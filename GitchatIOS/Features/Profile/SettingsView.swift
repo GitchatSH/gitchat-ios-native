@@ -17,15 +17,6 @@ struct SettingsView: View {
 
     var body: some View {
         List {
-            Section {
-                proRow
-                    .listRowBackground(Color.accentColor.opacity(0.18))
-                Button("Restore purchases") {
-                    Task { try? await store.restore() }
-                }
-                .font(.caption)
-            }
-
             Section("Account") {
                 HStack {
                     Image(systemName: "person.crop.circle")
@@ -36,6 +27,11 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .font(.system(.body, design: .monospaced))
                 }
+                proRow
+                Button("Restore purchases") {
+                    Task { try? await store.restore() }
+                }
+                .font(.caption)
             }
 
             Section("Appearance") {
@@ -128,35 +124,21 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
     private var proRow: some View {
-        if store.isPro {
+        Button {
+            showUpgrade = true
+        } label: {
             HStack {
-                Image(systemName: "star.fill")
+                Image(systemName: "sparkles")
                     .foregroundStyle(Color.accentColor)
-                Text("Gitchat Pro")
+                Text("Plan")
                     .foregroundStyle(Color(.label))
                 Spacer()
-                Text("ACTIVE")
-                    .font(.system(size: 10, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Color.accentColor, in: Capsule())
-            }
-        } else {
-            Button {
-                showUpgrade = true
-            } label: {
-                HStack {
-                    Image(systemName: "sparkles")
-                        .foregroundStyle(Color.accentColor)
-                    Text("Upgrade to Pro")
-                        .foregroundStyle(Color(.label))
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
+                Text(store.isPro ? "Pro" : "Free")
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
     }

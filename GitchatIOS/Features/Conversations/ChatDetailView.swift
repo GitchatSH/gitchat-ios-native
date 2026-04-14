@@ -108,14 +108,40 @@ final class ChatViewModel: ObservableObject {
         draft = ""
     }
 
-    func uploadAndSend(data: Data, filename: String, mimeType: String) async {
-        uploading = true
-        defer { uploading = false }
+    func uploadAndSend(data: Data, filename: String, mimeType: String, senderLogin: String?) async {
+        // 1. Compress to reasonable size + quality so upload is snappy.
+        let (compressed, usedFilename, usedMime) = Self.compressIfImage(
+            data: data, filename: filename, mimeType: mimeType
+        )
+
+        // 2. Write to a temp file so we can display the local image optimistically.
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString)-\(usedFilename)")
+        try? compressed.write(to: tmpURL)
+        let localID = "local-\(UUID().uuidString)"
+        let optimistic = Message(
+            id: localID,
+            conversation_id: conversation.id,
+            sender: senderLogin ?? "me",
+            sender_avatar: nil,
+            content: "",
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            edited_at: nil,
+            reactions: nil,
+            attachment_url: tmpURL.absoluteString,
+            type: "user",
+            reply_to_id: nil
+        )
+        messages.append(optimistic)
+        Haptics.impact(.light)
+
+        // 3. Upload in the background. Keep the optimistic bubble as-is until we
+        // have a real server message, then swap.
         do {
             let url = try await APIClient.shared.uploadAttachment(
-                data: data,
-                filename: filename,
-                mimeType: mimeType,
+                data: compressed,
+                filename: usedFilename,
+                mimeType: usedMime,
                 conversationId: conversation.id
             )
             let msg = try await APIClient.shared.sendMessage(
@@ -123,8 +149,38 @@ final class ChatViewModel: ObservableObject {
                 body: "",
                 attachmentURL: url
             )
-            messages.append(msg)
-        } catch { self.error = error.localizedDescription }
+            if let idx = messages.firstIndex(where: { $0.id == localID }) {
+                messages[idx] = msg
+            } else {
+                messages.append(msg)
+            }
+            try? FileManager.default.removeItem(at: tmpURL)
+        } catch {
+            self.error = error.localizedDescription
+            messages.removeAll { $0.id == localID }
+            ToastCenter.shared.show(.error, "Upload failed", error.localizedDescription)
+        }
+    }
+
+    private static func compressIfImage(
+        data: Data, filename: String, mimeType: String
+    ) -> (Data, String, String) {
+        guard mimeType.hasPrefix("image/"), let image = UIImage(data: data) else {
+            return (data, filename, mimeType)
+        }
+        let maxDim: CGFloat = 1600
+        let size = image.size
+        let scale = min(1, maxDim / max(size.width, size.height))
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+        if let jpeg = resized.jpegData(compressionQuality: 0.75) {
+            let base = (filename as NSString).deletingPathExtension
+            return (jpeg, "\(base).jpg", "image/jpeg")
+        }
+        return (data, filename, mimeType)
     }
 }
 
@@ -140,6 +196,7 @@ struct ChatDetailView: View {
     @State private var showReportConfirm = false
     @State private var composerVisible = false
     @State private var showMembers = false
+    @FocusState private var composerFocused: Bool
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -147,6 +204,64 @@ struct ChatDetailView: View {
 
     private var visibleMessages: [Message] {
         vm.messages.filter { !blocks.isBlocked($0.sender) }
+    }
+
+    private var mentionSuggestions: [ConversationParticipant] {
+        guard vm.conversation.isGroup else { return [] }
+        guard let token = currentMentionToken() else { return [] }
+        let all = vm.conversation.participantsOrEmpty.filter { $0.login != auth.login }
+        if token.isEmpty { return Array(all.prefix(8)) }
+        let t = token.lowercased()
+        return all.filter {
+            $0.login.lowercased().hasPrefix(t) || ($0.name ?? "").lowercased().contains(t)
+        }.prefix(8).map { $0 }
+    }
+
+    private func currentMentionToken() -> String? {
+        let text = vm.draft
+        guard let atIdx = text.lastIndex(of: "@") else { return nil }
+        // Must be at start or preceded by whitespace
+        if atIdx != text.startIndex {
+            let prev = text[text.index(before: atIdx)]
+            if !prev.isWhitespace { return nil }
+        }
+        let tail = text[text.index(after: atIdx)...]
+        if tail.contains(" ") || tail.contains("\n") { return nil }
+        return String(tail)
+    }
+
+    private var mentionSuggestionList: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(mentionSuggestions) { p in
+                    Button {
+                        insertMention(p.login)
+                    } label: {
+                        HStack(spacing: 6) {
+                            AvatarView(url: p.avatar_url, size: 22)
+                            Text("@\(p.login)")
+                                .font(.geist(13, weight: .semibold))
+                                .foregroundStyle(Color(.label))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(.secondarySystemBackground), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private func insertMention(_ login: String) {
+        let text = vm.draft
+        guard let atIdx = text.lastIndex(of: "@") else { return }
+        let before = text[..<atIdx]
+        vm.draft = "\(before)@\(login) "
+        Haptics.selection()
     }
 
     private func resolveAvatar(for msg: Message) -> String? {
@@ -196,6 +311,9 @@ struct ChatDetailView: View {
             if composerVisible {
                 if vm.replyingTo != nil || vm.editingMessage != nil {
                     replyEditBar
+                }
+                if !mentionSuggestions.isEmpty {
+                    mentionSuggestionList
                 }
                 composer
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -313,7 +431,12 @@ struct ChatDetailView: View {
             Task {
                 guard let item = newItem,
                       let data = try? await item.loadTransferable(type: Data.self) else { return }
-                await vm.uploadAndSend(data: data, filename: "image.jpg", mimeType: "image/jpeg")
+                await vm.uploadAndSend(
+                    data: data,
+                    filename: "image.jpg",
+                    mimeType: "image/jpeg",
+                    senderLogin: auth.login
+                )
                 photoItem = nil
             }
         }
@@ -324,6 +447,9 @@ struct ChatDetailView: View {
         Button {
             vm.replyingTo = msg
             vm.editingMessage = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                composerFocused = true
+            }
         } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
         Button {
             UIPasteboard.general.string = msg.content
@@ -389,6 +515,7 @@ struct ChatDetailView: View {
             .disabled(vm.uploading)
 
             TextField(vm.editingMessage != nil ? "Edit message" : "Message", text: $vm.draft, axis: .vertical)
+                .focused($composerFocused)
                 .lineLimit(1...5)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
@@ -514,6 +641,20 @@ struct MessageBubble<Actions: View>: View {
         }
     }
 
+    @ViewBuilder
+    private func attachmentImage(for url: URL) -> some View {
+        if url.isFileURL, let ui = UIImage(contentsOfFile: url.path) {
+            Image(uiImage: ui).resizable().scaledToFit()
+        } else {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let img): img.resizable().scaledToFit()
+                default: Color(.secondarySystemBackground).frame(height: 160)
+                }
+            }
+        }
+    }
+
     private func replyPreview(_ reply: ReplyPreview) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 2)
@@ -540,14 +681,9 @@ struct MessageBubble<Actions: View>: View {
     private var bubbleContent: some View {
         VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
             if let url = message.attachment_url, let imageURL = URL(string: url) {
-                AsyncImage(url: imageURL) { phase in
-                    switch phase {
-                    case .success(let img): img.resizable().scaledToFit()
-                    default: Color(.secondarySystemBackground).frame(height: 160)
-                    }
-                }
-                .frame(maxWidth: 240)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                attachmentImage(for: imageURL)
+                    .frame(maxWidth: 240)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
             }
             if !message.content.isEmpty {
                 Text(message.content)
