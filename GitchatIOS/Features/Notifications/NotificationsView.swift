@@ -47,6 +47,7 @@ struct NotificationsView: View {
                                 Circle().fill(Color.accentColor).frame(width: 8, height: 8)
                             }
                         }
+                        .listRowSeparator(.hidden)
                     }
                     .listStyle(.plain)
                     .refreshable { await vm.load() }

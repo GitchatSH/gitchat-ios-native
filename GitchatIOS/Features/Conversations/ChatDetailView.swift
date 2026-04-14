@@ -307,47 +307,54 @@ struct ChatDetailView: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             PhotosPicker(selection: $photoItem, matching: .images) {
-                Image(systemName: "photo.on.rectangle")
-                    .font(.system(size: 22))
-                    .foregroundStyle(Color.accentColor)
+                Image(systemName: "paperclip")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .modifier(GlassPill())
             }
             .disabled(vm.uploading)
 
             TextField(vm.editingMessage != nil ? "Edit message" : "Message", text: $vm.draft, axis: .vertical)
                 .lineLimit(1...5)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground), in: Capsule())
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .frame(maxWidth: .infinity)
+                .background(Color.clear)
+                .modifier(GlassPill())
 
             Button {
                 Task { await vm.send() }
             } label: {
-                if vm.uploading {
-                    ProgressView().tint(Color.accentColor)
-                } else {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(vm.draft.isEmpty ? .gray : .accentColor)
+                Group {
+                    if vm.uploading {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
                 }
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle().fill(vm.draft.isEmpty ? Color.gray.opacity(0.5) : Color.accentColor)
+                )
             }
             .disabled(vm.draft.isEmpty || vm.uploading)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .modifier(GlassBarBackground())
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
     }
 }
 
-private struct GlassBarBackground: ViewModifier {
+private struct GlassPill: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content.glassEffect(.regular, in: Capsule())
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
         } else {
-            content.background(.ultraThinMaterial)
+            content.background(.ultraThinMaterial, in: Capsule())
         }
     }
 }
