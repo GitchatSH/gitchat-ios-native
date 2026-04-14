@@ -15,6 +15,9 @@ packages:
   SocketIO:
     url: https://github.com/socketio/socket.io-client-swift
     from: "16.1.0"
+  OneSignalXCFramework:
+    url: https://github.com/OneSignal/OneSignal-XCFramework
+    from: "5.2.0"
 targets:
   GitchatIOS:
     type: application
@@ -28,6 +31,8 @@ targets:
     dependencies:
       - package: SocketIO
         product: SocketIO
+      - package: OneSignalXCFramework
+        product: OneSignalFramework
     entitlements:
       path: GitchatIOS/GitchatIOS.entitlements
       properties:
@@ -38,7 +43,7 @@ targets:
       properties:
         CFBundleDisplayName: Gitchat
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "4"
+        CFBundleVersion: "5"
         UILaunchScreen:
           UIColorName: AccentColor
         UISupportedInterfaceOrientations:

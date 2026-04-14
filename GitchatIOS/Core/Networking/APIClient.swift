@@ -204,6 +204,16 @@ struct APIClient {
         )
     }
 
+    /// Flag a message as inappropriate. Backend route: POST /messages/:id/report.
+    func reportMessage(messageId: String, reason: String, detail: String?) async throws {
+        struct Body: Encodable { let reason: String; let detail: String? }
+        let _: EmptyResponse = try await request(
+            "messages/\(messageId)/report",
+            method: "POST",
+            body: Body(reason: reason, detail: detail)
+        )
+    }
+
     /// Upload a file to a conversation. Returns the attachment URL the
     /// backend will recognize when passed in `sendMessage(..., attachmentURL:)`.
     func uploadAttachment(

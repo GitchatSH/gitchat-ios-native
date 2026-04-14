@@ -30,6 +30,8 @@ final class AuthStore: ObservableObject {
         self.login = login
         self.needsGithubLink = needsGithubLink
         self.isAuthenticated = true
+        PushManager.shared.identify(login: login)
+        Task { await PushManager.shared.requestPermission() }
     }
 
     func clearNeedsGithubLink() {
@@ -45,6 +47,7 @@ final class AuthStore: ObservableObject {
         self.login = nil
         self.needsGithubLink = false
         self.isAuthenticated = false
+        PushManager.shared.forgetIdentity()
     }
 
     // MARK: - Keychain

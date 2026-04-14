@@ -2,6 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var auth: AuthStore
+    @StateObject private var blocks = BlockStore.shared
+    @StateObject private var store = StoreManager.shared
     @AppStorage("gitchat.pref.messageSound") private var messageSound: Bool = false
     @AppStorage("gitchat.pref.showOnlineStatus") private var showOnlineStatus: Bool = true
     @AppStorage("gitchat.pref.showUnreadBadges") private var showUnreadBadges: Bool = true
@@ -10,6 +12,8 @@ struct SettingsView: View {
     @AppStorage("gitchat.pref.appearance") private var appearance: String = "system"
     @State private var showingSignOutConfirm = false
     @State private var legalURL: URL?
+    @State private var showBlockedList = false
+    @State private var showUpgrade = false
 
     var body: some View {
         List {
@@ -39,9 +43,55 @@ struct SettingsView: View {
                 Toggle("Show unread badges", isOn: $showUnreadBadges)
             }
 
-            Section("Privacy") {
+            Section("Privacy & Safety") {
                 Toggle("Show my online status", isOn: $showOnlineStatus)
                 Toggle("Autoplay GIFs and videos", isOn: $autoplayGifs)
+                Button {
+                    showBlockedList = true
+                } label: {
+                    HStack {
+                        Text("Blocked users")
+                            .foregroundStyle(Color(.label))
+                        Spacer()
+                        Text("\(blocks.blockedLogins.count)")
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+
+            Section("Gitchat Pro") {
+                if store.isPro {
+                    HStack {
+                        Image(systemName: "star.fill").foregroundStyle(.yellow)
+                        Text("You're a Pro supporter").bold()
+                        Spacer()
+                    }
+                } else {
+                    Button {
+                        showUpgrade = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "sparkles").foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Upgrade to Pro").bold().foregroundStyle(Color(.label))
+                                Text("Unlimited history, larger uploads, themes")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+                Button("Restore purchases") {
+                    Task { try? await store.restore() }
+                }
+                .font(.caption)
             }
 
             Section("Legal") {
@@ -99,6 +149,49 @@ struct SettingsView: View {
             set: { legalURL = $0?.url }
         )) { wrapped in
             SafariSheet(url: wrapped.url).ignoresSafeArea()
+        }
+        .sheet(isPresented: $showBlockedList) {
+            NavigationStack { BlockedUsersView() }
+        }
+        .sheet(isPresented: $showUpgrade) {
+            UpgradeView()
+        }
+    }
+}
+
+struct BlockedUsersView: View {
+    @StateObject private var blocks = BlockStore.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Group {
+            if blocks.blockedLogins.isEmpty {
+                ContentUnavailableCompat(
+                    title: "Nobody blocked",
+                    systemImage: "hand.raised",
+                    description: "Users you block won't appear in your chats or search."
+                )
+            } else {
+                List {
+                    ForEach(Array(blocks.blockedLogins).sorted(), id: \.self) { login in
+                        HStack {
+                            Image(systemName: "person.crop.circle.badge.xmark")
+                                .foregroundStyle(.red)
+                            Text("@\(login)")
+                            Spacer()
+                            Button("Unblock") { blocks.unblock(login) }
+                                .font(.geist(13, weight: .semibold))
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Blocked users")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") { dismiss() }
+            }
         }
     }
 }

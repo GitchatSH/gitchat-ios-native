@@ -4,7 +4,15 @@ import SwiftUI
 struct GitchatApp: App {
     @StateObject private var auth = AuthStore.shared
     @StateObject private var socket = SocketClient.shared
+    @StateObject private var store = StoreManager.shared
     @AppStorage("gitchat.pref.appearance") private var appearance: String = "system"
+
+    init() {
+        Task { @MainActor in
+            StoreManager.shared.start()
+            PushManager.shared.bootstrap()
+        }
+    }
 
     var body: some Scene {
         WindowGroup {

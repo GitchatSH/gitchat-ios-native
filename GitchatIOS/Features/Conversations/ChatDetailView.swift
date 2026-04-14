@@ -115,12 +115,21 @@ final class ChatViewModel: ObservableObject {
 
 struct ChatDetailView: View {
     @StateObject private var vm: ChatViewModel
+    @StateObject private var blocks = BlockStore.shared
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var socket: SocketClient
     @State private var photoItem: PhotosPickerItem?
+    @State private var reportingMessage: Message?
+    @State private var reportReason: String = "Spam"
+    @State private var reportDetail: String = ""
+    @State private var showReportConfirm = false
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
+    }
+
+    private var visibleMessages: [Message] {
+        vm.messages.filter { !blocks.isBlocked($0.sender) }
     }
 
     var body: some View {
@@ -128,7 +137,7 @@ struct ChatDetailView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 8) {
-                        ForEach(vm.messages) { msg in
+                        ForEach(visibleMessages) { msg in
                             MessageBubble(message: msg, isMe: msg.sender == auth.login)
                                 .id(msg.id)
                                 .contextMenu {
@@ -166,6 +175,55 @@ struct ChatDetailView: View {
         .onDisappear {
             socket.unsubscribe(conversation: vm.conversation.id)
         }
+        .sheet(item: $reportingMessage) { msg in
+            NavigationStack {
+                Form {
+                    Section("What's wrong?") {
+                        Picker("Reason", selection: $reportReason) {
+                            Text("Spam").tag("Spam")
+                            Text("Harassment").tag("Harassment")
+                            Text("Hate speech").tag("Hate")
+                            Text("Sexual content").tag("Sexual")
+                            Text("Violence or self-harm").tag("Violence")
+                            Text("Other").tag("Other")
+                        }
+                    }
+                    Section("Details (optional)") {
+                        TextEditor(text: $reportDetail)
+                            .frame(minHeight: 80)
+                    }
+                    Section {
+                        Button {
+                            Task {
+                                try? await APIClient.shared.reportMessage(
+                                    messageId: msg.id,
+                                    reason: reportReason,
+                                    detail: reportDetail.isEmpty ? nil : reportDetail
+                                )
+                                blocks.block(msg.sender)
+                                reportReason = "Spam"
+                                reportDetail = ""
+                                reportingMessage = nil
+                                showReportConfirm = true
+                            }
+                        } label: {
+                            HStack { Spacer(); Text("Report and block").bold(); Spacer() }
+                        }
+                        .foregroundStyle(.red)
+                    }
+                }
+                .navigationTitle("Report message")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") { reportingMessage = nil }
+                    }
+                }
+            }
+        }
+        .alert("Thanks — we'll review it within 24 hours.", isPresented: $showReportConfirm) {
+            Button("OK", role: .cancel) {}
+        }
         .onChange(of: photoItem) { newItem in
             Task {
                 guard let item = newItem,
@@ -199,6 +257,13 @@ struct ChatDetailView: View {
             Button(role: .destructive) {
                 Task { await vm.delete(msg) }
             } label: { Label("Delete", systemImage: "trash") }
+        } else {
+            Button(role: .destructive) {
+                reportingMessage = msg
+            } label: { Label("Report", systemImage: "flag") }
+            Button(role: .destructive) {
+                blocks.block(msg.sender)
+            } label: { Label("Block @\(msg.sender)", systemImage: "hand.raised") }
         }
     }
 
