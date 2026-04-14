@@ -84,7 +84,17 @@ final class ChatViewModel: ObservableObject {
     func togglePin(_ msg: Message) async {
         do {
             try await APIClient.shared.pinMessage(conversationId: conversation.id, messageId: msg.id)
-        } catch { self.error = error.localizedDescription }
+            ToastCenter.shared.show(.success, "Pinned message")
+        } catch {
+            // If already pinned, unpin instead.
+            do {
+                try await APIClient.shared.unpinMessage(conversationId: conversation.id, messageId: msg.id)
+                ToastCenter.shared.show(.info, "Unpinned message")
+            } catch {
+                self.error = error.localizedDescription
+                ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
+            }
+        }
     }
 
     func startEdit(_ msg: Message) {
@@ -129,6 +139,7 @@ struct ChatDetailView: View {
     @State private var reportDetail: String = ""
     @State private var showReportConfirm = false
     @State private var composerVisible = false
+    @State private var showMembers = false
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -138,21 +149,44 @@ struct ChatDetailView: View {
         vm.messages.filter { !blocks.isBlocked($0.sender) }
     }
 
+    private func resolveAvatar(for msg: Message) -> String? {
+        if let url = msg.sender_avatar { return url }
+        if let match = vm.conversation.participantsOrEmpty.first(where: { $0.login == msg.sender }) {
+            return match.avatar_url
+        }
+        if let other = vm.conversation.other_user, other.login == msg.sender {
+            return other.avatar_url
+        }
+        return nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         ForEach(visibleMessages) { msg in
-                            MessageBubble(message: msg, isMe: msg.sender == auth.login)
-                                .id(msg.id)
-                                .contextMenu {
-                                    messageActions(for: msg)
-                                }
+                            MessageBubble(
+                                message: msg,
+                                isMe: msg.sender == auth.login,
+                                resolvedAvatar: resolveAvatar(for: msg)
+                            ) {
+                                messageActions(for: msg)
+                            }
+                            .id(msg.id)
                         }
                     }
                     .padding()
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                )
                 .onChange(of: vm.messages.count) { _ in
                     if let last = vm.messages.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -170,6 +204,43 @@ struct ChatDetailView: View {
         .navigationTitle(vm.conversation.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if vm.conversation.isGroup {
+                    Button {
+                        showMembers = true
+                    } label: {
+                        Text("\(vm.conversation.participantsOrEmpty.count)")
+                            .font(.geist(14, weight: .bold))
+                    }
+                } else if let other = vm.conversation.other_user {
+                    NavigationLink(value: ProfileLoginRoute(login: other.login)) {
+                        AsyncImage(url: other.avatar_url.flatMap(URL.init(string:))) { phase in
+                            switch phase {
+                            case .success(let img): img.resizable().scaledToFill()
+                            default:
+                                Color.accentColor.opacity(0.2)
+                                    .overlay(Image(systemName: "person.fill").foregroundStyle(.white))
+                            }
+                        }
+                        .frame(width: 30, height: 30)
+                        .clipShape(Circle())
+                        .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .navigationDestination(for: ProfileLoginRoute.self) { route in
+            ProfileView(login: route.login)
+        }
+        .sheet(isPresented: $showMembers) {
+            NavigationStack {
+                MembersSheet(participants: vm.conversation.participantsOrEmpty)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .onAppear {
             withAnimation(.spring(response: 0.45, dampingFraction: 0.85).delay(0.05)) {
                 composerVisible = true
@@ -349,6 +420,51 @@ struct ChatDetailView: View {
     }
 }
 
+struct ProfileLoginRoute: Hashable {
+    let login: String
+}
+
+struct MembersSheet: View {
+    let participants: [ConversationParticipant]
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Group {
+            if participants.isEmpty {
+                ContentUnavailableCompat(
+                    title: "No members",
+                    systemImage: "person.2",
+                    description: "This group has no visible members."
+                )
+            } else {
+                List(participants) { p in
+                    NavigationLink(value: ProfileLoginRoute(login: p.login)) {
+                        HStack(spacing: 12) {
+                            AvatarView(url: p.avatar_url, size: 40)
+                            VStack(alignment: .leading) {
+                                Text(p.name ?? p.login).font(.headline)
+                                Text("@\(p.login)").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .listRowSeparator(.hidden)
+                }
+                .listStyle(.plain)
+            }
+        }
+        .navigationTitle("\(participants.count) Member\(participants.count == 1 ? "" : "s")")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: ProfileLoginRoute.self) { route in
+            ProfileView(login: route.login)
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") { dismiss() }
+            }
+        }
+    }
+}
+
 private struct GlassPill: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
@@ -359,38 +475,26 @@ private struct GlassPill: ViewModifier {
     }
 }
 
-struct MessageBubble: View {
+struct MessageBubble<Actions: View>: View {
     let message: Message
     let isMe: Bool
+    var resolvedAvatar: String? = nil
+    @ViewBuilder let actions: () -> Actions
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
             if isMe { Spacer(minLength: 40) } else {
-                AvatarView(url: message.sender_avatar, size: 28)
+                AvatarView(url: resolvedAvatar ?? message.sender_avatar, size: 28)
             }
             VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
                 if !isMe {
                     Text(message.sender).font(.caption2).foregroundStyle(.secondary)
                 }
-                if let url = message.attachment_url, let imageURL = URL(string: url) {
-                    AsyncImage(url: imageURL) { phase in
-                        switch phase {
-                        case .success(let img): img.resizable().scaledToFit()
-                        default: Color(.secondarySystemBackground).frame(height: 160)
-                        }
-                    }
-                    .frame(maxWidth: 240)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                if let reply = message.reply {
+                    replyPreview(reply)
                 }
-                if !message.content.isEmpty {
-                    Text(message.content)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(
-                            isMe ? Color.accentColor : Color(.secondarySystemBackground)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                        .foregroundStyle(isMe ? .white : .primary)
-                }
+                bubbleContent
+                    .contextMenu { actions() }
                 if message.edited_at != nil {
                     Text("edited").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
@@ -407,6 +511,53 @@ struct MessageBubble: View {
                 }
             }
             if !isMe { Spacer(minLength: 40) }
+        }
+    }
+
+    private func replyPreview(_ reply: ReplyPreview) -> some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(isMe ? Color.accentColor : Color.secondary)
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 1) {
+                if let login = reply.sender_login {
+                    Text("@\(login)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isMe ? Color.accentColor : Color.secondary)
+                }
+                Text(reply.body ?? "…")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color(.tertiarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private var bubbleContent: some View {
+        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            if let url = message.attachment_url, let imageURL = URL(string: url) {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .success(let img): img.resizable().scaledToFit()
+                    default: Color(.secondarySystemBackground).frame(height: 160)
+                    }
+                }
+                .frame(maxWidth: 240)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            if !message.content.isEmpty {
+                Text(message.content)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(
+                        isMe ? Color.accentColor : Color(.secondarySystemBackground)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .foregroundStyle(isMe ? .white : .primary)
+            }
         }
     }
 }

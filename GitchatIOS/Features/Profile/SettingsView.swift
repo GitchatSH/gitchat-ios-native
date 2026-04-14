@@ -19,8 +19,7 @@ struct SettingsView: View {
         List {
             Section {
                 proRow
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(Color.accentColor.opacity(0.18))
                 Button("Restore purchases") {
                     Task { try? await store.restore() }
                 }
@@ -132,79 +131,34 @@ struct SettingsView: View {
     @ViewBuilder
     private var proRow: some View {
         if store.isPro {
-            HStack(spacing: 12) {
+            HStack {
                 Image(systemName: "star.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(.white)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("Gitchat Pro")
-                            .font(.geist(16, weight: .bold))
-                            .foregroundStyle(.white)
-                        proBadge
-                    }
-                    Text("You're a Pro supporter. Thank you!")
-                        .font(.geist(12, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.9))
-                }
+                    .foregroundStyle(Color.accentColor)
+                Text("Gitchat Pro")
+                    .foregroundStyle(Color(.label))
                 Spacer()
+                Text("ACTIVE")
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Color.accentColor, in: Capsule())
             }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(
-                LinearGradient(
-                    colors: [Color.accentColor, Color.accentColor.opacity(0.75)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: Color.accentColor.opacity(0.3), radius: 10, y: 4)
         } else {
             Button {
                 showUpgrade = true
             } label: {
-                HStack(spacing: 10) {
+                HStack {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.white)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Upgrade to Pro")
-                            .font(.geist(16, weight: .bold))
-                            .foregroundStyle(.white)
-                        Text("Unlimited history, larger uploads, custom themes, Pro badge.")
-                            .font(.geist(12, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .multilineTextAlignment(.leading)
-                    }
+                        .foregroundStyle(Color.accentColor)
+                    Text("Upgrade to Pro")
+                        .foregroundStyle(Color(.label))
                     Spacer()
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.white)
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity)
-                .background(
-                    LinearGradient(
-                        colors: [Color.accentColor, Color.accentColor.opacity(0.75)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: Color.accentColor.opacity(0.3), radius: 10, y: 4)
             }
-            .buttonStyle(.plain)
         }
-    }
-
-    private var proBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "star.fill").font(.system(size: 9))
-            Text("PRO").font(.system(size: 10, weight: .heavy))
-        }
-        .foregroundStyle(Color.accentColor)
-        .padding(.horizontal, 7).padding(.vertical, 2)
-        .background(Color.white)
-        .clipShape(Capsule())
     }
 }
 

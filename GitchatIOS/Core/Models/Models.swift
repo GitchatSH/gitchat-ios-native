@@ -90,6 +90,26 @@ struct ConversationParticipant: Decodable, Identifiable, Hashable {
     let online: Bool?
 }
 
+struct ReplyPreview: Decodable, Hashable {
+    let id: String
+    let body: String?
+    let sender_login: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, body
+        case sender_login
+        case senderLogin
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.body = try c.decodeIfPresent(String.self, forKey: .body)
+        self.sender_login = try c.decodeIfPresent(String.self, forKey: .sender_login)
+            ?? c.decodeIfPresent(String.self, forKey: .senderLogin)
+    }
+}
+
 struct Message: Decodable, Identifiable, Hashable {
     let id: String
     let conversation_id: String?
@@ -102,11 +122,12 @@ struct Message: Decodable, Identifiable, Hashable {
     let attachment_url: String?
     let type: String?
     let reply_to_id: String?
+    let reply: ReplyPreview?
 
     // Decode defensively: backend may send `sender` as a string OR as an
     // object `{ login, avatar_url }`, and may use slightly different keys.
     private enum CodingKeys: String, CodingKey {
-        case id, sender, content, type
+        case id, sender, content, type, reply
         case sender_login, senderLogin
         case conversation_id, conversationId
         case sender_avatar, senderAvatar, sender_avatar_url
@@ -134,7 +155,8 @@ struct Message: Decodable, Identifiable, Hashable {
         reactions: [MessageReaction]?,
         attachment_url: String?,
         type: String?,
-        reply_to_id: String?
+        reply_to_id: String?,
+        reply: ReplyPreview? = nil
     ) {
         self.id = id
         self.conversation_id = conversation_id
@@ -147,6 +169,7 @@ struct Message: Decodable, Identifiable, Hashable {
         self.attachment_url = attachment_url
         self.type = type
         self.reply_to_id = reply_to_id
+        self.reply = reply
     }
 
     init(from decoder: Decoder) throws {
@@ -187,12 +210,24 @@ struct Message: Decodable, Identifiable, Hashable {
             ?? c.decodeIfPresent(String.self, forKey: .createdAt)
         self.edited_at = try c.decodeIfPresent(String.self, forKey: .edited_at)
             ?? c.decodeIfPresent(String.self, forKey: .editedAt)
-        self.reactions = try c.decodeIfPresent([MessageReaction].self, forKey: .reactions)
+        // Backend returns raw reaction rows ({emoji, userLogin, ...}) not the
+        // aggregated {emoji, count, reacted} shape. Try structured decode first,
+        // otherwise aggregate raw rows manually. Never fail the whole message.
+        if let decoded = try? c.decodeIfPresent([MessageReaction].self, forKey: .reactions) {
+            self.reactions = decoded
+        } else if let raw = try? c.decodeIfPresent([RawReactionRow].self, forKey: .reactions) {
+            var counts: [String: Int] = [:]
+            for row in raw { counts[row.emoji, default: 0] += 1 }
+            self.reactions = counts.map { MessageReaction(emoji: $0.key, count: $0.value, reacted: false) }
+        } else {
+            self.reactions = nil
+        }
         self.attachment_url = try c.decodeIfPresent(String.self, forKey: .attachment_url)
             ?? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
         self.type = try c.decodeIfPresent(String.self, forKey: .type)
         self.reply_to_id = try c.decodeIfPresent(String.self, forKey: .reply_to_id)
             ?? c.decodeIfPresent(String.self, forKey: .replyToId)
+        self.reply = try? c.decodeIfPresent(ReplyPreview.self, forKey: .reply)
     }
 }
 
@@ -200,6 +235,10 @@ struct MessageReaction: Decodable, Hashable {
     let emoji: String
     let count: Int
     let reacted: Bool
+}
+
+private struct RawReactionRow: Decodable {
+    let emoji: String
 }
 
 struct MessagesResponse: Decodable {

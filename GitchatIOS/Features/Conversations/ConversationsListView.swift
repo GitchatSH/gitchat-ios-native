@@ -55,11 +55,19 @@ struct ConversationsListView: View {
 
     private var filtered: [Conversation] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return vm.conversations }
-        return vm.conversations.filter { c in
-            c.displayTitle.lowercased().contains(q)
-                || (c.previewText ?? "").lowercased().contains(q)
-                || c.participantsOrEmpty.contains(where: { $0.login.lowercased().contains(q) })
+        let base: [Conversation]
+        if q.isEmpty {
+            base = vm.conversations
+        } else {
+            base = vm.conversations.filter { c in
+                c.displayTitle.lowercased().contains(q)
+                    || (c.previewText ?? "").lowercased().contains(q)
+                    || c.participantsOrEmpty.contains(where: { $0.login.lowercased().contains(q) })
+            }
+        }
+        return base.sorted { a, b in
+            if a.isPinned != b.isPinned { return a.isPinned }
+            return (a.last_message_at ?? "") > (b.last_message_at ?? "")
         }
     }
 

@@ -41,6 +41,9 @@ struct NotificationsView: View {
                                 if let preview = n.metadata?.preview {
                                     Text(preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                                 }
+                                Text(RelativeTime.format(n.created_at))
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
                             }
                             Spacer()
                             if !n.is_read {

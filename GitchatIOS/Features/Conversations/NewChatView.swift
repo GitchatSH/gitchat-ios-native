@@ -84,21 +84,20 @@ struct NewChatView: View {
     @StateObject private var vm = NewChatViewModel()
     @Environment(\.dismiss) private var dismiss
     let onOpen: (Conversation) -> Void
+    @State private var showGroupNameAlert = false
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if vm.groupMode {
-                    groupHeader
+                if vm.groupMode, !vm.selected.isEmpty {
+                    selectionBar
                 }
                 list
-                if let err = vm.error {
-                    Text(err)
-                        .font(.geist(12, weight: .regular))
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                        .padding(.bottom, 8)
+            }
+            .onChange(of: vm.error) { newValue in
+                if let msg = newValue, !msg.isEmpty {
+                    ToastCenter.shared.show(.error, "Couldn't start chat", cleanErrorMessage(msg))
+                    vm.error = nil
                 }
             }
             .searchable(
@@ -118,11 +117,8 @@ struct NewChatView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if vm.groupMode {
                         Button("Create") {
-                            Task {
-                                if let convo = await vm.createGroupChat() {
-                                    onOpen(convo); dismiss()
-                                }
-                            }
+                            vm.groupName = ""
+                            showGroupNameAlert = true
                         }
                         .disabled(vm.selected.isEmpty || vm.creating)
                         .font(.geist(15, weight: .semibold))
@@ -137,27 +133,31 @@ struct NewChatView: View {
             .overlay {
                 if vm.creating { loadingOverlay }
             }
+            .alert("Name this group", isPresented: $showGroupNameAlert) {
+                TextField("Group name (optional)", text: $vm.groupName)
+                Button("Create") {
+                    Task {
+                        if let convo = await vm.createGroupChat() {
+                            onOpen(convo); dismiss()
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Leave it blank to use participants' names.")
+            }
             .task { await vm.loadFriends() }
         }
     }
 
-    private var groupHeader: some View {
-        VStack(spacing: 10) {
-            TextField("Group name (optional)", text: $vm.groupName)
-                .font(.geist(15, weight: .regular))
-                .padding(10)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            if !vm.selected.isEmpty {
-                HStack {
-                    Text("\(vm.selected.count) selected")
-                        .font(.geist(12, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                    Spacer()
-                    Button("Clear") { vm.selected.removeAll() }
-                        .font(.geist(12, weight: .semibold))
-                }
-            }
+    private var selectionBar: some View {
+        HStack {
+            Text("\(vm.selected.count) selected")
+                .font(.geist(12, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+            Spacer()
+            Button("Clear") { vm.selected.removeAll() }
+                .font(.geist(12, weight: .semibold))
         }
         .padding(.horizontal)
         .padding(.top, 12)
@@ -233,6 +233,17 @@ struct NewChatView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func cleanErrorMessage(_ raw: String) -> String {
+        // Pull out the human-readable `"message":"..."` from backend HTTP error blobs.
+        if let range = raw.range(of: #""message"\s*:\s*"([^"]+)""#, options: .regularExpression) {
+            let slice = raw[range]
+            if let m = slice.range(of: #""([^"]+)"$"#, options: .regularExpression) {
+                return String(slice[m]).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            }
+        }
+        return raw
     }
 
     private var loadingOverlay: some View {
