@@ -101,6 +101,52 @@ struct APIClient {
         return try await request("auth/github-link", method: "POST", body: body, requireAuth: false)
     }
 
+    struct ExchangeCodeRequest: Encodable {
+        let code: String
+        let redirect_uri: String
+        let client_id: String
+        let ide: String
+        let ide_version: String
+    }
+
+    func exchangeGithubCode(code: String, redirectURI: String) async throws -> AuthLinkResponse {
+        let body = ExchangeCodeRequest(
+            code: code,
+            redirect_uri: redirectURI,
+            client_id: "gitchat-ios@\(Config.appVersion)",
+            ide: "ios",
+            ide_version: UIDeviceVersion.current
+        )
+        return try await request("auth/github-exchange-code", method: "POST", body: body, requireAuth: false)
+    }
+
+    struct AppleLinkRequest: Encodable {
+        let identity_token: String
+        let first_name: String?
+        let last_name: String?
+        let client_id: String
+        let ide: String
+        let ide_version: String
+    }
+
+    struct AppleLinkResponse: Decodable {
+        let access_token: String
+        let login: String
+        let needs_github_link: Bool
+    }
+
+    func appleLink(identityToken: String, firstName: String?, lastName: String?) async throws -> AppleLinkResponse {
+        let body = AppleLinkRequest(
+            identity_token: identityToken,
+            first_name: firstName,
+            last_name: lastName,
+            client_id: "gitchat-ios@\(Config.appVersion)",
+            ide: "ios",
+            ide_version: UIDeviceVersion.current
+        )
+        return try await request("auth/apple-link", method: "POST", body: body, requireAuth: false)
+    }
+
     // Conversations
     func listConversations(cursor: String? = nil, limit: Int = 30) async throws -> ConversationListResponse {
         var q = [URLQueryItem(name: "limit", value: "\(limit)")]
@@ -114,18 +160,125 @@ struct APIClient {
         return try await request("messages/conversations/\(id)", query: q)
     }
 
-    func sendMessage(conversationId: String, body: String, replyTo: String? = nil) async throws -> Message {
-        let req = SendMessageRequest(body: body, reply_to_id: replyTo)
-        return try await request("messages/conversations/\(conversationId)", method: "POST", body: req)
-    }
-
     func createConversation(recipient: String) async throws -> Conversation {
         let req = CreateConversationRequest(recipient_login: recipient, recipient_logins: nil, group_name: nil)
         return try await request("messages/conversations", method: "POST", body: req)
     }
 
+    func createGroup(recipients: [String], name: String?) async throws -> Conversation {
+        let req = CreateConversationRequest(recipient_login: nil, recipient_logins: recipients, group_name: name)
+        return try await request("messages/conversations", method: "POST", body: req)
+    }
+
     func markRead(conversationId: String) async throws {
         let _: EmptyResponse = try await request("messages/conversations/\(conversationId)/read", method: "PATCH")
+    }
+
+    func editMessage(conversationId: String, messageId: String, body: String) async throws {
+        struct Body: Encodable { let body: String }
+        let _: EmptyResponse = try await request(
+            "messages/conversations/\(conversationId)/messages/\(messageId)",
+            method: "PATCH",
+            body: Body(body: body)
+        )
+    }
+
+    func deleteMessage(conversationId: String, messageId: String) async throws {
+        let _: EmptyResponse = try await request(
+            "messages/conversations/\(conversationId)/messages/\(messageId)",
+            method: "DELETE"
+        )
+    }
+
+    func pinMessage(conversationId: String, messageId: String) async throws {
+        let _: EmptyResponse = try await request(
+            "messages/conversations/\(conversationId)/messages/\(messageId)/pin",
+            method: "POST"
+        )
+    }
+
+    func unpinMessage(conversationId: String, messageId: String) async throws {
+        let _: EmptyResponse = try await request(
+            "messages/conversations/\(conversationId)/messages/\(messageId)/pin",
+            method: "DELETE"
+        )
+    }
+
+    /// Upload a file to a conversation. Returns the attachment URL the
+    /// backend will recognize when passed in `sendMessage(..., attachmentURL:)`.
+    func uploadAttachment(
+        data: Data,
+        filename: String,
+        mimeType: String,
+        conversationId: String
+    ) async throws -> String {
+        let boundary = "gitchat-\(UUID().uuidString)"
+        var req = URLRequest(url: Config.apiBaseURL.appendingPathComponent("messages/upload"))
+        req.httpMethod = "POST"
+        guard let token = await AuthStore.shared.accessToken else { throw APIError.notAuthenticated }
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func append(_ s: String) { body.append(s.data(using: .utf8)!) }
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"conversation_id\"\r\n\r\n\(conversationId)\r\n")
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n")
+        append("Content-Type: \(mimeType)\r\n\r\n")
+        body.append(data)
+        append("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+
+        let (respData, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.http((resp as? HTTPURLResponse)?.statusCode ?? -1, String(data: respData, encoding: .utf8))
+        }
+        struct Wrap: Decodable { let data: Inner?; let url: String? }
+        struct Inner: Decodable { let url: String }
+        let w = try decoder.decode(Wrap.self, from: respData)
+        if let url = w.data?.url ?? w.url { return url }
+        throw APIError.decoding(NSError(domain: "upload", code: 0, userInfo: [NSLocalizedDescriptionKey: "no url in response"]))
+    }
+
+    func sendMessage(
+        conversationId: String,
+        body: String,
+        replyTo: String? = nil,
+        attachmentURL: String? = nil
+    ) async throws -> Message {
+        struct Body: Encodable {
+            let body: String
+            let reply_to_id: String?
+            let attachments: [[String: String]]?
+        }
+        let attachments: [[String: String]]? = attachmentURL.map { [["url": $0]] }
+        let req = Body(body: body, reply_to_id: replyTo, attachments: attachments)
+        return try await request("messages/conversations/\(conversationId)", method: "POST", body: req)
+    }
+
+    // Channel feeds
+    struct ChannelPost: Decodable, Identifiable, Hashable {
+        let id: String
+        let platform: String?
+        let authorHandle: String?
+        let authorName: String?
+        let authorAvatar: String?
+        let body: String?
+        let mediaUrls: [String]?
+        let platformCreatedAt: String?
+    }
+
+    struct ChannelFeedResponse: Decodable {
+        let posts: [ChannelPost]
+        let nextCursor: String?
+    }
+
+    func channelFeed(channelId: String, source: String, cursor: String? = nil) async throws -> ChannelFeedResponse {
+        var q: [URLQueryItem] = []
+        if let cursor { q.append(URLQueryItem(name: "cursor", value: cursor)) }
+        q.append(URLQueryItem(name: "limit", value: "30"))
+        return try await request("channels/\(channelId)/feed/\(source)", query: q, requireAuth: false)
     }
 
     func react(messageId: String, emoji: String, add: Bool) async throws {
@@ -135,6 +288,16 @@ struct APIClient {
             method: add ? "POST" : "DELETE",
             body: Body(emoji: emoji, message_id: messageId)
         )
+    }
+
+    // User search (for starting conversations)
+    func searchUsersForDM(query: String) async throws -> [FriendUser] {
+        struct Wrap: Decodable { let users: [FriendUser] }
+        let w: Wrap = try await request(
+            "messages/search-users",
+            query: [URLQueryItem(name: "q", value: query)]
+        )
+        return w.users
     }
 
     // Profile
@@ -153,8 +316,8 @@ struct APIClient {
     func unfollow(login: String) async throws {
         let _: EmptyResponse = try await request("follow/\(login)", method: "DELETE")
     }
-    func followingList() async throws -> [UserProfile] {
-        struct Wrap: Decodable { let users: [UserProfile] }
+    func followingList() async throws -> [FriendUser] {
+        struct Wrap: Decodable { let users: [FriendUser] }
         let w: Wrap = try await request("following", query: [URLQueryItem(name: "per_page", value: "100")])
         return w.users
     }

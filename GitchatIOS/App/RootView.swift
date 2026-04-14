@@ -8,11 +8,16 @@ struct RootView: View {
     var body: some View {
         Group {
             if auth.isAuthenticated {
-                MainTabView()
-                    .task {
-                        socket.connect()
-                        startHeartbeat()
+                VStack(spacing: 0) {
+                    if auth.needsGithubLink {
+                        LinkGithubBanner()
                     }
+                    MainTabView()
+                }
+                .task {
+                    socket.connect()
+                    startHeartbeat()
+                }
             } else {
                 SignInView()
             }

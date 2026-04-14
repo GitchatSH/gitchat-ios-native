@@ -28,7 +28,19 @@ struct ProfileView: View {
 
     var body: some View {
         ScrollView {
-            if let p = vm.profile {
+            if let err = vm.error, vm.profile == nil {
+                VStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 40))
+                        .foregroundStyle(.secondary)
+                    Text("Couldn't load profile").font(.headline)
+                    Text(err).font(.caption).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center).padding(.horizontal)
+                    Button("Retry") { Task { await vm.load() } }
+                        .buttonStyle(.borderedProminent)
+                }
+                .padding(.top, 60)
+            } else if let p = vm.profile {
                 VStack(spacing: 16) {
                     AvatarView(url: p.avatar_url, size: 96)
                         .padding(.top)

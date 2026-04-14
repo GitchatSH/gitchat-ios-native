@@ -20,9 +20,22 @@ final class ConversationsViewModel: ObservableObject {
 struct ConversationsListView: View {
     @StateObject private var vm = ConversationsViewModel()
     @EnvironmentObject var socket: SocketClient
+    @State private var showNewChat = false
+    @State private var filter = ""
+    @State private var path = NavigationPath()
+
+    private var filtered: [Conversation] {
+        let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return vm.conversations }
+        return vm.conversations.filter { c in
+            c.displayTitle.lowercased().contains(q)
+                || (c.last_message_preview ?? c.last_message?.content ?? "").lowercased().contains(q)
+                || c.participants.contains(where: { $0.login.lowercased().contains(q) })
+        }
+    }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Group {
                 if vm.isLoading && vm.conversations.isEmpty {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -30,10 +43,10 @@ struct ConversationsListView: View {
                     ContentUnavailableCompat(
                         title: "No conversations yet",
                         systemImage: "bubble.left.and.bubble.right",
-                        description: "Start chatting with developers you follow."
+                        description: "Tap the pencil icon to start one."
                     )
                 } else {
-                    List(vm.conversations) { convo in
+                    List(filtered) { convo in
                         NavigationLink(value: convo) {
                             ConversationRow(conversation: convo)
                         }
@@ -42,9 +55,28 @@ struct ConversationsListView: View {
                     .refreshable { await vm.load() }
                 }
             }
+            .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search chats")
             .navigationTitle("Chats")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showNewChat = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    .accessibilityLabel("New chat")
+                }
+            }
             .navigationDestination(for: Conversation.self) { convo in
                 ChatDetailView(conversation: convo)
+            }
+            .sheet(isPresented: $showNewChat) {
+                NewChatView { convo in
+                    Task {
+                        await vm.load()
+                        path.append(convo)
+                    }
+                }
             }
             .task {
                 if vm.conversations.isEmpty { await vm.load() }

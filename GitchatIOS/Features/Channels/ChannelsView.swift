@@ -26,11 +26,13 @@ struct ChannelsView: View {
                     )
                 } else {
                     List(vm.channels) { c in
-                        HStack(spacing: 12) {
-                            AvatarView(url: c.avatarUrl, size: 44)
-                            VStack(alignment: .leading) {
-                                Text(c.displayName ?? "\(c.repoOwner)/\(c.repoName)").font(.headline)
-                                Text("\(c.subscriberCount) subscribers").font(.caption).foregroundStyle(.secondary)
+                        NavigationLink(value: c) {
+                            HStack(spacing: 12) {
+                                AvatarView(url: c.avatarUrl, size: 44)
+                                VStack(alignment: .leading) {
+                                    Text(c.displayName ?? "\(c.repoOwner)/\(c.repoName)").font(.headline)
+                                    Text("\(c.subscriberCount) subscribers").font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
@@ -39,6 +41,9 @@ struct ChannelsView: View {
                 }
             }
             .navigationTitle("Channels")
+            .navigationDestination(for: RepoChannel.self) { c in
+                ChannelDetailView(channel: c)
+            }
             .task { await vm.load() }
         }
     }

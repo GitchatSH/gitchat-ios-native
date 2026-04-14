@@ -1,0 +1,254 @@
+import SwiftUI
+
+@MainActor
+final class NewChatViewModel: ObservableObject {
+    @Published var query: String = ""
+    @Published var results: [FriendUser] = []
+    @Published var friends: [FriendUser] = []
+    @Published var isLoading = false
+    @Published var error: String?
+    @Published var creating = false
+    @Published var groupMode = false
+    @Published var selected: [FriendUser] = []
+    @Published var groupName: String = ""
+
+    private var debounceTask: Task<Void, Never>?
+
+    func loadFriends() async {
+        do { friends = try await APIClient.shared.followingList() } catch { }
+    }
+
+    func queryChanged(_ text: String) {
+        debounceTask?.cancel()
+        let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else {
+            results = []
+            return
+        }
+        debounceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            if Task.isCancelled { return }
+            await self?.search(q)
+        }
+    }
+
+    private func search(_ q: String) async {
+        isLoading = true; error = nil
+        defer { isLoading = false }
+        do {
+            results = try await APIClient.shared.searchUsersForDM(query: q)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    func toggle(_ u: FriendUser) {
+        if let i = selected.firstIndex(where: { $0.login == u.login }) {
+            selected.remove(at: i)
+        } else {
+            selected.append(u)
+        }
+    }
+
+    func isSelected(_ u: FriendUser) -> Bool {
+        selected.contains(where: { $0.login == u.login })
+    }
+
+    func startDM(with login: String) async -> Conversation? {
+        creating = true; defer { creating = false }
+        do { return try await APIClient.shared.createConversation(recipient: login) }
+        catch { self.error = error.localizedDescription; return nil }
+    }
+
+    func createGroupChat() async -> Conversation? {
+        guard !selected.isEmpty else { return nil }
+        creating = true; defer { creating = false }
+        do {
+            let name = groupName.trimmingCharacters(in: .whitespacesAndNewlines)
+            return try await APIClient.shared.createGroup(
+                recipients: selected.map(\.login),
+                name: name.isEmpty ? nil : name
+            )
+        } catch { self.error = error.localizedDescription; return nil }
+    }
+
+    var visibleUsers: [FriendUser] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if q.count >= 2 { return results }
+        // No query — show followed friends as the default suggestion set
+        return friends
+    }
+}
+
+struct NewChatView: View {
+    @StateObject private var vm = NewChatViewModel()
+    @Environment(\.dismiss) private var dismiss
+    let onOpen: (Conversation) -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                searchField
+                list
+            }
+            .navigationTitle(vm.groupMode ? "New group" : "New chat")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if vm.groupMode {
+                        Button("Create") {
+                            Task {
+                                if let convo = await vm.createGroupChat() {
+                                    onOpen(convo); dismiss()
+                                }
+                            }
+                        }
+                        .disabled(vm.selected.isEmpty || vm.creating)
+                        .font(.geist(15, weight: .semibold))
+                    } else {
+                        Button {
+                            vm.groupMode = true
+                        } label: {
+                            Image(systemName: "person.2.fill")
+                        }
+                        .accessibilityLabel("New group")
+                    }
+                }
+            }
+            .overlay {
+                if vm.creating { loadingOverlay }
+            }
+            .task { await vm.loadFriends() }
+        }
+    }
+
+    private var searchField: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(Color(.secondaryLabel))
+                TextField("Search by handle or name", text: $vm.query)
+                    .font(.geist(16, weight: .regular))
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .onChange(of: vm.query) { vm.queryChanged($0) }
+                if !vm.query.isEmpty {
+                    Button { vm.query = ""; vm.results = [] } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(Color(.tertiaryLabel))
+                    }
+                    .buttonStyle(.plain)
+                }
+                if vm.isLoading {
+                    ProgressView().scaleEffect(0.75)
+                }
+            }
+            .padding(10)
+            .background(Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if vm.groupMode {
+                TextField("Group name (optional)", text: $vm.groupName)
+                    .font(.geist(15, weight: .regular))
+                    .padding(10)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                if !vm.selected.isEmpty {
+                    HStack {
+                        Text("\(vm.selected.count) selected")
+                            .font(.geist(12, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                        Spacer()
+                        Button("Clear") {
+                            vm.selected.removeAll()
+                        }
+                        .font(.geist(12, weight: .semibold))
+                    }
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+    }
+
+    private var list: some View {
+        Group {
+            if vm.visibleUsers.isEmpty && !vm.isLoading {
+                if vm.query.isEmpty {
+                    ContentUnavailableCompat(
+                        title: "No friends yet",
+                        systemImage: "person.2",
+                        description: "Search above to find anyone on GitHub."
+                    )
+                } else if vm.query.count >= 2 {
+                    ContentUnavailableCompat(
+                        title: "No matches",
+                        systemImage: "person.slash",
+                        description: "Try a different handle."
+                    )
+                } else {
+                    Spacer()
+                }
+            } else {
+                List(vm.visibleUsers) { user in
+                    row(for: user)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                }
+                .listStyle(.plain)
+            }
+        }
+    }
+
+    private func row(for user: FriendUser) -> some View {
+        let selected = vm.isSelected(user)
+        return Button {
+            if vm.groupMode {
+                vm.toggle(user)
+            } else {
+                Task {
+                    if let convo = await vm.startDM(with: user.login) {
+                        onOpen(convo); dismiss()
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 12) {
+                AvatarView(url: user.avatar_url, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text((user.name?.isEmpty == false ? user.name! : user.login))
+                        .font(.geist(15, weight: .semibold))
+                        .foregroundStyle(Color(.label))
+                    Text("@\(user.login)")
+                        .font(.geist(12, weight: .regular))
+                        .foregroundStyle(Color(.secondaryLabel))
+                }
+                Spacer()
+                if vm.groupMode {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(selected ? Color.accentColor : Color(.tertiaryLabel))
+                } else if user.online == true {
+                    Circle().fill(.green).frame(width: 8, height: 8)
+                }
+            }
+            .padding(10)
+            .background(
+                selected ? Color.accentColor.opacity(0.08) : Color.clear
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var loadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.2).ignoresSafeArea()
+            ProgressView().tint(.white).padding().background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+}

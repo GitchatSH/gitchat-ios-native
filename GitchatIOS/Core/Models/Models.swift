@@ -67,8 +67,8 @@ struct ConversationListResponse: Decodable {
 struct ConversationParticipant: Decodable, Identifiable, Hashable {
     var id: String { login }
     let login: String
-    let avatar_url: String
-    let name: String
+    let avatar_url: String?
+    let name: String?
     let online: Bool?
 }
 
@@ -114,7 +114,7 @@ struct SendMessageRequest: Encodable {
 struct UserProfile: Decodable, Hashable {
     let login: String
     let name: String?
-    let avatar_url: String
+    let avatar_url: String?
     let bio: String?
     let company: String?
     let location: String?
@@ -125,6 +125,15 @@ struct UserProfile: Decodable, Hashable {
     let star_power: Int?
     let top_repos: [RepoSummary]?
     let created_at: String?
+}
+
+/// Minimal user shape returned by /following, /followers, /messages/search-users, etc.
+struct FriendUser: Decodable, Identifiable, Hashable {
+    var id: String { login }
+    let login: String
+    let name: String?
+    let avatar_url: String?
+    let online: Bool?
 }
 
 struct RepoSummary: Decodable, Hashable, Identifiable {
