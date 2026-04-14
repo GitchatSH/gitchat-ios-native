@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		00DB4217A078DC17FD451462 /* ChannelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9685947BA9F7F47948D0D9FD /* ChannelDetailView.swift */; };
 		0992E140C62E0F3779B22A78 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70C13ECDA5B85E7FDEDB9D8 /* Models.swift */; };
+		1297F23217D80C72EB69A324 /* OneSignalExtension in Frameworks */ = {isa = PBXBuildFile; productRef = A804AE540868411FDE202E67 /* OneSignalExtension */; };
 		20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */; };
 		23DA5097E24D54E366575F0C /* BlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C7DB031D380DE22F80C960 /* BlockStore.swift */; };
 		2A4E2644658850573AD267CD /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E987C78E04FD812B6372B42 /* ProfileView.swift */; };
@@ -23,6 +24,8 @@
 		6E8E6B2E139735239E900101 /* Geist-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C300A84467231D3D6475F5E0 /* Geist-Bold.ttf */; };
 		72F26E42CF9099BA1A6CEC36 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F7E0D975F7A5F9F05AE4C937 /* Assets.xcassets */; };
 		76A2320B8D73680FE87405B3 /* SocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA25F2BA4BC86A0256C4C1DD /* SocketClient.swift */; };
+		80C07FFED87C334C9E6943FF /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500978A5175704DEC944236B /* NotificationService.swift */; };
+		875CBDD4A2B05627C889CFF4 /* OneSignalNotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		8AD5EE1720D14E153C09F5BA /* StoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07857501623E25CD298B606 /* StoreManager.swift */; };
 		999E1B7961171663AD703952 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */; };
 		9FF34A6AA21F0417CEF2D2D5 /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D27D2F5A412D74F579504B /* ChannelsView.swift */; };
@@ -40,16 +43,43 @@
 		FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99301F77409640F810FB1F0D /* UpgradeView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		F05CDA2F190907952F592C0C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE209328F4293473D3365D39 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6F43BFDA3F932B01CF0412E7;
+			remoteInfo = OneSignalNotificationServiceExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A9E912D26ED35979B30271EB /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				875CBDD4A2B05627C889CFF4 /* OneSignalNotificationServiceExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		043204DC26642044739AFFED /* OneSignalNotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OneSignalNotificationServiceExtension.entitlements; sourceTree = "<group>"; };
 		0A64D83F5578E057CF2F6A03 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
 		3240F18DF11804D759392EA5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		4BC0F97726C2E12C5EF27207 /* FollowingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowingView.swift; sourceTree = "<group>"; };
+		500978A5175704DEC944236B /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GitchatIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E57C30BA465BAC85D5F1F79 /* Geist-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Black.ttf"; sourceTree = "<group>"; };
 		79D9DA88399CF4A4C8C4371F /* NewChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatView.swift; sourceTree = "<group>"; };
 		7E94D622A0735683786E43FF /* SafariSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariSheet.swift; sourceTree = "<group>"; };
 		808AF0F70444427011FF450A /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
+		814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = OneSignalNotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8A624F25A8589989F02FE384 /* Geist-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Regular.ttf"; sourceTree = "<group>"; };
 		8E987C78E04FD812B6372B42 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		9685947BA9F7F47948D0D9FD /* ChannelDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelDetailView.swift; sourceTree = "<group>"; };
@@ -73,6 +103,7 @@
 		F7537B4250B26209B8C7F03C /* Geist-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-SemiBold.ttf"; sourceTree = "<group>"; };
 		F7E0D975F7A5F9F05AE4C937 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
+		FE29B3507EA081EE81ACD1F8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +113,14 @@
 			files = (
 				6C48CFFBB6D004E3EF124CE3 /* SocketIO in Frameworks */,
 				42CD53F46D0C85A66271982E /* OneSignalFramework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		805EC3D5548F8060DC6B1344 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1297F23217D80C72EB69A324 /* OneSignalExtension in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +172,7 @@
 			isa = PBXGroup;
 			children = (
 				0D9442EC8C4FC8F6B1095FEA /* GitchatIOS */,
+				6AD5976CDA709D12CBDE670A /* OneSignalNotificationServiceExtension */,
 				4B29051015B57A682F6F111B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -163,6 +203,7 @@
 			isa = PBXGroup;
 			children = (
 				653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */,
+				814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -208,6 +249,16 @@
 				9E6C6D62D2207B8EF522F851 /* SettingsView.swift */,
 			);
 			path = Profile;
+			sourceTree = "<group>";
+		};
+		6AD5976CDA709D12CBDE670A /* OneSignalNotificationServiceExtension */ = {
+			isa = PBXGroup;
+			children = (
+				FE29B3507EA081EE81ACD1F8 /* Info.plist */,
+				500978A5175704DEC944236B /* NotificationService.swift */,
+				043204DC26642044739AFFED /* OneSignalNotificationServiceExtension.entitlements */,
+			);
+			path = OneSignalNotificationServiceExtension;
 			sourceTree = "<group>";
 		};
 		75FD909FFC59E1A265FFE9D2 /* Core */ = {
@@ -280,10 +331,12 @@
 				8CDDD9207D4516957F4C6D6B /* Sources */,
 				B3A3CE17CC142D96B4213C39 /* Resources */,
 				2AFBD2219A3304C09570CAA9 /* Frameworks */,
+				A9E912D26ED35979B30271EB /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				96BDEA750E9F07883F228703 /* PBXTargetDependency */,
 			);
 			name = GitchatIOS;
 			packageProductDependencies = (
@@ -293,6 +346,25 @@
 			productName = GitchatIOS;
 			productReference = 653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */;
 			productType = "com.apple.product-type.application";
+		};
+		6F43BFDA3F932B01CF0412E7 /* OneSignalNotificationServiceExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DBA9CCB182E4CD108DE81D78 /* Build configuration list for PBXNativeTarget "OneSignalNotificationServiceExtension" */;
+			buildPhases = (
+				55B919FB72A578C456A08892 /* Sources */,
+				805EC3D5548F8060DC6B1344 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OneSignalNotificationServiceExtension;
+			packageProductDependencies = (
+				A804AE540868411FDE202E67 /* OneSignalExtension */,
+			);
+			productName = OneSignalNotificationServiceExtension;
+			productReference = 814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -304,6 +376,10 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					15D7A7746C96C0D956D835DF = {
+						DevelopmentTeam = 9S5F8693FB;
+						ProvisioningStyle = Automatic;
+					};
+					6F43BFDA3F932B01CF0412E7 = {
 						DevelopmentTeam = 9S5F8693FB;
 						ProvisioningStyle = Automatic;
 					};
@@ -328,6 +404,7 @@
 			projectRoot = "";
 			targets = (
 				15D7A7746C96C0D956D835DF /* GitchatIOS */,
+				6F43BFDA3F932B01CF0412E7 /* OneSignalNotificationServiceExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -348,6 +425,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		55B919FB72A578C456A08892 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				80C07FFED87C334C9E6943FF /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8CDDD9207D4516957F4C6D6B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -380,6 +465,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		96BDEA750E9F07883F228703 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6F43BFDA3F932B01CF0412E7 /* OneSignalNotificationServiceExtension */;
+			targetProxy = F05CDA2F190907952F592C0C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0147FDD3494219CD15F87115 /* Debug */ = {
@@ -459,6 +552,48 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.9;
+			};
+			name = Release;
+		};
+		55D18C3DC5EE18E9D4818C57 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OneSignalNotificationServiceExtension/OneSignalNotificationServiceExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 9S5F8693FB;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OneSignalNotificationServiceExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = chat.git.OneSignalNotificationServiceExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		B6CCE87CD5023925CA331036 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OneSignalNotificationServiceExtension/OneSignalNotificationServiceExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 9S5F8693FB;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OneSignalNotificationServiceExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = chat.git.OneSignalNotificationServiceExtension;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = NO;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -570,6 +705,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		DBA9CCB182E4CD108DE81D78 /* Build configuration list for PBXNativeTarget "OneSignalNotificationServiceExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				55D18C3DC5EE18E9D4818C57 /* Debug */,
+				B6CCE87CD5023925CA331036 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -596,6 +740,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
 			productName = OneSignalFramework;
+		};
+		A804AE540868411FDE202E67 /* OneSignalExtension */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
+			productName = OneSignalExtension;
 		};
 		E40E297012AF55791D27B93E /* SocketIO */ = {
 			isa = XCSwiftPackageProductDependency;

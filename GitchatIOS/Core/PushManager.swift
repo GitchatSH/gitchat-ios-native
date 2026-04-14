@@ -8,7 +8,7 @@ final class PushManager {
     /// Paste your OneSignal App ID here (Settings → Keys & IDs). Leave the
     /// placeholder string if you haven't created the app yet — PushManager
     /// will quietly skip initialization.
-    static let oneSignalAppId = "PASTE_YOUR_ONESIGNAL_APP_ID"
+    static let oneSignalAppId = "bda62420-cf4d-4669-b5ed-829010c63adc"
 
     private var initialized = false
 

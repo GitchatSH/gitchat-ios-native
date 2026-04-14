@@ -6,6 +6,7 @@ struct UpgradeView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var purchasing: String?
     @State private var error: String?
+    @State private var legalURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -41,6 +42,12 @@ struct UpgradeView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Close") { dismiss() }
                 }
+            }
+            .sheet(item: Binding<URLIdentifiableIAP?>(
+                get: { legalURL.map(URLIdentifiableIAP.init) },
+                set: { legalURL = $0?.url }
+            )) { wrapped in
+                SafariSheet(url: wrapped.url).ignoresSafeArea()
             }
         }
     }
@@ -106,7 +113,7 @@ struct UpgradeView: View {
                             Text(product.displayName)
                                 .font(.geist(16, weight: .semibold))
                                 .foregroundStyle(Color(.label))
-                            Text(product.description)
+                            Text(subscriptionLengthLabel(for: product))
                                 .font(.geist(12, weight: .regular))
                                 .foregroundStyle(.secondary)
                         }
@@ -114,9 +121,14 @@ struct UpgradeView: View {
                         if purchasing == product.id {
                             ProgressView()
                         } else {
-                            Text(product.displayPrice)
-                                .font(.geist(16, weight: .bold))
-                                .foregroundStyle(Color.accentColor)
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(product.displayPrice)
+                                    .font(.geist(16, weight: .bold))
+                                    .foregroundStyle(Color.accentColor)
+                                Text(perPeriodLabel(for: product))
+                                    .font(.geist(10, weight: .regular))
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                     .padding()
@@ -125,6 +137,28 @@ struct UpgradeView: View {
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+
+    private func subscriptionLengthLabel(for product: Product) -> String {
+        guard let sub = product.subscription else { return product.description }
+        switch sub.subscriptionPeriod.unit {
+        case .day:   return "\(sub.subscriptionPeriod.value) day subscription"
+        case .week:  return "\(sub.subscriptionPeriod.value) week subscription"
+        case .month: return sub.subscriptionPeriod.value == 1 ? "Monthly subscription" : "\(sub.subscriptionPeriod.value) month subscription"
+        case .year:  return sub.subscriptionPeriod.value == 1 ? "Yearly subscription" : "\(sub.subscriptionPeriod.value) year subscription"
+        @unknown default: return product.description
+        }
+    }
+
+    private func perPeriodLabel(for product: Product) -> String {
+        guard let sub = product.subscription else { return "" }
+        switch sub.subscriptionPeriod.unit {
+        case .month: return "per month"
+        case .year:  return "per year"
+        case .week:  return "per week"
+        case .day:   return "per day"
+        @unknown default: return ""
         }
     }
 
@@ -185,12 +219,28 @@ struct UpgradeView: View {
     }
 
     private var legal: some View {
-        VStack(spacing: 4) {
-            Text("Subscriptions auto-renew unless cancelled at least 24 hours before the end of the period. Manage or cancel in your Apple ID settings.")
+        VStack(spacing: 10) {
+            Text("Subscriptions auto-renew at the end of each period unless cancelled at least 24 hours before the end of the current period. You can manage or cancel your subscription in your Apple ID account settings at any time. Payment will be charged to your Apple ID account at purchase confirmation.")
                 .font(.geist(10, weight: .regular))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
+
+            HStack(spacing: 16) {
+                Button("Terms of Use") { legalURL = Config.termsURL }
+                Text("·").foregroundStyle(.tertiary)
+                Button("Privacy Policy") { legalURL = Config.privacyURL }
+                Text("·").foregroundStyle(.tertiary)
+                Button("EULA") { legalURL = Config.eulaURL }
+            }
+            .font(.geist(11, weight: .semibold))
+            .foregroundStyle(Color.accentColor)
         }
         .padding(.top, 8)
+        .padding(.horizontal, 8)
     }
+}
+
+private struct URLIdentifiableIAP: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }

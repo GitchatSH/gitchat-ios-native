@@ -33,17 +33,23 @@ targets:
         product: SocketIO
       - package: OneSignalXCFramework
         product: OneSignalFramework
+      - target: OneSignalNotificationServiceExtension
+        embed: true
+        codeSign: true
     entitlements:
       path: GitchatIOS/GitchatIOS.entitlements
       properties:
         com.apple.developer.applesignin:
           - Default
+        aps-environment: development
+        com.apple.security.application-groups:
+          - group.chat.git.onesignal
     info:
       path: GitchatIOS/Info.plist
       properties:
         CFBundleDisplayName: Gitchat
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "5"
+        CFBundleVersion: "7"
         UILaunchScreen:
           UIColorName: AccentColor
         UISupportedInterfaceOrientations:
@@ -72,3 +78,35 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: GitchatIOS/Info.plist
+  OneSignalNotificationServiceExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: OneSignalNotificationServiceExtension
+    dependencies:
+      - package: OneSignalXCFramework
+        product: OneSignalExtension
+    info:
+      path: OneSignalNotificationServiceExtension/Info.plist
+      properties:
+        CFBundleDisplayName: OneSignalNotificationServiceExtension
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "7"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    entitlements:
+      path: OneSignalNotificationServiceExtension/OneSignalNotificationServiceExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.chat.git.onesignal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: chat.git.OneSignalNotificationServiceExtension
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 9S5F8693FB
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: OneSignalNotificationServiceExtension/Info.plist
+        SKIP_INSTALL: NO
