@@ -20,9 +20,6 @@ struct UpgradeView: View {
                         comingSoon
                     } else {
                         subscriptionTiles
-                        if let supporter = store.supporter {
-                            oneTimeTile(supporter)
-                        }
                     }
                     Button("Restore purchases") {
                         Task { try? await store.restore() }
@@ -160,47 +157,6 @@ struct UpgradeView: View {
         case .day:   return "per day"
         @unknown default: return ""
         }
-    }
-
-    private func oneTimeTile(_ product: Product) -> some View {
-        Button {
-            Task {
-                do {
-                    purchasing = product.id
-                    _ = try await store.purchase(product)
-                    purchasing = nil
-                    if store.isPro { dismiss() }
-                } catch {
-                    purchasing = nil
-                    self.error = error.localizedDescription
-                }
-            }
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Lifetime supporter")
-                        .font(.geist(16, weight: .semibold))
-                        .foregroundStyle(Color(.label))
-                    Text("One-time purchase, all Pro features forever")
-                        .font(.geist(12, weight: .regular))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if purchasing == product.id {
-                    ProgressView()
-                } else {
-                    Text(product.displayPrice)
-                        .font(.geist(16, weight: .bold))
-                        .foregroundStyle(Color.accentColor)
-                }
-            }
-            .padding()
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(Color.accentColor.opacity(0.5), lineWidth: 1.5)
-            )
-        }
-        .buttonStyle(.plain)
     }
 
     private var comingSoon: some View {

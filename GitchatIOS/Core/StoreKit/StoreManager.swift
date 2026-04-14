@@ -14,8 +14,7 @@ final class StoreManager: ObservableObject {
 
     static let productIDs: Set<String> = [
         "chat.git.pro.monthly",
-        "chat.git.pro.yearly",
-        "chat.git.supporter"
+        "chat.git.pro.yearly"
     ]
 
     var isPro: Bool {
@@ -26,11 +25,6 @@ final class StoreManager: ObservableObject {
     var subscriptions: [Product] {
         products.filter { $0.type == .autoRenewable }
             .sorted { $0.price < $1.price }
-    }
-
-    /// One-time supporter upgrade.
-    var supporter: Product? {
-        products.first { $0.id == "chat.git.supporter" }
     }
 
     private var updatesTask: Task<Void, Never>?

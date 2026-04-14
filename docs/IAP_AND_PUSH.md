@@ -16,7 +16,6 @@ Keep it small. Three products, tiered clearly:
 |-|-|-|-|
 | **Gitchat Pro** (monthly) | Auto-renewable subscription | $3.99/mo | `chat.git.pro.monthly` |
 | **Gitchat Pro** (yearly) | Auto-renewable subscription | $29.99/yr | `chat.git.pro.yearly` |
-| **Supporter** (one-time) | Non-consumable | $9.99 | `chat.git.supporter` |
 
 **Why these three?**
 - Monthly is the on-ramp
