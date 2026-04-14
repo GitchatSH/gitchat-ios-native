@@ -1,0 +1,58 @@
+name: GitchatIOS
+options:
+  bundleIdPrefix: git
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+settings:
+  base:
+    DEVELOPMENT_TEAM: 9S5F8693FB
+    SWIFT_VERSION: "5.9"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+packages:
+  SocketIO:
+    url: https://github.com/socketio/socket.io-client-swift
+    from: "16.1.0"
+targets:
+  GitchatIOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: GitchatIOS
+    resources:
+      - path: GitchatIOS/Resources/Assets.xcassets
+    dependencies:
+      - package: SocketIO
+        product: SocketIO
+    info:
+      path: GitchatIOS/Info.plist
+      properties:
+        CFBundleDisplayName: Gitchat
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        UILaunchScreen:
+          UIColorName: AccentColor
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        NSCameraUsageDescription: Gitchat needs camera access to attach photos to messages.
+        NSPhotoLibraryUsageDescription: Gitchat needs photo library access to attach images to messages.
+        NSMicrophoneUsageDescription: Gitchat needs microphone access for voice messages.
+        ITSAppUsesNonExemptEncryption: false
+        LSApplicationQueriesSchemes:
+          - https
+          - github
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: git.chat
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 9S5F8693FB
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: GitchatIOS/Info.plist
