@@ -4,8 +4,11 @@ import StoreKit
 struct RootView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var socket: SocketClient
+    @StateObject private var push = PushManager.shared
     @Environment(\.requestReview) private var requestReview
     @State private var heartbeatTask: Task<Void, Never>?
+    @State private var routedConversationId: String?
+    @State private var routedProfileLogin: String?
 
     var body: some View {
         Group {
@@ -23,6 +26,21 @@ struct RootView: View {
             } else {
                 SignInView()
             }
+        }
+        .sheet(item: Binding(
+            get: { routedProfileLogin.map(ProfileLoginRoute.init(login:)) },
+            set: { routedProfileLogin = $0?.login }
+        )) { route in
+            NavigationStack { ProfileView(login: route.login) }
+        }
+        .onChange(of: push.pendingRoute) { route in
+            guard let route else { return }
+            switch route {
+            case .profile(let login):
+                routedProfileLogin = login
+            default: break
+            }
+            push.pendingRoute = nil
         }
         .onChange(of: auth.isAuthenticated) { isAuth in
             if isAuth {

@@ -15,6 +15,7 @@
 		23DA5097E24D54E366575F0C /* BlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C7DB031D380DE22F80C960 /* BlockStore.swift */; };
 		2A4E2644658850573AD267CD /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E987C78E04FD812B6372B42 /* ProfileView.swift */; };
 		2A9935280A2FA6DB2275A27D /* RelativeTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3255839AE4B52EEE916274AF /* RelativeTime.swift */; };
+		2C8169E0DC4D00EE13E46120 /* Intents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA91A2CC0ACF49DD840C13FF /* Intents.framework */; };
 		301A8A5BBE220BDAD5E67750 /* Geist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A624F25A8589989F02FE384 /* Geist-Regular.ttf */; };
 		345DAB43FC963AC5DC04D6F6 /* ConversationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16BA9650859D21117E8FF1B /* ConversationsListView.swift */; };
 		38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D5340BD447D966282E2E67D /* Haptics.swift */; };
@@ -104,6 +105,7 @@
 		CE9078C15E5B9CC4441DCE26 /* GitHubWebOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubWebOAuth.swift; sourceTree = "<group>"; };
 		D0108E6ED2C630F572A0C5F9 /* LinkGithubBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkGithubBanner.swift; sourceTree = "<group>"; };
 		D1AC72B0B806B50EB64E82E8 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		DA91A2CC0ACF49DD840C13FF /* Intents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Intents.framework; path = System/Library/Frameworks/Intents.framework; sourceTree = SDKROOT; };
 		DDDF70233C14FFDD5E7CB1A8 /* ChatDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailView.swift; sourceTree = "<group>"; };
 		DE08A0DE3086C45434C3F914 /* GitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitchatApp.swift; sourceTree = "<group>"; };
 		ED882894AD818DBFB0421E96 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1297F23217D80C72EB69A324 /* OneSignalExtension in Frameworks */,
+				2C8169E0DC4D00EE13E46120 /* Intents.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -181,6 +184,7 @@
 			children = (
 				0D9442EC8C4FC8F6B1095FEA /* GitchatIOS */,
 				6AD5976CDA709D12CBDE670A /* OneSignalNotificationServiceExtension */,
+				BA7A14953E341B5C937325EA /* Frameworks */,
 				4B29051015B57A682F6F111B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -320,6 +324,14 @@
 				FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		BA7A14953E341B5C937325EA /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				DA91A2CC0ACF49DD840C13FF /* Intents.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		C9FA730CA955F901CF2929EE /* Channels */ = {

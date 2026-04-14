@@ -42,6 +42,7 @@ targets:
         com.apple.developer.applesignin:
           - Default
         aps-environment: development
+        com.apple.developer.usernotifications.communication: true
         com.apple.security.application-groups:
           - group.chat.git.onesignal
     info:
@@ -49,7 +50,7 @@ targets:
       properties:
         CFBundleDisplayName: Gitchat
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "14"
+        CFBundleVersion: "15"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -89,12 +90,13 @@ targets:
     dependencies:
       - package: OneSignalXCFramework
         product: OneSignalExtension
+      - sdk: Intents.framework
     info:
       path: OneSignalNotificationServiceExtension/Info.plist
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "14"
+        CFBundleVersion: "15"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

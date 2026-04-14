@@ -1,5 +1,6 @@
 import UserNotifications
 import OneSignalExtension
+import Intents
 
 final class NotificationService: UNNotificationServiceExtension {
     var contentHandler: ((UNNotificationContent) -> Void)?
@@ -14,14 +15,20 @@ final class NotificationService: UNNotificationServiceExtension {
         self.contentHandler = contentHandler
         self.bestAttemptContent = request.content.mutableCopy() as? UNMutableNotificationContent
 
-        if let bestAttemptContent = bestAttemptContent {
-            // Hand off to OneSignal — it decrypts, enriches (attachment,
-            // action buttons), and calls back with the mutated content.
-            OneSignalExtension.didReceiveNotificationExtensionRequest(
-                request,
-                with: bestAttemptContent,
-                withContentHandler: contentHandler
-            )
+        guard let bestAttemptContent = bestAttemptContent else {
+            contentHandler(request.content)
+            return
+        }
+
+        // Let OneSignal first decrypt + enrich (attachments, action buttons).
+        OneSignalExtension.didReceiveNotificationExtensionRequest(
+            request,
+            with: bestAttemptContent
+        ) { [weak self] processed in
+            // Attempt to upgrade to a Communication Notification (big avatar
+            // + small app icon) when we have a sender login in the payload.
+            let finalContent = self?.applyCommunicationIntent(to: processed) ?? processed
+            contentHandler(finalContent)
         }
     }
 
@@ -32,6 +39,70 @@ final class NotificationService: UNNotificationServiceExtension {
                 with: bestAttemptContent
             )
             contentHandler(bestAttemptContent)
+        }
+    }
+
+    /// Upgrade a notification to a Communication Notification when we have a
+    /// `sender_login` / `sender_avatar_url` in the payload. On iOS 15+ this
+    /// makes the notification render with the sender's avatar as the hero
+    /// and the app icon as a small corner badge.
+    private func applyCommunicationIntent(to content: UNNotificationContent) -> UNNotificationContent {
+        guard #available(iOS 15.0, *) else { return content }
+
+        // Pull custom data — OneSignal nests under `custom.a`.
+        let userInfo = content.userInfo
+        let custom = (userInfo["custom"] as? [String: Any]) ?? [:]
+        let data = (custom["a"] as? [String: Any]) ?? (userInfo["data"] as? [String: Any]) ?? [:]
+
+        guard
+            let senderLogin = (data["sender_login"] as? String) ?? (data["actor_login"] as? String),
+            !senderLogin.isEmpty
+        else {
+            return content
+        }
+
+        let senderName = (data["sender_name"] as? String) ?? senderLogin
+        let avatarURLString = (data["sender_avatar_url"] as? String)
+            ?? "https://github.com/\(senderLogin).png"
+
+        // Build an INPerson with an INImage (downloaded synchronously — small
+        // network cost in the NSE is acceptable because the system gives us
+        // up to 30 s).
+        let avatarImage: INImage?
+        if let url = URL(string: avatarURLString),
+           let data = try? Data(contentsOf: url) {
+            avatarImage = INImage(imageData: data)
+        } else {
+            avatarImage = nil
+        }
+
+        let handle = INPersonHandle(value: senderLogin, type: .unknown)
+        let sender = INPerson(
+            personHandle: handle,
+            nameComponents: nil,
+            displayName: senderName,
+            image: avatarImage,
+            contactIdentifier: nil,
+            customIdentifier: senderLogin
+        )
+
+        let intent = INSendMessageIntent(
+            recipients: nil,
+            content: content.body,
+            speakableGroupName: nil,
+            conversationIdentifier: (data["conversation_id"] as? String) ?? senderLogin,
+            serviceName: nil,
+            sender: sender
+        )
+
+        let interaction = INInteraction(intent: intent, response: nil)
+        interaction.direction = .incoming
+        interaction.donate(completion: nil)
+
+        do {
+            return try content.updating(from: intent)
+        } catch {
+            return content
         }
     }
 }

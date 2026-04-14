@@ -6,6 +6,8 @@ import UIKit
 final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var pinnedIds: Set<String> = []
+    @Published var typingUsers: Set<String> = []
+    @Published var otherReadAt: String?
     @Published var isLoading = false
     @Published var draft = "" {
         didSet { saveDraft() }
@@ -39,6 +41,7 @@ final class ChatViewModel: ObservableObject {
         do {
             let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
             self.messages = resp.messages.reversed()
+            self.otherReadAt = resp.otherReadAt
             try? await APIClient.shared.markRead(conversationId: conversation.id)
         } catch { self.error = error.localizedDescription }
         await loadPinned()
@@ -414,6 +417,25 @@ struct ChatDetailView: View {
     }
 
     @ViewBuilder
+    private var typingAndReadFooter: some View {
+        if !vm.typingUsers.isEmpty {
+            TypingIndicatorRow(logins: Array(vm.typingUsers))
+        }
+        if shouldShowSeen {
+            HStack {
+                Spacer()
+                Text("Seen").font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var shouldShowSeen: Bool {
+        guard let otherReadAt = vm.otherReadAt else { return false }
+        guard let lastMine = visibleMessages.last(where: { $0.sender == auth.login }) else { return false }
+        return (lastMine.created_at ?? "") <= otherReadAt
+    }
+
+    @ViewBuilder
     private func messageRow(for msg: Message, at idx: Int, proxy: ScrollViewProxy) -> some View {
         if let t = msg.type, t != "user" {
             SystemMessageRow(message: msg).id(msg.id)
@@ -476,6 +498,7 @@ struct ChatDetailView: View {
                         ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { idx, msg in
                             messageRow(for: msg, at: idx, proxy: proxy)
                         }
+                        typingAndReadFooter
                         Color.clear.frame(height: 8).id("__bottom__")
                     }
                     .padding()
@@ -659,9 +682,25 @@ struct ChatDetailView: View {
                     }
                 }
             }
+            socket.onTyping = { convId, login, typing in
+                guard convId == vm.conversation.id, login != auth.login else { return }
+                if typing { vm.typingUsers.insert(login) }
+                else { vm.typingUsers.remove(login) }
+            }
+            socket.onConversationRead = { convId, login in
+                guard convId == vm.conversation.id, login != auth.login else { return }
+                vm.otherReadAt = ISO8601DateFormatter().string(from: Date())
+            }
         }
         .onDisappear {
             socket.unsubscribe(conversation: vm.conversation.id)
+            socket.emitTyping(conversationId: vm.conversation.id, isTyping: false)
+        }
+        .onChange(of: vm.draft) { newValue in
+            socket.emitTyping(
+                conversationId: vm.conversation.id,
+                isTyping: !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
         }
         .sheet(item: $reportingMessage) { msg in
             NavigationStack {
@@ -890,6 +929,34 @@ struct MembersSheet: View {
 private struct URLItem: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
+}
+
+struct TypingIndicatorRow: View {
+    let logins: [String]
+    @State private var dotIndex = 0
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle().fill(Color(.secondarySystemBackground)).frame(width: 28, height: 28)
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(Color.secondary)
+                        .frame(width: 6, height: 6)
+                        .opacity(dotIndex == i ? 1 : 0.3)
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 8)
+            .background(Color(.secondarySystemBackground), in: Capsule())
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 4)
+        .onAppear {
+            Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
+                dotIndex = (dotIndex + 1) % 3
+            }
+        }
+    }
 }
 
 struct SystemMessageRow: View {
@@ -1452,17 +1519,56 @@ struct MessageBubble: View {
                         .onTapGesture { onAttachmentTap?(url) }
                 }
                 if !message.content.isEmpty {
-                    Text(Self.attributed(message.content, isMe: isMe))
-                        .tint(isMe ? .white : Color.accentColor)
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(
-                            isMe ? Color.accentColor : Color(.secondarySystemBackground)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                        .foregroundStyle(isMe ? .white : .primary)
+                    let parsed = Self.parseForwarded(message.content)
+                    VStack(alignment: isMe ? .trailing : .leading, spacing: 0) {
+                        if let from = parsed.forwardedFrom {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrowshape.turn.up.right.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text("Forwarded from @\(from)")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .foregroundStyle(isMe ? Color.white.opacity(0.85) : .secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 8)
+                            .padding(.bottom, 4)
+                        }
+                        Text(Self.attributed(parsed.body, isMe: isMe))
+                            .tint(isMe ? .white : Color.accentColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, parsed.forwardedFrom == nil ? 8 : 6)
+                            .padding(.bottom, parsed.forwardedFrom == nil ? 0 : 2)
+                    }
+                    .background(
+                        isMe ? Color.accentColor : Color(.secondarySystemBackground)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .foregroundStyle(isMe ? .white : .primary)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .strokeBorder(
+                                parsed.forwardedFrom != nil ? (isMe ? Color.white.opacity(0.3) : Color.secondary.opacity(0.3)) : Color.clear,
+                                lineWidth: 1
+                            )
+                    )
                 }
             }
         }
+    }
+
+    static func parseForwarded(_ raw: String) -> (forwardedFrom: String?, body: String) {
+        let pattern = "^> Forwarded from @([A-Za-z0-9-]+)\\n\\n"
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: raw, range: NSRange(location: 0, length: raw.utf16.count)),
+              match.numberOfRanges >= 2,
+              let nameRange = Range(match.range(at: 1), in: raw),
+              let fullRange = Range(match.range, in: raw)
+        else {
+            return (nil, raw)
+        }
+        let login = String(raw[nameRange])
+        let body = String(raw[fullRange.upperBound...])
+        return (login, body)
     }
 
     static func attributed(_ raw: String, isMe: Bool) -> AttributedString {

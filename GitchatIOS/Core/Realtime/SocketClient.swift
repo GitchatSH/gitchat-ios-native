@@ -17,6 +17,8 @@ final class SocketClient: ObservableObject {
     var onPresenceUpdated: ((String, Bool) -> Void)?
     var onReactionUpdated: ((String) -> Void)?
     var onNotificationNew: (() -> Void)?
+    var onTyping: ((String, String, Bool) -> Void)? // conversationId, login, isTyping
+    var onConversationRead: ((String, String) -> Void)? // conversationId, login
 
     private init() {}
 
@@ -74,6 +76,24 @@ final class SocketClient: ObservableObject {
         socket.on("notification:new") { [weak self] _, _ in
             Task { @MainActor in self?.onNotificationNew?() }
         }
+        socket.on("typing:start") { [weak self] data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let convId = dict["conversationId"] as? String,
+                  let login = dict["login"] as? String else { return }
+            Task { @MainActor in self?.onTyping?(convId, login, true) }
+        }
+        socket.on("typing:stop") { [weak self] data, _ in
+            guard let dict = data.first as? [String: Any],
+                  let convId = dict["conversationId"] as? String,
+                  let login = dict["login"] as? String else { return }
+            Task { @MainActor in self?.onTyping?(convId, login, false) }
+        }
+        socket.on("conversation:read") { [weak self] data, _ in
+            guard let dict = (data.first as? [String: Any])?["data"] as? [String: Any] ?? (data.first as? [String: Any]),
+                  let convId = dict["conversationId"] as? String,
+                  let login = dict["login"] as? String else { return }
+            Task { @MainActor in self?.onConversationRead?(convId, login) }
+        }
 
         socket.connect()
     }
@@ -98,5 +118,9 @@ final class SocketClient: ObservableObject {
 
     func subscribeUser(login: String) {
         socket?.emit("subscribe:user", ["login": login])
+    }
+
+    func emitTyping(conversationId: String, isTyping: Bool) {
+        socket?.emit(isTyping ? "typing:start" : "typing:stop", ["conversationId": conversationId])
     }
 }
