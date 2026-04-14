@@ -48,6 +48,7 @@ final class ConversationsViewModel: ObservableObject {
 
 struct ConversationsListView: View {
     @StateObject private var vm = ConversationsViewModel()
+    @StateObject private var router = AppRouter.shared
     @EnvironmentObject var socket: SocketClient
     @State private var showNewChat = false
     @State private var filter = ""
@@ -179,6 +180,22 @@ struct ConversationsListView: View {
                 if vm.conversations.isEmpty { await vm.load() }
                 socket.onConversationUpdated = { Task { await vm.load() } }
             }
+            .onAppear {
+                // Re-bind hook in case chat detail cleared it, and refresh
+                // so the list reflects anything sent from inside a chat.
+                socket.onConversationUpdated = { Task { await vm.load() } }
+                Task { await vm.load() }
+            }
+            .onChange(of: router.pendingConversationId) { id in
+                guard let id else { return }
+                Task {
+                    await vm.load()
+                    if let convo = vm.conversations.first(where: { $0.id == id }) {
+                        path.append(convo)
+                    }
+                    router.pendingConversationId = nil
+                }
+            }
         }
     }
 }
@@ -188,7 +205,14 @@ struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AvatarView(url: conversation.displayAvatarURL, size: 50)
+            if conversation.isGroup && !conversation.participantsOrEmpty.isEmpty {
+                GroupAvatarCluster(
+                    participants: Array(conversation.participantsOrEmpty.prefix(3)),
+                    size: 50
+                )
+            } else {
+                AvatarView(url: conversation.displayAvatarURL, size: 50)
+            }
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(conversation.displayTitle)
@@ -213,6 +237,40 @@ struct ConversationRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+/// Cluster of up to 3 participant avatars arranged inside a fixed square so
+/// group rows feel distinct from single-user rows.
+struct GroupAvatarCluster: View {
+    let participants: [ConversationParticipant]
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            Color.clear.frame(width: size, height: size)
+            if participants.count >= 3 {
+                AvatarView(url: participants[2].avatar_url, size: size * 0.55)
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                    .offset(x: -size * 0.18, y: -size * 0.18)
+                AvatarView(url: participants[1].avatar_url, size: size * 0.45)
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                    .offset(x: size * 0.22, y: -size * 0.08)
+                AvatarView(url: participants[0].avatar_url, size: size * 0.40)
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                    .offset(x: -size * 0.02, y: size * 0.22)
+            } else if participants.count == 2 {
+                AvatarView(url: participants[1].avatar_url, size: size * 0.6)
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                    .offset(x: -size * 0.16, y: -size * 0.12)
+                AvatarView(url: participants[0].avatar_url, size: size * 0.55)
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                    .offset(x: size * 0.18, y: size * 0.14)
+            } else if let first = participants.first {
+                AvatarView(url: first.avatar_url, size: size * 0.8)
+            }
+        }
+        .frame(width: size, height: size)
     }
 }
 

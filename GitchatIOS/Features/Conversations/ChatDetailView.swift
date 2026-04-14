@@ -673,6 +673,7 @@ struct ChatDetailView: View {
             }
         }
         .task {
+            socket.currentConversationId = vm.conversation.id
             await vm.load()
             socket.subscribe(conversation: vm.conversation.id)
             socket.onMessageSent = { msg in
@@ -695,6 +696,9 @@ struct ChatDetailView: View {
         .onDisappear {
             socket.unsubscribe(conversation: vm.conversation.id)
             socket.emitTyping(conversationId: vm.conversation.id, isTyping: false)
+            if socket.currentConversationId == vm.conversation.id {
+                socket.currentConversationId = nil
+            }
         }
         .onChange(of: vm.draft) { newValue in
             socket.emitTyping(
@@ -1409,6 +1413,7 @@ struct MessageBubble: View {
     var onAttachmentTap: ((String) -> Void)? = nil
     var isPulsing: Bool = false
     var bubbleContextMenu: (() -> AnyView)? = nil
+    @State private var showTime = false
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
@@ -1420,6 +1425,12 @@ struct MessageBubble: View {
                 }
             }
             VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+                if showTime {
+                    Text(RelativeTime.format(message.created_at))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
                 if !isMe && showHeader {
                     HStack(spacing: 4) {
                         Text(message.sender).font(.caption2).foregroundStyle(.secondary)
@@ -1447,6 +1458,9 @@ struct MessageBubble: View {
                 }
                 .scaleEffect(isPulsing ? 1.05 : 1)
                 .shadow(color: isPulsing ? Color.accentColor.opacity(0.6) : .clear, radius: 12)
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) { showTime.toggle() }
+                }
                 if message.edited_at != nil {
                     Text("edited").font(.system(size: 9)).foregroundStyle(.secondary)
                 }

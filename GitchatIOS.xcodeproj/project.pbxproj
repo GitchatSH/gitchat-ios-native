@@ -22,6 +22,7 @@
 		42CD53F46D0C85A66271982E /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 37D9D440E2615CB0D8C2247A /* OneSignalFramework */; };
 		42ECF6E4F91ED322D0B563F0 /* FollowingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC0F97726C2E12C5EF27207 /* FollowingView.swift */; };
 		494D3D00F4249ABA940FC7E0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A64D83F5578E057CF2F6A03 /* RootView.swift */; };
+		60D610D3E81196FD29EADE83 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F911D72B3577520347C7A25 /* AppRouter.swift */; };
 		633B7848AFE04D7B0D1939B2 /* LinkGithubBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0108E6ED2C630F572A0C5F9 /* LinkGithubBanner.swift */; };
 		69AEAFD3B68278AC0518960C /* Geist-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6E57C30BA465BAC85D5F1F79 /* Geist-Black.ttf */; };
 		6C48CFFBB6D004E3EF124CE3 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = E40E297012AF55791D27B93E /* SocketIO */; };
@@ -84,6 +85,7 @@
 		500978A5175704DEC944236B /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GitchatIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E57C30BA465BAC85D5F1F79 /* Geist-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Black.ttf"; sourceTree = "<group>"; };
+		6F911D72B3577520347C7A25 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		79D9DA88399CF4A4C8C4371F /* NewChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatView.swift; sourceTree = "<group>"; };
 		7E94D622A0735683786E43FF /* SafariSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariSheet.swift; sourceTree = "<group>"; };
 		808AF0F70444427011FF450A /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
@@ -223,6 +225,7 @@
 		4F135E0B180DB4FA449BF647 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				6F911D72B3577520347C7A25 /* AppRouter.swift */,
 				2D5340BD447D966282E2E67D /* Haptics.swift */,
 				3255839AE4B52EEE916274AF /* RelativeTime.swift */,
 				3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */,
@@ -470,6 +473,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B089CE1EDCE2E0EB3376D18E /* APIClient.swift in Sources */,
+				60D610D3E81196FD29EADE83 /* AppRouter.swift in Sources */,
 				B7312742825A6973BA9FE86B /* AuthStore.swift in Sources */,
 				23DA5097E24D54E366575F0C /* BlockStore.swift in Sources */,
 				00DB4217A078DC17FD451462 /* ChannelDetailView.swift in Sources */,

@@ -60,20 +60,22 @@ final class PushManager: ObservableObject {
         guard let type = additional["type"] as? String else { return }
 
         switch type {
-        case "chat_message", "group_add", "reply", "mention":
+        case "chat_message", "group_add", "reply":
             if let id = additional["conversation_id"] as? String, !id.isEmpty {
-                pendingRoute = .conversation(id: id)
+                AppRouter.shared.openConversation(id: id)
+            }
+        case "mention":
+            if let id = additional["conversation_id"] as? String, !id.isEmpty {
+                AppRouter.shared.openConversation(id: id)
+            } else if let login = additional["actor_login"] as? String, !login.isEmpty {
+                AppRouter.shared.openProfile(login: login)
             }
         case "follow":
             if let login = additional["actor_login"] as? String, !login.isEmpty {
-                pendingRoute = .profile(login: login)
+                AppRouter.shared.openProfile(login: login)
             }
-        case "reaction", "repo_starred", "event_like", "event_comment",
-             "post_like", "post_reply", "awesome_list_milestone",
-             "awesome_list_suggestion":
-            pendingRoute = .notifications
         default:
-            pendingRoute = .notifications
+            AppRouter.shared.selectedTab = 2 // Activity tab
         }
     }
 }

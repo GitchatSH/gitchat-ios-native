@@ -52,7 +52,12 @@ struct ProfileView: View {
     @StateObject private var blocks = BlockStore.shared
 
     /// True when viewing your own profile (no login passed).
-    private var isSelf: Bool { vm.login == nil }
+    private var isSelf: Bool {
+        if vm.login == nil { return true }
+        if let me = AuthStore.shared.login, let login = vm.login,
+           me.lowercased() == login.lowercased() { return true }
+        return false
+    }
 
     init(login: String? = nil) {
         _vm = StateObject(wrappedValue: ProfileViewModel(login: login))

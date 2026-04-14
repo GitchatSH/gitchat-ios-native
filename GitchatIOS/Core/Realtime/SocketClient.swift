@@ -7,12 +7,17 @@ final class SocketClient: ObservableObject {
 
     @Published private(set) var connected = false
 
+    /// ID of the conversation currently visible in a ChatDetailView.
+    /// Used to suppress in-app toast banners for the same conversation.
+    @Published var currentConversationId: String?
+
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private var subscribedConversations = Set<String>()
 
     // Event callbacks
     var onMessageSent: ((Message) -> Void)?
+    var globalOnMessageSent: ((Message) -> Void)?
     var onConversationUpdated: (() -> Void)?
     var onPresenceUpdated: ((String, Bool) -> Void)?
     var onReactionUpdated: ((String) -> Void)?
@@ -57,7 +62,10 @@ final class SocketClient: ObservableObject {
             guard let dict = (data.first as? [String: Any])?["data"] ?? data.first,
                   let json = try? JSONSerialization.data(withJSONObject: dict),
                   let msg = try? JSONDecoder().decode(Message.self, from: json) else { return }
-            Task { @MainActor in self?.onMessageSent?(msg) }
+            Task { @MainActor in
+                self?.globalOnMessageSent?(msg)
+                self?.onMessageSent?(msg)
+            }
         }
         socket.on("conversation:updated") { [weak self] _, _ in
             Task { @MainActor in self?.onConversationUpdated?() }

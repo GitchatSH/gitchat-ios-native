@@ -5,10 +5,9 @@ struct RootView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var socket: SocketClient
     @StateObject private var push = PushManager.shared
+    @StateObject private var router = AppRouter.shared
     @Environment(\.requestReview) private var requestReview
     @State private var heartbeatTask: Task<Void, Never>?
-    @State private var routedConversationId: String?
-    @State private var routedProfileLogin: String?
 
     var body: some View {
         Group {
@@ -20,6 +19,7 @@ struct RootView: View {
                         .task {
                             socket.connect()
                             if let login = auth.login { socket.subscribeUser(login: login) }
+                            wireGlobalMessageBanner()
                             startHeartbeat()
                         }
                 }
@@ -28,19 +28,10 @@ struct RootView: View {
             }
         }
         .sheet(item: Binding(
-            get: { routedProfileLogin.map(ProfileLoginRoute.init(login:)) },
-            set: { routedProfileLogin = $0?.login }
+            get: { router.pendingProfileLogin.map(ProfileLoginRoute.init(login:)) },
+            set: { router.pendingProfileLogin = $0?.login }
         )) { route in
             NavigationStack { ProfileView(login: route.login) }
-        }
-        .onChange(of: push.pendingRoute) { route in
-            guard let route else { return }
-            switch route {
-            case .profile(let login):
-                routedProfileLogin = login
-            default: break
-            }
-            push.pendingRoute = nil
         }
         .onChange(of: auth.isAuthenticated) { isAuth in
             if isAuth {
@@ -57,6 +48,19 @@ struct RootView: View {
         }
     }
 
+    private func wireGlobalMessageBanner() {
+        socket.globalOnMessageSent = { msg in
+            // Skip own messages and the conversation currently on screen.
+            guard msg.sender != auth.login else { return }
+            if let active = socket.currentConversationId,
+               active == msg.conversation_id {
+                return
+            }
+            let preview = msg.content.isEmpty ? "sent you a photo" : msg.content
+            ToastCenter.shared.show(.info, "@\(msg.sender)", preview)
+        }
+    }
+
     private func startHeartbeat() {
         heartbeatTask?.cancel()
         heartbeatTask = Task {
@@ -69,14 +73,14 @@ struct RootView: View {
 }
 
 struct MainTabView: View {
-    @State private var selection = 0
+    @StateObject private var router = AppRouter.shared
 
     var body: some View {
         TabView(selection: Binding(
-            get: { selection },
+            get: { router.selectedTab },
             set: { newValue in
-                if newValue != selection { Haptics.selection() }
-                selection = newValue
+                if newValue != router.selectedTab { Haptics.selection() }
+                router.selectedTab = newValue
             }
         )) {
             ConversationsListView()
