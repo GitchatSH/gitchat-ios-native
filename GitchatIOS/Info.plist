@@ -49,6 +49,10 @@
 	<dict>
 		<key>UIColorName</key>
 		<string>AccentColor</string>
+		<key>UIImageName</key>
+		<string>LaunchIcon</string>
+		<key>UIImageRespectsSafeAreaInsets</key>
+		<true/>
 	</dict>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>

@@ -127,12 +127,10 @@ struct NewChatView: View {
                         .disabled(vm.selected.isEmpty || vm.creating)
                         .font(.geist(15, weight: .semibold))
                     } else {
-                        Button {
+                        Button("New Group") {
                             vm.groupMode = true
-                        } label: {
-                            Image(systemName: "person.2.fill")
                         }
-                        .accessibilityLabel("New group")
+                        .font(.geist(15, weight: .semibold))
                     }
                 }
             }

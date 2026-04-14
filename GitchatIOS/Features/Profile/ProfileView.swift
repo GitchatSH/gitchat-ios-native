@@ -19,10 +19,37 @@ final class ProfileViewModel: ObservableObject {
     }
 }
 
+enum FollowListKind: Identifiable {
+    case followers(String)
+    case following(String)
+    var id: String {
+        switch self {
+        case .followers(let l): return "followers:\(l)"
+        case .following(let l): return "following:\(l)"
+        }
+    }
+    var title: String {
+        switch self {
+        case .followers: return "Followers"
+        case .following: return "Following"
+        }
+    }
+}
+
 struct ProfileView: View {
     @StateObject private var vm: ProfileViewModel
     @StateObject private var store = StoreManager.shared
     @State private var showUpgrade = false
+    @State private var followList: FollowListKind?
+    @State private var chatSheet: Conversation?
+    @State private var startingChat = false
+    @State private var followState: FollowStatus?
+    @State private var followBusy = false
+    @State private var showReport = false
+    @State private var reportReason = "Spam"
+    @State private var reportDetail = ""
+    @State private var showBlockConfirm = false
+    @StateObject private var blocks = BlockStore.shared
 
     /// True when viewing your own profile (no login passed).
     private var isSelf: Bool { vm.login == nil }
@@ -58,9 +85,71 @@ struct ProfileView: View {
                     Text("@\(p.login)").foregroundStyle(.secondary)
                     if let bio = p.bio { Text(bio).multilineTextAlignment(.center).padding(.horizontal) }
                     HStack(spacing: 24) {
-                        stat("Followers", p.followers ?? 0)
-                        stat("Following", p.following ?? 0)
+                        Button { followList = .followers(p.login) } label: {
+                            stat("Followers", p.followers ?? 0)
+                        }
+                        .buttonStyle(.plain)
+                        Button { followList = .following(p.login) } label: {
+                            stat("Following", p.following ?? 0)
+                        }
+                        .buttonStyle(.plain)
                         stat("Repos", p.public_repos ?? 0)
+                    }
+                    if !isSelf {
+                        HStack(spacing: 6) {
+                            Button {
+                                Task { await toggleFollow(login: p.login) }
+                            } label: {
+                                followButtonLabel
+                            }
+                            .disabled(followBusy || followState == nil)
+
+                            Button {
+                                Task { await startChat(with: p.login) }
+                            } label: {
+                                actionLabel(
+                                    systemImage: startingChat ? "hourglass" : "paperplane.fill",
+                                    title: "Chat"
+                                )
+                            }
+                            .disabled(startingChat)
+
+                            Menu {
+                                if followState?.following == true {
+                                    Button {
+                                        Task { await toggleFollow(login: p.login) }
+                                    } label: {
+                                        Label("Unfollow", systemImage: "person.badge.minus")
+                                    }
+                                }
+                                if blocks.isBlocked(p.login) {
+                                    Button {
+                                        blocks.unblock(p.login)
+                                    } label: {
+                                        Label("Unblock", systemImage: "hand.raised.slash")
+                                    }
+                                } else {
+                                    Button {
+                                        showBlockConfirm = true
+                                    } label: {
+                                        Label("Block", systemImage: "hand.raised")
+                                    }
+                                }
+                                Button {
+                                    showReport = true
+                                } label: {
+                                    Label("Report", systemImage: "exclamationmark.bubble")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .frame(width: 44, height: 40)
+                                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+                            }
+                            .environment(\.colorScheme, .dark)
+                            .tint(.white)
+                        }
+                        .padding(.horizontal)
                     }
                     if isSelf && !store.isPro {
                         upgradeCard
@@ -82,11 +171,160 @@ struct ProfileView: View {
                     }
                 }
             } else {
-                ProgressView().padding()
+                ProfileSkeleton()
             }
         }
-        .task { await vm.load() }
+        .scrollIndicators(.hidden)
+        .task {
+            await vm.load()
+            if !isSelf, let login = vm.profile?.login ?? vm.login {
+                await loadFollowStatus(login: login)
+            }
+        }
+        .toolbar {
+            if !isSelf, let login = vm.profile?.login ?? vm.login {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Link(destination: URL(string: "https://github.com/\(login)")!) {
+                        Image("GitHubMark")
+                            .renderingMode(.template)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 22, height: 22)
+                            .foregroundStyle(Color(.label))
+                    }
+                    .accessibilityLabel("Open on GitHub")
+                }
+            }
+        }
+        .confirmationDialog(
+            "Block @\(vm.profile?.login ?? "")?",
+            isPresented: $showBlockConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Block", role: .destructive) {
+                if let l = vm.profile?.login {
+                    blocks.block(l)
+                    ToastCenter.shared.show(.warning, "Blocked", "@\(l)")
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You won't see their messages anywhere in the app.")
+        }
+        .sheet(isPresented: $showReport) {
+            NavigationStack {
+                Form {
+                    Section("Reason") {
+                        Picker("Reason", selection: $reportReason) {
+                            Text("Spam").tag("Spam")
+                            Text("Harassment").tag("Harassment")
+                            Text("Impersonation").tag("Impersonation")
+                            Text("Other").tag("Other")
+                        }
+                    }
+                    Section("Details (optional)") {
+                        TextField("Add context", text: $reportDetail, axis: .vertical)
+                            .lineLimit(3...6)
+                    }
+                }
+                .navigationTitle("Report user")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { showReport = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Send") {
+                            if let l = vm.profile?.login {
+                                Task {
+                                    do {
+                                        try await APIClient.shared.reportUser(login: l, reason: reportReason, detail: reportDetail.isEmpty ? nil : reportDetail)
+                                        ToastCenter.shared.show(.success, "Report sent", "Thanks for keeping Gitchat safe.")
+                                    } catch {
+                                        ToastCenter.shared.show(.error, "Report failed", error.localizedDescription)
+                                    }
+                                }
+                            }
+                            showReport = false
+                            reportDetail = ""
+                        }
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showUpgrade) { UpgradeView() }
+        .sheet(item: $chatSheet) { convo in
+            NavigationStack { ChatDetailView(conversation: convo) }
+        }
+        .sheet(item: $followList) { kind in
+            NavigationStack {
+                FollowListSheet(kind: kind)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var followButtonLabel: some View {
+        let following = followState?.following == true
+        return HStack(spacing: 6) {
+            Image(systemName: following ? "checkmark" : "plus")
+            Text(following ? "Following" : "Follow").font(.geist(14, weight: .semibold))
+        }
+        .foregroundStyle(following ? Color(.label) : .white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(
+            (following ? Color(.secondarySystemBackground) : Color.accentColor),
+            in: .rect(cornerRadius: 12)
+        )
+    }
+
+    private func loadFollowStatus(login: String) async {
+        do { followState = try await APIClient.shared.followStatus(login: login) }
+        catch { }
+    }
+
+    private func toggleFollow(login: String) async {
+        guard !followBusy else { return }
+        followBusy = true; defer { followBusy = false }
+        Haptics.impact(.light)
+        let currentlyFollowing = followState?.following == true
+        do {
+            if currentlyFollowing {
+                try await APIClient.shared.unfollow(login: login)
+                ToastCenter.shared.show(.info, "Unfollowed", "@\(login)")
+            } else {
+                try await APIClient.shared.follow(login: login)
+                ToastCenter.shared.show(.success, "Following", "@\(login)")
+            }
+            await loadFollowStatus(login: login)
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't update follow", error.localizedDescription)
+        }
+    }
+
+    private func startChat(with login: String) async {
+        startingChat = true
+        defer { startingChat = false }
+        Haptics.impact(.light)
+        do {
+            let convo = try await APIClient.shared.createConversation(recipient: login)
+            Haptics.success()
+            chatSheet = convo
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't start chat", error.localizedDescription)
+        }
+    }
+
+    private func actionLabel(systemImage: String, title: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+            Text(title).font(.geist(14, weight: .semibold))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
     }
 
     private func stat(_ label: String, _ value: Int) -> some View {
@@ -146,6 +384,111 @@ struct ProfileView: View {
             .padding(.horizontal)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct ProfileSkeleton: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Circle()
+                .fill(Color(.secondarySystemBackground))
+                .frame(width: 96, height: 96)
+                .padding(.top)
+            SkeletonShape().frame(width: 140, height: 16)
+            SkeletonShape().frame(width: 100, height: 12)
+            SkeletonShape().frame(maxWidth: 260).frame(height: 10).padding(.horizontal)
+            HStack(spacing: 24) {
+                ForEach(0..<3, id: \.self) { _ in
+                    VStack(spacing: 6) {
+                        SkeletonShape().frame(width: 40, height: 14)
+                        SkeletonShape().frame(width: 60, height: 10)
+                    }
+                }
+            }
+            HStack(spacing: 12) {
+                SkeletonShape(cornerRadius: 12).frame(height: 40)
+                SkeletonShape(cornerRadius: 12).frame(height: 40)
+                SkeletonShape(cornerRadius: 12).frame(width: 44, height: 40)
+            }
+            .padding(.horizontal)
+            VStack(spacing: 10) {
+                ForEach(0..<3, id: \.self) { _ in
+                    SkeletonShape(cornerRadius: 12).frame(height: 56).padding(.horizontal)
+                }
+            }
+        }
+        .shimmering()
+    }
+}
+
+@MainActor
+final class FollowListVM: ObservableObject {
+    @Published var users: [FriendUser] = []
+    @Published var isLoading = false
+    @Published var error: String?
+
+    func load(kind: FollowListKind) async {
+        isLoading = true; defer { isLoading = false }
+        do {
+            switch kind {
+            case .followers(let login):
+                users = try await APIClient.shared.followersList(login: login)
+            case .following(let login):
+                users = try await APIClient.shared.followingList(login: login)
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+struct FollowListSheet: View {
+    let kind: FollowListKind
+    @StateObject private var vm = FollowListVM()
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Group {
+            if vm.isLoading && vm.users.isEmpty {
+                SkeletonList(count: 10, avatarSize: 40)
+            } else if let err = vm.error, vm.users.isEmpty {
+                ContentUnavailableCompat(
+                    title: "Couldn't load",
+                    systemImage: "exclamationmark.triangle",
+                    description: err
+                )
+            } else if vm.users.isEmpty {
+                ContentUnavailableCompat(
+                    title: "Nobody here",
+                    systemImage: "person.2",
+                    description: "Nothing to show yet."
+                )
+            } else {
+                List(vm.users) { u in
+                    NavigationLink {
+                        ProfileView(login: u.login)
+                    } label: {
+                        HStack(spacing: 12) {
+                            AvatarView(url: u.avatar_url, size: 40)
+                            VStack(alignment: .leading) {
+                                Text(u.name ?? u.login).font(.headline)
+                                Text("@\(u.login)").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .listRowSeparator(.hidden)
+                }
+                .listStyle(.plain)
+            }
+        }
+        .navigationTitle(kind.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Done") { dismiss() }
+            }
+        }
+        .task { await vm.load(kind: kind) }
     }
 }
 

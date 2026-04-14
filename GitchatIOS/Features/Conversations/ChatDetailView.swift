@@ -61,8 +61,13 @@ final class ChatViewModel: ObservableObject {
                     replyTo: replyId
                 )
                 messages.append(msg)
+                Haptics.impact(.light)
             }
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            self.error = error.localizedDescription
+            Haptics.error()
+            ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
+        }
     }
 
     func react(messageId: String, emoji: String) async {
@@ -123,6 +128,7 @@ struct ChatDetailView: View {
     @State private var reportReason: String = "Spam"
     @State private var reportDetail: String = ""
     @State private var showReportConfirm = false
+    @State private var composerVisible = false
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -153,14 +159,22 @@ struct ChatDetailView: View {
                     }
                 }
             }
-            if vm.replyingTo != nil || vm.editingMessage != nil {
-                replyEditBar
+            if composerVisible {
+                if vm.replyingTo != nil || vm.editingMessage != nil {
+                    replyEditBar
+                }
+                composer
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            Divider()
-            composer
         }
         .navigationTitle(vm.conversation.displayTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
+        .onAppear {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.85).delay(0.05)) {
+                composerVisible = true
+            }
+        }
         .task {
             await vm.load()
             socket.subscribe(conversation: vm.conversation.id)
@@ -303,9 +317,9 @@ struct ChatDetailView: View {
 
             TextField(vm.editingMessage != nil ? "Edit message" : "Message", text: $vm.draft, axis: .vertical)
                 .lineLimit(1...5)
-                .padding(10)
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.secondarySystemBackground), in: Capsule())
 
             Button {
                 Task { await vm.send() }
@@ -320,8 +334,21 @@ struct ChatDetailView: View {
             }
             .disabled(vm.draft.isEmpty || vm.uploading)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .modifier(GlassBarBackground())
+    }
+}
+
+private struct GlassBarBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: Capsule())
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+        } else {
+            content.background(.ultraThinMaterial)
+        }
     }
 }
 

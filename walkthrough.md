@@ -105,6 +105,27 @@ xcrun devicectl device install app \
 Phone must be unlocked and paired for wireless debugging in Xcode
 (Window → Devices & Simulators → "Connect via network").
 
+## Recent changes
+
+- Profile: added "GitHub" and "Chat" action buttons on other users' profiles. GitHub opens `https://github.com/<login>` via `Link`; Chat calls `createConversation` and presents `ChatDetailView` in a sheet. Hidden on the self profile.
+- Conversations list: hid row separators to match Channels/Friends.
+- Chat detail: `.toolbar(.hidden, for: .tabBar)` hides the bottom tab bar on push, and the composer slides/fades up via a spring transition on appear.
+- Profile actions refactor: top-right toolbar now shows a GitHub icon button (template-rendered `GitHubMark` asset → `https://github.com/<login>`). The row below the stats is now Follow/Following (calls `GET /follow/:login` + POST/DELETE) + Chat + a Menu (ellipsis) with Unfollow/Block/Unblock/Report. Added `APIClient.followStatus` and `reportUser`.
+- Profile loading uses a shimmer skeleton (`ProfileSkeleton`) instead of a spinner.
+- Global: disabled scroll indicators via `UIScrollView.appearance()` in `GitchatApp.init`.
+- Conversations list: swipe right to pin/unpin, swipe left to delete. New `APIClient.pinConversation / unpinConversation / deleteConversation`.
+- Chat detail composer: removed the divider, rounded the text field into a full capsule, and wrapped the bar with `.glassEffect(.regular, in: Capsule())` on iOS 26+ (ultraThinMaterial fallback on older systems).
+- Profile: fixed follow button — `FollowStatus` now decodes backend `followedBy` via CodingKeys (was failing to decode and leaving the button disabled). Chat button uses `paperplane.fill`. Dropdown buttons no longer use the destructive role and the Menu runs in a forced-dark color scheme for uniform white labels. Spacing between Follow/Chat/ellipsis tightened to 6pt.
+
+## Recent changes
+
+- Settings: moved Gitchat Pro card to the top and restyled it with the same accent gradient used on the profile upgrade card (active-Pro variant now also shows the gradient).
+- Settings: removed the API host row from the About section.
+- Added a shared shimmer skeleton (`Core/UI/Skeleton.swift`, `SkeletonList`) and replaced spinner loading states in Chats, Channels, Friends, and the followers/following sheet.
+- Channels and Friends tabs now have search bars (navigation-bar drawer) matching the Chats tab, and their list row separators are hidden.
+- Fixed "Unable to load" on other users' profiles: `APIClient.userProfile(login:)` now decodes the nested `{ profile, repos }` response shape returned by `GET /user/:username` and maps it into `UserProfile`.
+- Profile followers/following stats are now tappable and open a bottom sheet (`FollowListSheet`) listing users via `GET /followers?login=` and `GET /following?login=`.
+
 ## Known gaps / next pass
 
 - Image / file attachments in composer

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct GitchatApp: App {
@@ -8,6 +9,8 @@ struct GitchatApp: App {
     @AppStorage("gitchat.pref.appearance") private var appearance: String = "system"
 
     init() {
+        UIScrollView.appearance().showsVerticalScrollIndicator = false
+        UIScrollView.appearance().showsHorizontalScrollIndicator = false
         Task { @MainActor in
             StoreManager.shared.start()
             PushManager.shared.bootstrap()
@@ -21,6 +24,7 @@ struct GitchatApp: App {
                 .environmentObject(socket)
                 .tint(.accentColor)
                 .preferredColorScheme(colorScheme)
+                .toastHost()
         }
     }
 

@@ -35,11 +35,14 @@ struct Conversation: Decodable, Identifiable, Hashable {
     let group_avatar_url: String?
     let repo_full_name: String?
     let participants: [ConversationParticipant]?
+    let other_user: ConversationParticipant?
     let last_message: Message?
     let last_message_preview: String?
+    let last_message_text: String?
     let last_message_at: String?
     let unread_count: Int?
     let pinned: Bool?
+    let pinned_at: String?
     let is_request: Bool?
     let updated_at: String?
     let is_muted: Bool?
@@ -48,12 +51,19 @@ struct Conversation: Decodable, Identifiable, Hashable {
 
     var participantsOrEmpty: [ConversationParticipant] { participants ?? [] }
     var unreadCount: Int { unread_count ?? 0 }
-    var isPinned: Bool { pinned ?? false }
+    var isPinned: Bool { pinned ?? (pinned_at != nil) }
     var isRequest: Bool { is_request ?? false }
+
+    var previewText: String? {
+        last_message_preview ?? last_message_text ?? last_message?.content
+    }
 
     var displayTitle: String {
         if isGroup {
             return group_name ?? participantsOrEmpty.map(\.login).joined(separator: ", ")
+        }
+        if let u = other_user {
+            return u.name ?? u.login
         }
         if let first = participantsOrEmpty.first {
             return first.name ?? first.login
@@ -63,7 +73,7 @@ struct Conversation: Decodable, Identifiable, Hashable {
 
     var displayAvatarURL: String? {
         if isGroup { return group_avatar_url }
-        return participantsOrEmpty.first?.avatar_url
+        return other_user?.avatar_url ?? participantsOrEmpty.first?.avatar_url
     }
 }
 
@@ -238,6 +248,11 @@ struct RepoSummary: Decodable, Hashable, Identifiable {
 struct FollowStatus: Decodable, Hashable {
     let following: Bool
     let followed_by: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case following
+        case followed_by = "followedBy"
+    }
 }
 
 // MARK: - Notifications

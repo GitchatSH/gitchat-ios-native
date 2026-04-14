@@ -17,6 +17,16 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                proRow
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                Button("Restore purchases") {
+                    Task { try? await store.restore() }
+                }
+                .font(.caption)
+            }
+
             Section("Account") {
                 HStack {
                     Image(systemName: "person.crop.circle")
@@ -62,38 +72,6 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Gitchat Pro") {
-                if store.isPro {
-                    HStack {
-                        Image(systemName: "star.fill").foregroundStyle(.yellow)
-                        Text("You're a Pro supporter").bold()
-                        Spacer()
-                    }
-                } else {
-                    Button {
-                        showUpgrade = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "sparkles").foregroundStyle(.orange)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Upgrade to Pro").bold().foregroundStyle(Color(.label))
-                                Text("Unlimited history, larger uploads, themes")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                }
-                Button("Restore purchases") {
-                    Task { try? await store.restore() }
-                }
-                .font(.caption)
-            }
-
             Section("Legal") {
                 Button { legalURL = Config.eulaURL } label: {
                     HStack { Text("EULA"); Spacer(); Image(systemName: "arrow.up.right.square") }
@@ -112,13 +90,6 @@ struct SettingsView: View {
                     Text("Version")
                     Spacer()
                     Text("\(Config.appVersion)").foregroundStyle(.secondary)
-                }
-                HStack {
-                    Text("API")
-                    Spacer()
-                    Text(Config.apiBaseURL.host ?? "")
-                        .foregroundStyle(.secondary)
-                        .font(.system(.caption, design: .monospaced))
                 }
             }
 
@@ -156,6 +127,84 @@ struct SettingsView: View {
         .sheet(isPresented: $showUpgrade) {
             UpgradeView()
         }
+    }
+
+    @ViewBuilder
+    private var proRow: some View {
+        if store.isPro {
+            HStack(spacing: 12) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.white)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("Gitchat Pro")
+                            .font(.geist(16, weight: .bold))
+                            .foregroundStyle(.white)
+                        proBadge
+                    }
+                    Text("You're a Pro supporter. Thank you!")
+                        .font(.geist(12, weight: .regular))
+                        .foregroundStyle(.white.opacity(0.9))
+                }
+                Spacer()
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(
+                    colors: [Color.accentColor, Color.accentColor.opacity(0.75)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: Color.accentColor.opacity(0.3), radius: 10, y: 4)
+        } else {
+            Button {
+                showUpgrade = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Upgrade to Pro")
+                            .font(.geist(16, weight: .bold))
+                            .foregroundStyle(.white)
+                        Text("Unlimited history, larger uploads, custom themes, Pro badge.")
+                            .font(.geist(12, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(.white)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity)
+                .background(
+                    LinearGradient(
+                        colors: [Color.accentColor, Color.accentColor.opacity(0.75)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: Color.accentColor.opacity(0.3), radius: 10, y: 4)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var proBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "star.fill").font(.system(size: 9))
+            Text("PRO").font(.system(size: 10, weight: .heavy))
+        }
+        .foregroundStyle(Color.accentColor)
+        .padding(.horizontal, 7).padding(.vertical, 2)
+        .background(Color.white)
+        .clipShape(Capsule())
     }
 }
 

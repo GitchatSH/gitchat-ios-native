@@ -52,6 +52,8 @@ targets:
         CFBundleVersion: "9"
         UILaunchScreen:
           UIColorName: AccentColor
+          UIImageName: LaunchIcon
+          UIImageRespectsSafeAreaInsets: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIApplicationSceneManifest:

@@ -15,12 +15,22 @@ final class FollowingViewModel: ObservableObject {
 
 struct FollowingView: View {
     @StateObject private var vm = FollowingViewModel()
+    @State private var filter = ""
+
+    private var filtered: [FriendUser] {
+        let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return vm.users }
+        return vm.users.filter { u in
+            u.login.lowercased().contains(q)
+                || (u.name ?? "").lowercased().contains(q)
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Group {
                 if vm.isLoading && vm.users.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    SkeletonList(count: 10, avatarSize: 40)
                 } else if let err = vm.error, vm.users.isEmpty {
                     VStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle")
@@ -40,7 +50,7 @@ struct FollowingView: View {
                         description: "People you follow on GitHub show up here."
                     )
                 } else {
-                    List(vm.users) { u in
+                    List(filtered) { u in
                         NavigationLink {
                             ProfileView(login: u.login)
                         } label: {
@@ -56,11 +66,13 @@ struct FollowingView: View {
                                 }
                             }
                         }
+                        .listRowSeparator(.hidden)
                     }
                     .listStyle(.plain)
                     .refreshable { await vm.load() }
                 }
             }
+            .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search friends")
             .navigationTitle("Friends")
             .task { if vm.users.isEmpty { await vm.load() } }
         }

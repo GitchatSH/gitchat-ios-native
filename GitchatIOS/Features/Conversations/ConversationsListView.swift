@@ -15,6 +15,35 @@ final class ConversationsViewModel: ObservableObject {
             self.error = error.localizedDescription
         }
     }
+
+    func togglePin(_ convo: Conversation) async {
+        Haptics.impact(.light)
+        do {
+            if convo.isPinned {
+                try await APIClient.shared.unpinConversation(id: convo.id)
+                ToastCenter.shared.show(.info, "Unpinned", convo.displayTitle)
+            } else {
+                try await APIClient.shared.pinConversation(id: convo.id)
+                ToastCenter.shared.show(.success, "Pinned", convo.displayTitle)
+            }
+            await load()
+        } catch {
+            self.error = error.localizedDescription
+            ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
+        }
+    }
+
+    func delete(_ convo: Conversation) async {
+        Haptics.impact(.medium)
+        do {
+            try await APIClient.shared.deleteConversation(id: convo.id)
+            conversations.removeAll { $0.id == convo.id }
+            ToastCenter.shared.show(.warning, "Conversation deleted", convo.displayTitle)
+        } catch {
+            self.error = error.localizedDescription
+            ToastCenter.shared.show(.error, "Couldn't delete", error.localizedDescription)
+        }
+    }
 }
 
 struct ConversationsListView: View {
@@ -29,7 +58,7 @@ struct ConversationsListView: View {
         guard !q.isEmpty else { return vm.conversations }
         return vm.conversations.filter { c in
             c.displayTitle.lowercased().contains(q)
-                || (c.last_message_preview ?? c.last_message?.content ?? "").lowercased().contains(q)
+                || (c.previewText ?? "").lowercased().contains(q)
                 || c.participantsOrEmpty.contains(where: { $0.login.lowercased().contains(q) })
         }
     }
@@ -38,7 +67,7 @@ struct ConversationsListView: View {
         NavigationStack(path: $path) {
             Group {
                 if vm.isLoading && vm.conversations.isEmpty {
-                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    SkeletonList(count: 10, avatarSize: 50)
                 } else if vm.conversations.isEmpty {
                     ContentUnavailableCompat(
                         title: "No conversations yet",
@@ -49,6 +78,22 @@ struct ConversationsListView: View {
                     List(filtered) { convo in
                         NavigationLink(value: convo) {
                             ConversationRow(conversation: convo)
+                        }
+                        .listRowSeparator(.hidden)
+                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                            Button {
+                                Task { await vm.togglePin(convo) }
+                            } label: {
+                                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash.fill" : "pin.fill")
+                            }
+                            .tint(.orange)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task { await vm.delete(convo) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
                         }
                     }
                     .listStyle(.plain)
@@ -109,7 +154,7 @@ struct ConversationRow: View {
                             .foregroundStyle(.white)
                     }
                 }
-                Text(conversation.last_message_preview ?? conversation.last_message?.content ?? "")
+                Text(conversation.previewText ?? "")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

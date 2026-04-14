@@ -10,11 +10,13 @@
 		00DB4217A078DC17FD451462 /* ChannelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9685947BA9F7F47948D0D9FD /* ChannelDetailView.swift */; };
 		0992E140C62E0F3779B22A78 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70C13ECDA5B85E7FDEDB9D8 /* Models.swift */; };
 		1297F23217D80C72EB69A324 /* OneSignalExtension in Frameworks */ = {isa = PBXBuildFile; productRef = A804AE540868411FDE202E67 /* OneSignalExtension */; };
+		1F64E756A95BD31E664AAEE9 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */; };
 		20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */; };
 		23DA5097E24D54E366575F0C /* BlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C7DB031D380DE22F80C960 /* BlockStore.swift */; };
 		2A4E2644658850573AD267CD /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E987C78E04FD812B6372B42 /* ProfileView.swift */; };
 		301A8A5BBE220BDAD5E67750 /* Geist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A624F25A8589989F02FE384 /* Geist-Regular.ttf */; };
 		345DAB43FC963AC5DC04D6F6 /* ConversationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16BA9650859D21117E8FF1B /* ConversationsListView.swift */; };
+		38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D5340BD447D966282E2E67D /* Haptics.swift */; };
 		42CD53F46D0C85A66271982E /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 37D9D440E2615CB0D8C2247A /* OneSignalFramework */; };
 		42ECF6E4F91ED322D0B563F0 /* FollowingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC0F97726C2E12C5EF27207 /* FollowingView.swift */; };
 		494D3D00F4249ABA940FC7E0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A64D83F5578E057CF2F6A03 /* RootView.swift */; };
@@ -38,6 +40,7 @@
 		D2745DCC01B9FB447C2F6ABA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6C6D62D2207B8EF522F851 /* SettingsView.swift */; };
 		D3A3045A0F089C628A6E343D /* GitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE08A0DE3086C45434C3F914 /* GitchatApp.swift */; };
 		D6F22BEEE3B7B425EE371B5A /* NewChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79D9DA88399CF4A4C8C4371F /* NewChatView.swift */; };
+		DEA9CCB7625D47EC3D8A9A78 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFB37F9F8D7D60BEB1494E05 /* Toast.swift */; };
 		EAD68B38CE7B44B3B0C1D31E /* Geist-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F7537B4250B26209B8C7F03C /* Geist-SemiBold.ttf */; };
 		F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E94D622A0735683786E43FF /* SafariSheet.swift */; };
 		FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99301F77409640F810FB1F0D /* UpgradeView.swift */; };
@@ -71,7 +74,9 @@
 		043204DC26642044739AFFED /* OneSignalNotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OneSignalNotificationServiceExtension.entitlements; sourceTree = "<group>"; };
 		0A64D83F5578E057CF2F6A03 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		2D5340BD447D966282E2E67D /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 		3240F18DF11804D759392EA5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		4BC0F97726C2E12C5EF27207 /* FollowingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowingView.swift; sourceTree = "<group>"; };
 		500978A5175704DEC944236B /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GitchatIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -104,6 +109,7 @@
 		F7E0D975F7A5F9F05AE4C937 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		FE29B3507EA081EE81ACD1F8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		FFB37F9F8D7D60BEB1494E05 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -208,6 +214,16 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		4F135E0B180DB4FA449BF647 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				2D5340BD447D966282E2E67D /* Haptics.swift */,
+				3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */,
+				FFB37F9F8D7D60BEB1494E05 /* Toast.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
 		5316F8D5B7050796AA6C4783 /* Following */ = {
 			isa = PBXGroup;
 			children = (
@@ -271,6 +287,7 @@
 				62AB9BB7FB15FBD0242CDC62 /* Networking */,
 				2984B6A01475141D53A662FB /* Realtime */,
 				7D374814E832CD239C7A4ED0 /* StoreKit */,
+				4F135E0B180DB4FA449BF647 /* UI */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -448,6 +465,7 @@
 				42ECF6E4F91ED322D0B563F0 /* FollowingView.swift in Sources */,
 				AC3DF2D2EBA66464D53D71CC /* GitHubWebOAuth.swift in Sources */,
 				D3A3045A0F089C628A6E343D /* GitchatApp.swift in Sources */,
+				38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */,
 				633B7848AFE04D7B0D1939B2 /* LinkGithubBanner.swift in Sources */,
 				0992E140C62E0F3779B22A78 /* Models.swift in Sources */,
 				D6F22BEEE3B7B425EE371B5A /* NewChatView.swift in Sources */,
@@ -458,8 +476,10 @@
 				F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */,
 				D2745DCC01B9FB447C2F6ABA /* SettingsView.swift in Sources */,
 				999E1B7961171663AD703952 /* SignInView.swift in Sources */,
+				1F64E756A95BD31E664AAEE9 /* Skeleton.swift in Sources */,
 				76A2320B8D73680FE87405B3 /* SocketClient.swift in Sources */,
 				8AD5EE1720D14E153C09F5BA /* StoreManager.swift in Sources */,
+				DEA9CCB7625D47EC3D8A9A78 /* Toast.swift in Sources */,
 				FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

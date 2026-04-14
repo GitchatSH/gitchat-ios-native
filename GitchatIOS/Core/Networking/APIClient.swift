@@ -170,6 +170,16 @@ struct APIClient {
         return try await request("messages/conversations", method: "POST", body: req)
     }
 
+    func pinConversation(id: String) async throws {
+        let _: EmptyResponse = try await request("messages/conversations/\(id)/pin", method: "POST")
+    }
+    func unpinConversation(id: String) async throws {
+        let _: EmptyResponse = try await request("messages/conversations/\(id)/pin", method: "DELETE")
+    }
+    func deleteConversation(id: String) async throws {
+        let _: EmptyResponse = try await request("messages/conversations/\(id)/delete", method: "POST")
+    }
+
     func markRead(conversationId: String) async throws {
         let _: EmptyResponse = try await request("messages/conversations/\(conversationId)/read", method: "PATCH")
     }
@@ -316,7 +326,54 @@ struct APIClient {
     }
 
     func userProfile(login: String) async throws -> UserProfile {
-        try await request("user/\(login)")
+        struct NestedRepo: Decodable {
+            let owner: String
+            let name: String
+            let description: String?
+            let stars: Int?
+            let language: String?
+        }
+        struct NestedProfile: Decodable {
+            let login: String
+            let name: String?
+            let avatar_url: String?
+            let bio: String?
+            let company: String?
+            let location: String?
+            let blog: String?
+            let followers: Int?
+            let following: Int?
+            let public_repos: Int?
+            let created_at: String?
+        }
+        struct NestedResponse: Decodable {
+            let profile: NestedProfile
+            let repos: [NestedRepo]?
+        }
+        let resp: NestedResponse = try await request("user/\(login)")
+        let tops = (resp.repos ?? []).prefix(10).map {
+            RepoSummary(
+                full_name: "\($0.owner)/\($0.name)",
+                description: $0.description,
+                stars: $0.stars,
+                language: $0.language
+            )
+        }
+        return UserProfile(
+            login: resp.profile.login,
+            name: resp.profile.name,
+            avatar_url: resp.profile.avatar_url,
+            bio: resp.profile.bio,
+            company: resp.profile.company,
+            location: resp.profile.location,
+            blog: resp.profile.blog,
+            followers: resp.profile.followers,
+            following: resp.profile.following,
+            public_repos: resp.profile.public_repos,
+            star_power: nil,
+            top_repos: Array(tops),
+            created_at: resp.profile.created_at
+        )
     }
 
     // Following
@@ -326,10 +383,55 @@ struct APIClient {
     func unfollow(login: String) async throws {
         let _: EmptyResponse = try await request("follow/\(login)", method: "DELETE")
     }
+    func followStatus(login: String) async throws -> FollowStatus {
+        try await request("follow/\(login)")
+    }
+    func reportUser(login: String, reason: String, detail: String?) async throws {
+        struct Body: Encodable { let reason: String; let detail: String? }
+        let _: EmptyResponse = try await request(
+            "user/\(login)/report",
+            method: "POST",
+            body: Body(reason: reason, detail: detail)
+        )
+    }
     func followingList() async throws -> [FriendUser] {
         struct Wrap: Decodable { let users: [FriendUser] }
         let w: Wrap = try await request("following", query: [URLQueryItem(name: "per_page", value: "100")])
         return w.users
+    }
+
+    // Public follow lists for any user — backend returns richer shape, map to FriendUser.
+    private struct PublicFollowUser: Decodable {
+        let login: String
+        let name: String?
+        let avatar_url: String?
+    }
+    private struct PublicFollowList: Decodable {
+        let users: [PublicFollowUser]
+    }
+
+    func followingList(login: String) async throws -> [FriendUser] {
+        let w: PublicFollowList = try await request(
+            "following",
+            query: [
+                URLQueryItem(name: "login", value: login),
+                URLQueryItem(name: "per_page", value: "100")
+            ],
+            requireAuth: false
+        )
+        return w.users.map { FriendUser(login: $0.login, name: $0.name, avatar_url: $0.avatar_url, online: nil) }
+    }
+
+    func followersList(login: String) async throws -> [FriendUser] {
+        let w: PublicFollowList = try await request(
+            "followers",
+            query: [
+                URLQueryItem(name: "login", value: login),
+                URLQueryItem(name: "per_page", value: "100")
+            ],
+            requireAuth: false
+        )
+        return w.users.map { FriendUser(login: $0.login, name: $0.name, avatar_url: $0.avatar_url, online: nil) }
     }
 
     // Notifications
