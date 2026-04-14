@@ -82,14 +82,32 @@ struct ProfileView: View {
 
 struct MeView: View {
     @EnvironmentObject var auth: AuthStore
+    @State private var showSettings = false
+
     var body: some View {
         NavigationStack {
-            VStack {
-                ProfileView()
-                Button("Sign out", role: .destructive) { auth.signOut() }
-                    .padding()
-            }
-            .navigationTitle("Me")
+            ProfileView()
+                .navigationTitle("Me")
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }
+                        .accessibilityLabel("Settings")
+                    }
+                }
+                .sheet(isPresented: $showSettings) {
+                    NavigationStack {
+                        SettingsView()
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarTrailing) {
+                                    Button("Done") { showSettings = false }
+                                }
+                            }
+                    }
+                }
         }
     }
 }

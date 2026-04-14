@@ -119,13 +119,13 @@ struct SignInView: View {
                                     .resizable()
                                     .renderingMode(.template)
                                     .scaledToFit()
-                                    .frame(width: 20, height: 20)
+                                    .frame(width: 17, height: 17)
                             }
                             Text("Sign in with GitHub")
-                                .font(.system(size: 19, weight: .semibold))
+                                .font(.system(size: 17, weight: .semibold))
                         }
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(height: 46)
                         .background(Color(.label))
                         .clipShape(Capsule())
                         .foregroundStyle(Color(.systemBackground))
@@ -144,7 +144,7 @@ struct SignInView: View {
                     )
                     .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 54)
+                    .frame(height: 46)
                     .clipShape(Capsule())
                 }
                 .padding(.horizontal, 32)

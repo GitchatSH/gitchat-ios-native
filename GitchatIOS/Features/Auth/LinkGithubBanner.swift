@@ -15,7 +15,6 @@ final class LinkGithubViewModel: ObservableObject {
                 code: code,
                 redirectURI: GitHubWebOAuth.redirectURI
             )
-            // The backend issues a new JWT tied to the real GitHub login.
             AuthStore.shared.save(token: link.access_token, login: link.login, needsGithubLink: false)
         } catch GitHubWebOAuth.WebOAuthError.cancelled {
             return
@@ -25,52 +24,80 @@ final class LinkGithubViewModel: ObservableObject {
     }
 }
 
-struct LinkGithubBanner: View {
+/// Full-screen wall shown to Apple-only users. The entire Gitchat backend is
+/// keyed off a GitHub token in the JWT payload — without one, every authed
+/// endpoint returns 401. Force the link before letting the user into the app.
+struct LinkGithubWall: View {
     @StateObject private var vm = LinkGithubViewModel()
+    @EnvironmentObject var auth: AuthStore
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Image("GitHubMark")
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+            VStack(spacing: 24) {
+                Spacer().frame(maxHeight: 80)
+
+                Image("AppLogo")
                     .resizable()
-                    .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: 20, height: 20)
-                    .foregroundStyle(.white)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Link your GitHub account")
-                        .font(.geist(14, weight: .semibold))
-                        .foregroundStyle(.white)
-                    Text("Unlock chats, friends, and repo activity.")
-                        .font(.geist(12, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.85))
+                    .frame(width: 96, height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
+
+                VStack(spacing: 10) {
+                    Text("One more step")
+                        .font(.geist(28, weight: .black))
+                        .foregroundStyle(Color(.label))
+                    Text("Gitchat is built on top of GitHub.\nLink your GitHub account to unlock chats, friends, and repo activity.")
+                        .font(.geist(15, weight: .regular))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Color(.secondaryLabel))
+                        .padding(.horizontal, 32)
                 }
+
                 Spacer()
-                Button {
-                    Task { await vm.link() }
-                } label: {
-                    if vm.isLoading {
-                        ProgressView().tint(.white).frame(width: 60)
-                    } else {
-                        Text("Link")
-                            .font(.geist(14, weight: .semibold))
-                            .padding(.horizontal, 14).padding(.vertical, 7)
-                            .background(Color.white)
-                            .foregroundStyle(Color.accentColor)
-                            .clipShape(Capsule())
+
+                VStack(spacing: 12) {
+                    Button {
+                        Task { await vm.link() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if vm.isLoading {
+                                ProgressView().tint(Color(.systemBackground))
+                            } else {
+                                Image("GitHubMark")
+                                    .resizable()
+                                    .renderingMode(.template)
+                                    .scaledToFit()
+                                    .frame(width: 17, height: 17)
+                            }
+                            Text("Link GitHub")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                        .background(Color(.label))
+                        .clipShape(Capsule())
+                        .foregroundStyle(Color(.systemBackground))
                     }
+                    .disabled(vm.isLoading)
+
+                    Button("Sign out", role: .destructive) {
+                        auth.signOut()
+                    }
+                    .font(.geist(14, weight: .regular))
                 }
-                .disabled(vm.isLoading)
+                .padding(.horizontal, 32)
+
+                if let err = vm.error {
+                    Text(err)
+                        .font(.geist(12, weight: .regular))
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
             }
-            if let err = vm.error {
-                Text(err)
-                    .font(.geist(11, weight: .regular))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            .padding(.bottom, 40)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.accentColor)
     }
 }

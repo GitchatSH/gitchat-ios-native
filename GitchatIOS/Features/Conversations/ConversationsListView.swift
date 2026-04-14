@@ -30,7 +30,7 @@ struct ConversationsListView: View {
         return vm.conversations.filter { c in
             c.displayTitle.lowercased().contains(q)
                 || (c.last_message_preview ?? c.last_message?.content ?? "").lowercased().contains(q)
-                || c.participants.contains(where: { $0.login.lowercased().contains(q) })
+                || c.participantsOrEmpty.contains(where: { $0.login.lowercased().contains(q) })
         }
     }
 
@@ -97,12 +97,12 @@ struct ConversationRow: View {
                     Text(conversation.displayTitle)
                         .font(.headline)
                         .lineLimit(1)
-                    if conversation.pinned {
+                    if conversation.isPinned {
                         Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    if conversation.unread_count > 0 {
-                        Text("\(conversation.unread_count)")
+                    if conversation.unreadCount > 0 {
+                        Text("\(conversation.unreadCount)")
                             .font(.caption2.bold())
                             .padding(.horizontal, 8).padding(.vertical, 2)
                             .background(Color.accentColor, in: .capsule)

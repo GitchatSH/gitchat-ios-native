@@ -34,28 +34,36 @@ struct Conversation: Decodable, Identifiable, Hashable {
     let group_name: String?
     let group_avatar_url: String?
     let repo_full_name: String?
-    let participants: [ConversationParticipant]
+    let participants: [ConversationParticipant]?
     let last_message: Message?
     let last_message_preview: String?
     let last_message_at: String?
-    let unread_count: Int
-    let pinned: Bool
-    let is_request: Bool
-    let updated_at: String
+    let unread_count: Int?
+    let pinned: Bool?
+    let is_request: Bool?
+    let updated_at: String?
     let is_muted: Bool?
 
     var isGroup: Bool { is_group == true || type == "group" || type == "community" || type == "team" }
 
+    var participantsOrEmpty: [ConversationParticipant] { participants ?? [] }
+    var unreadCount: Int { unread_count ?? 0 }
+    var isPinned: Bool { pinned ?? false }
+    var isRequest: Bool { is_request ?? false }
+
     var displayTitle: String {
         if isGroup {
-            return group_name ?? participants.map(\.login).joined(separator: ", ")
+            return group_name ?? participantsOrEmpty.map(\.login).joined(separator: ", ")
         }
-        return participants.first?.name ?? participants.first?.login ?? "Conversation"
+        if let first = participantsOrEmpty.first {
+            return first.name ?? first.login
+        }
+        return "Conversation"
     }
 
     var displayAvatarURL: String? {
         if isGroup { return group_avatar_url }
-        return participants.first?.avatar_url
+        return participantsOrEmpty.first?.avatar_url
     }
 }
 
@@ -78,12 +86,93 @@ struct Message: Decodable, Identifiable, Hashable {
     let sender: String
     let sender_avatar: String?
     let content: String
-    let created_at: String
+    let created_at: String?
     let edited_at: String?
     let reactions: [MessageReaction]?
     let attachment_url: String?
     let type: String?
     let reply_to_id: String?
+
+    // Decode defensively: backend may send `sender` as a string OR as an
+    // object `{ login, avatar_url }`, and may use slightly different keys.
+    private enum CodingKeys: String, CodingKey {
+        case id, sender, content, type
+        case conversation_id, conversationId
+        case sender_avatar, senderAvatar, sender_avatar_url
+        case created_at, createdAt
+        case edited_at, editedAt
+        case reactions
+        case attachment_url, attachmentUrl
+        case reply_to_id, replyToId
+        case body
+    }
+
+    private struct SenderObject: Decodable {
+        let login: String?
+        let avatar_url: String?
+    }
+
+    init(
+        id: String,
+        conversation_id: String?,
+        sender: String,
+        sender_avatar: String?,
+        content: String,
+        created_at: String?,
+        edited_at: String?,
+        reactions: [MessageReaction]?,
+        attachment_url: String?,
+        type: String?,
+        reply_to_id: String?
+    ) {
+        self.id = id
+        self.conversation_id = conversation_id
+        self.sender = sender
+        self.sender_avatar = sender_avatar
+        self.content = content
+        self.created_at = created_at
+        self.edited_at = edited_at
+        self.reactions = reactions
+        self.attachment_url = attachment_url
+        self.type = type
+        self.reply_to_id = reply_to_id
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.conversation_id = try c.decodeIfPresent(String.self, forKey: .conversation_id)
+            ?? c.decodeIfPresent(String.self, forKey: .conversationId)
+
+        // sender: string or object
+        if let s = try? c.decode(String.self, forKey: .sender) {
+            self.sender = s
+            self.sender_avatar = try c.decodeIfPresent(String.self, forKey: .sender_avatar)
+                ?? c.decodeIfPresent(String.self, forKey: .senderAvatar)
+                ?? c.decodeIfPresent(String.self, forKey: .sender_avatar_url)
+        } else if let obj = try? c.decode(SenderObject.self, forKey: .sender) {
+            self.sender = obj.login ?? "unknown"
+            self.sender_avatar = obj.avatar_url
+        } else {
+            self.sender = "unknown"
+            self.sender_avatar = nil
+        }
+
+        // content: `content` or `body`
+        self.content = (try? c.decode(String.self, forKey: .content))
+            ?? (try? c.decode(String.self, forKey: .body))
+            ?? ""
+        self.created_at = try c.decodeIfPresent(String.self, forKey: .created_at)
+            ?? c.decodeIfPresent(String.self, forKey: .createdAt)
+        self.edited_at = try c.decodeIfPresent(String.self, forKey: .edited_at)
+            ?? c.decodeIfPresent(String.self, forKey: .editedAt)
+        self.reactions = try c.decodeIfPresent([MessageReaction].self, forKey: .reactions)
+        self.attachment_url = try c.decodeIfPresent(String.self, forKey: .attachment_url)
+            ?? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
+        self.type = try c.decodeIfPresent(String.self, forKey: .type)
+        self.reply_to_id = try c.decodeIfPresent(String.self, forKey: .reply_to_id)
+            ?? c.decodeIfPresent(String.self, forKey: .replyToId)
+    }
 }
 
 struct MessageReaction: Decodable, Hashable {
@@ -95,6 +184,8 @@ struct MessageReaction: Decodable, Hashable {
 struct MessagesResponse: Decodable {
     let messages: [Message]
     let cursor: String?
+    let nextCursor: String?
+    let previousCursor: String?
     let otherReadAt: String?
 }
 

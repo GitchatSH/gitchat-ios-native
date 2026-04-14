@@ -88,9 +88,27 @@ struct NewChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                searchField
+                if vm.groupMode {
+                    groupHeader
+                }
                 list
+                if let err = vm.error {
+                    Text(err)
+                        .font(.geist(12, weight: .regular))
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                }
             }
+            .searchable(
+                text: $vm.query,
+                placement: .navigationBarDrawer(displayMode: .always),
+                prompt: "Search by handle or name"
+            )
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .onChange(of: vm.query) { vm.queryChanged($0) }
             .navigationTitle(vm.groupMode ? "New group" : "New chat")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -125,53 +143,27 @@ struct NewChatView: View {
         }
     }
 
-    private var searchField: some View {
+    private var groupHeader: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(Color(.secondaryLabel))
-                TextField("Search by handle or name", text: $vm.query)
-                    .font(.geist(16, weight: .regular))
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .onChange(of: vm.query) { vm.queryChanged($0) }
-                if !vm.query.isEmpty {
-                    Button { vm.query = ""; vm.results = [] } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(Color(.tertiaryLabel))
-                    }
-                    .buttonStyle(.plain)
-                }
-                if vm.isLoading {
-                    ProgressView().scaleEffect(0.75)
-                }
-            }
-            .padding(10)
-            .background(Color(.secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            if vm.groupMode {
-                TextField("Group name (optional)", text: $vm.groupName)
-                    .font(.geist(15, weight: .regular))
-                    .padding(10)
-                    .background(Color(.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                if !vm.selected.isEmpty {
-                    HStack {
-                        Text("\(vm.selected.count) selected")
-                            .font(.geist(12, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
-                        Spacer()
-                        Button("Clear") {
-                            vm.selected.removeAll()
-                        }
+            TextField("Group name (optional)", text: $vm.groupName)
+                .font(.geist(15, weight: .regular))
+                .padding(10)
+                .background(Color(.secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            if !vm.selected.isEmpty {
+                HStack {
+                    Text("\(vm.selected.count) selected")
                         .font(.geist(12, weight: .semibold))
-                    }
+                        .foregroundStyle(Color.accentColor)
+                    Spacer()
+                    Button("Clear") { vm.selected.removeAll() }
+                        .font(.geist(12, weight: .semibold))
                 }
             }
         }
         .padding(.horizontal)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
     }
 
     private var list: some View {
