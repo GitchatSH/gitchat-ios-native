@@ -52,6 +52,7 @@ struct ConversationsListView: View {
     @State private var showNewChat = false
     @State private var filter = ""
     @State private var path = NavigationPath()
+    @State private var confirmDelete: Conversation?
 
     private var filtered: [Conversation] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -103,6 +104,38 @@ struct ConversationsListView: View {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
+                        .contextMenu {
+                            Button {
+                                Task { await vm.togglePin(convo) }
+                            } label: {
+                                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash" : "pin")
+                            }
+                            Button {
+                                Task {
+                                    do {
+                                        if convo.is_muted == true {
+                                            try await APIClient.shared.unmuteConversation(id: convo.id)
+                                            ToastCenter.shared.show(.info, "Unmuted")
+                                        } else {
+                                            try await APIClient.shared.muteConversation(id: convo.id)
+                                            ToastCenter.shared.show(.success, "Muted")
+                                        }
+                                        await vm.load()
+                                    } catch {
+                                        ToastCenter.shared.show(.error, "Mute failed", error.localizedDescription)
+                                    }
+                                }
+                            } label: {
+                                Label(convo.is_muted == true ? "Unmute" : "Mute", systemImage: convo.is_muted == true ? "bell" : "bell.slash")
+                            }
+                            Button(role: .destructive) {
+                                confirmDelete = convo
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            .tint(.red)
+                        }
+                        .tint(.primary)
                     }
                     .listStyle(.plain)
                     .refreshable { await vm.load() }
@@ -119,6 +152,17 @@ struct ConversationsListView: View {
                     }
                     .accessibilityLabel("New chat")
                 }
+            }
+            .alert("Delete conversation?", isPresented: Binding(
+                get: { confirmDelete != nil },
+                set: { if !$0 { confirmDelete = nil } }
+            ), presenting: confirmDelete) { convo in
+                Button("Delete", role: .destructive) {
+                    Task { await vm.delete(convo) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("Messages will be removed from your list.")
             }
             .navigationDestination(for: Conversation.self) { convo in
                 ChatDetailView(conversation: convo)

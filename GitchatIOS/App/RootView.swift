@@ -16,6 +16,7 @@ struct RootView: View {
                     MainTabView()
                         .task {
                             socket.connect()
+                            if let login = auth.login { socket.subscribeUser(login: login) }
                             startHeartbeat()
                         }
                 }
@@ -26,6 +27,7 @@ struct RootView: View {
         .onChange(of: auth.isAuthenticated) { isAuth in
             if isAuth {
                 socket.connect()
+                if let login = auth.login { socket.subscribeUser(login: login) }
                 startHeartbeat()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     requestReview()
@@ -52,7 +54,13 @@ struct MainTabView: View {
     @State private var selection = 0
 
     var body: some View {
-        TabView(selection: $selection) {
+        TabView(selection: Binding(
+            get: { selection },
+            set: { newValue in
+                if newValue != selection { Haptics.selection() }
+                selection = newValue
+            }
+        )) {
             ConversationsListView()
                 .tabItem { Label("Chats", systemImage: "bubble.left.and.bubble.right.fill") }
                 .tag(0)

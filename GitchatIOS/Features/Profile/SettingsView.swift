@@ -28,10 +28,6 @@ struct SettingsView: View {
                         .font(.system(.body, design: .monospaced))
                 }
                 proRow
-                Button("Restore purchases") {
-                    Task { try? await store.restore() }
-                }
-                .font(.caption)
             }
 
             Section("Appearance") {

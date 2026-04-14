@@ -5,6 +5,7 @@ import UIKit
 @MainActor
 final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
+    @Published var pinnedIds: Set<String> = []
     @Published var isLoading = false
     @Published var draft = "" {
         didSet { saveDraft() }
@@ -40,6 +41,14 @@ final class ChatViewModel: ObservableObject {
             self.messages = resp.messages.reversed()
             try? await APIClient.shared.markRead(conversationId: conversation.id)
         } catch { self.error = error.localizedDescription }
+        await loadPinned()
+    }
+
+    func loadPinned() async {
+        do {
+            let pins = try await APIClient.shared.pinnedMessages(conversationId: conversation.id)
+            self.pinnedIds = Set(pins.map(\.id))
+        } catch { }
     }
 
     func send() async {
@@ -88,7 +97,35 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    func react(messageId: String, emoji: String) async {
+    func react(messageId: String, emoji: String, myLogin: String? = nil) async {
+        // Optimistic: bump the count (or add a new chip) on the local message immediately.
+        if let idx = messages.firstIndex(where: { $0.id == messageId }) {
+            var existing = messages[idx].reactions ?? []
+            if let ri = existing.firstIndex(where: { $0.emoji == emoji }) {
+                let r = existing[ri]
+                existing[ri] = MessageReaction(emoji: emoji, count: r.count + 1, reacted: true)
+            } else {
+                existing.append(MessageReaction(emoji: emoji, count: 1, reacted: true))
+            }
+            let m = messages[idx]
+            messages[idx] = Message(
+                id: m.id,
+                conversation_id: m.conversation_id,
+                sender: m.sender,
+                sender_avatar: m.sender_avatar,
+                content: m.content,
+                created_at: m.created_at,
+                edited_at: m.edited_at,
+                reactions: existing,
+                attachment_url: m.attachment_url,
+                type: m.type,
+                reply_to_id: m.reply_to_id,
+                reply: m.reply,
+                attachments: m.attachments,
+                unsent_at: m.unsent_at,
+                reactionRows: (m.reactionRows ?? []) + [RawReactionRow(emoji: emoji, user_login: myLogin)]
+            )
+        }
         try? await APIClient.shared.react(messageId: messageId, emoji: emoji, add: true)
     }
 
@@ -100,18 +137,19 @@ final class ChatViewModel: ObservableObject {
     }
 
     func togglePin(_ msg: Message) async {
+        let isPinned = pinnedIds.contains(msg.id)
         do {
-            try await APIClient.shared.pinMessage(conversationId: conversation.id, messageId: msg.id)
-            ToastCenter.shared.show(.success, "Pinned message")
-        } catch {
-            // If already pinned, unpin instead.
-            do {
+            if isPinned {
                 try await APIClient.shared.unpinMessage(conversationId: conversation.id, messageId: msg.id)
+                pinnedIds.remove(msg.id)
                 ToastCenter.shared.show(.info, "Unpinned message")
-            } catch {
-                self.error = error.localizedDescription
-                ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
+            } else {
+                try await APIClient.shared.pinMessage(conversationId: conversation.id, messageId: msg.id)
+                pinnedIds.insert(msg.id)
+                ToastCenter.shared.show(.success, "Pinned message")
             }
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
         }
     }
 
@@ -294,6 +332,13 @@ struct ChatDetailView: View {
     @State private var showPinned = false
     @State private var showForward: Message?
     @State private var reactorsFor: Message?
+    @State private var reactingFor: Message?
+    @State private var imagePreview: ImagePreviewState?
+    @State private var pulsingId: String?
+    @State private var webURL: URL?
+    @State private var profileRoute: ProfileLoginRoute?
+    @State private var confirmDelete: Message?
+    @State private var confirmUnsend: Message?
     @State private var reportingMessage: Message?
     @State private var reportReason: String = "Spam"
     @State private var reportDetail: String = ""
@@ -368,6 +413,50 @@ struct ChatDetailView: View {
         Haptics.selection()
     }
 
+    @ViewBuilder
+    private func messageRow(for msg: Message, at idx: Int, proxy: ScrollViewProxy) -> some View {
+        if let t = msg.type, t != "user" {
+            SystemMessageRow(message: msg).id(msg.id)
+        } else {
+            let prev = idx > 0 ? visibleMessages[idx - 1] : nil
+            let showHeader = prev?.sender != msg.sender || (prev?.type ?? "user") != "user"
+            MessageBubble(
+                message: msg,
+                isMe: msg.sender == auth.login,
+                resolvedAvatar: resolveAvatar(for: msg),
+                showHeader: showHeader,
+                isPinned: vm.pinnedIds.contains(msg.id),
+                onReactionsTap: { reactorsFor = msg },
+                onReplyTap: { jumpToReply(from: msg, proxy: proxy) },
+                onAttachmentTap: { url in
+                    let urls = (msg.attachments?.map(\.url) ?? [msg.attachment_url].compactMap { $0 })
+                    if let start = urls.firstIndex(of: url) {
+                        imagePreview = ImagePreviewState(urls: urls, index: start)
+                    }
+                },
+                isPulsing: pulsingId == msg.id,
+                bubbleContextMenu: { AnyView(messageActions(for: msg)) }
+            )
+            .id(msg.id)
+            .padding(.top, showHeader ? 6 : 0)
+            .onTapGesture(count: 2) {
+                Haptics.impact(.light)
+                Task { await vm.react(messageId: msg.id, emoji: "❤️", myLogin: auth.login) }
+            }
+        }
+    }
+
+    private func jumpToReply(from msg: Message, proxy: ScrollViewProxy) {
+        guard let targetId = msg.reply?.id else { return }
+        withAnimation { proxy.scrollTo(targetId, anchor: .center) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeInOut(duration: 0.25)) { pulsingId = targetId }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                withAnimation(.easeInOut(duration: 0.3)) { pulsingId = nil }
+            }
+        }
+    }
+
     private func resolveAvatar(for msg: Message) -> String? {
         if let url = msg.sender_avatar { return url }
         if let match = vm.conversation.participantsOrEmpty.first(where: { $0.login == msg.sender }) {
@@ -385,40 +474,7 @@ struct ChatDetailView: View {
                 ScrollView {
                     LazyVStack(spacing: 8) {
                         ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { idx, msg in
-                            let prev = idx > 0 ? visibleMessages[idx - 1] : nil
-                            let showHeader = prev?.sender != msg.sender
-                            MessageBubble(
-                                message: msg,
-                                isMe: msg.sender == auth.login,
-                                resolvedAvatar: resolveAvatar(for: msg),
-                                showHeader: showHeader,
-                                onReactionsTap: { reactorsFor = msg },
-                                onReplyTap: {
-                                    if let targetId = msg.reply?.id {
-                                        withAnimation {
-                                            proxy.scrollTo(targetId, anchor: .center)
-                                        }
-                                    }
-                                }
-                            )
-                            .id(msg.id)
-                            .padding(.top, showHeader ? 6 : 0)
-                            .contextMenu {
-                                messageActions(for: msg)
-                            } preview: {
-                                MessageContextPreview(
-                                    message: msg,
-                                    isMe: msg.sender == auth.login,
-                                    resolvedAvatar: resolveAvatar(for: msg),
-                                    onReact: { e in
-                                        Task { await vm.react(messageId: msg.id, emoji: e) }
-                                    }
-                                )
-                            }
-                            .onTapGesture(count: 2) {
-                                Haptics.impact(.light)
-                                Task { await vm.react(messageId: msg.id, emoji: "❤️") }
-                            }
+                            messageRow(for: msg, at: idx, proxy: proxy)
                         }
                         Color.clear.frame(height: 8).id("__bottom__")
                     }
@@ -517,10 +573,69 @@ struct ChatDetailView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(item: $imagePreview) { state in
+            ImageViewerSheet(urls: state.urls, startIndex: state.index)
+        }
+        .alert("Delete message?", isPresented: Binding(
+            get: { confirmDelete != nil },
+            set: { if !$0 { confirmDelete = nil } }
+        ), presenting: confirmDelete) { msg in
+            Button("Delete", role: .destructive) {
+                Task { await vm.delete(msg) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This removes the message for you only.")
+        }
+        .alert("Unsend message?", isPresented: Binding(
+            get: { confirmUnsend != nil },
+            set: { if !$0 { confirmUnsend = nil } }
+        ), presenting: confirmUnsend) { msg in
+            Button("Unsend", role: .destructive) {
+                Task { await vm.unsend(msg) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Everyone in the chat will see the message was unsent.")
+        }
+        .sheet(item: $profileRoute) { route in
+            NavigationStack { ProfileView(login: route.login) }
+        }
+        .sheet(item: Binding<URLItem?>(
+            get: { webURL.map(URLItem.init) },
+            set: { webURL = $0?.url }
+        )) { item in
+            SafariSheet(url: item.url).ignoresSafeArea()
+        }
+        .environment(\.openURL, OpenURLAction { url in
+            if url.scheme == "gitchat", url.host == "user" {
+                let login = url.pathComponents.dropFirst().first ?? ""
+                if !login.isEmpty {
+                    profileRoute = ProfileLoginRoute(login: login)
+                }
+                return .handled
+            }
+            webURL = url
+            return .handled
+        })
+        .sheet(item: $reactingFor) { msg in
+            EmojiPickerSheet { emoji in
+                Task { await vm.react(messageId: msg.id, emoji: emoji, myLogin: auth.login) }
+                reactingFor = nil
+            }
+            .presentationDetents([.height(360)])
+            .presentationDragIndicator(.visible)
+        }
         .sheet(item: $reactorsFor) { msg in
-            NavigationStack { ReactorsSheet(message: msg, participants: vm.conversation.participantsOrEmpty + [vm.conversation.other_user].compactMap { $0 }) }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            NavigationStack {
+                ReactorsSheet(
+                    message: msg,
+                    participants: vm.conversation.participantsOrEmpty + [vm.conversation.other_user].compactMap { $0 },
+                    myLogin: auth.login
+                )
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showMembers) {
             NavigationStack {
@@ -615,6 +730,13 @@ struct ChatDetailView: View {
     @ViewBuilder
     private func messageActions(for msg: Message) -> some View {
         Button {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                reactingFor = msg
+            }
+        } label: {
+            Label("React", systemImage: "face.smiling")
+        }
+        Button {
             vm.replyingTo = msg
             vm.editingMessage = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { composerFocused = true }
@@ -625,22 +747,27 @@ struct ChatDetailView: View {
         } label: { Label("Copy", systemImage: "doc.on.doc") }
         Button {
             Task { await vm.togglePin(msg) }
-        } label: { Label("Pin", systemImage: "pin") }
+        } label: {
+            Label(vm.pinnedIds.contains(msg.id) ? "Unpin" : "Pin",
+                  systemImage: vm.pinnedIds.contains(msg.id) ? "pin.slash" : "pin")
+        }
         Button {
             showForward = msg
         } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
         if msg.sender == auth.login {
             Button { vm.startEdit(msg) } label: { Label("Edit", systemImage: "pencil") }
             Button {
-                Task { await vm.unsend(msg) }
+                confirmUnsend = msg
             } label: { Label("Unsend", systemImage: "arrow.uturn.backward") }
             Button(role: .destructive) {
-                Task { await vm.delete(msg) }
+                confirmDelete = msg
             } label: { Label("Delete", systemImage: "trash") }
+            .tint(.red)
         } else {
             Button(role: .destructive) {
                 reportingMessage = msg
             } label: { Label("Report", systemImage: "flag") }
+            .tint(.red)
         }
     }
 
@@ -714,8 +841,9 @@ struct ChatDetailView: View {
     }
 }
 
-struct ProfileLoginRoute: Hashable {
+struct ProfileLoginRoute: Hashable, Identifiable {
     let login: String
+    var id: String { login }
 }
 
 struct MembersSheet: View {
@@ -759,93 +887,288 @@ struct MembersSheet: View {
     }
 }
 
-struct MessageContextPreview: View {
-    let message: Message
-    let isMe: Bool
-    let resolvedAvatar: String?
-    let onReact: (String) -> Void
+private struct URLItem: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
 
-    private let emojis = ["❤️", "👍", "👎", "😂", "😮", "🎉"]
+struct SystemMessageRow: View {
+    let message: Message
+
+    private var text: String {
+        let body = message.content.isEmpty ? prettyType : message.content
+        return "@\(message.sender) \(body)"
+    }
+
+    private var prettyType: String {
+        switch message.type {
+        case "pin": return "pinned a message"
+        case "unpin": return "unpinned a message"
+        case "join": return "joined"
+        case "leave": return "left"
+        case "invite": return "was invited"
+        case "group_created": return "created the group"
+        case "rename": return "renamed the group"
+        default: return message.type ?? ""
+        }
+    }
 
     var body: some View {
-        VStack(alignment: isMe ? .trailing : .leading, spacing: 10) {
-            HStack(spacing: 2) {
-                ForEach(emojis, id: \.self) { e in
-                    Button {
-                        Haptics.selection()
-                        onReact(e)
-                    } label: {
-                        Text(e)
-                            .font(.system(size: 26))
-                            .frame(width: 42, height: 42)
-                    }
-                    .buttonStyle(.plain)
+        HStack {
+            Spacer()
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(Color(.secondarySystemBackground), in: Capsule())
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct ImagePreviewState: Identifiable {
+    let id = UUID()
+    let urls: [String]
+    let index: Int
+}
+
+struct ImageViewerSheet: View {
+    let urls: [String]
+    let startIndex: Int
+    @State private var index: Int
+    @Environment(\.dismiss) private var dismiss
+
+    init(urls: [String], startIndex: Int) {
+        self.urls = urls
+        self.startIndex = startIndex
+        _index = State(initialValue: startIndex)
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            TabView(selection: $index) {
+                ForEach(Array(urls.enumerated()), id: \.offset) { i, url in
+                    ZoomableImage(url: url).tag(i)
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(.ultraThinMaterial, in: Capsule())
-            MessageBubble(
-                message: message,
-                isMe: isMe,
-                resolvedAvatar: resolvedAvatar,
-                showHeader: true
-            )
+            .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .automatic : .never))
+            .indexViewStyle(.page(backgroundDisplayMode: .always))
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .environment(\.colorScheme, .dark)
+            }
+            .padding(.top, 12)
+            .padding(.trailing, 16)
         }
-        .padding(12)
+        .statusBarHidden(true)
+    }
+}
+
+private struct ZoomableImage: View {
+    let url: String
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { geo in
+            imageView
+                .scaleEffect(scale)
+                .offset(offset)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .gesture(
+                    SimultaneousGesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                scale = max(1, min(4, lastScale * value))
+                            }
+                            .onEnded { _ in
+                                lastScale = scale
+                                if scale <= 1 {
+                                    withAnimation(.spring()) {
+                                        offset = .zero; lastOffset = .zero
+                                    }
+                                }
+                            },
+                        DragGesture()
+                            .onChanged { value in
+                                guard scale > 1 else { return }
+                                offset = CGSize(
+                                    width: lastOffset.width + value.translation.width,
+                                    height: lastOffset.height + value.translation.height
+                                )
+                            }
+                            .onEnded { _ in lastOffset = offset }
+                    )
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation(.spring()) {
+                        if scale > 1 {
+                            scale = 1; lastScale = 1
+                            offset = .zero; lastOffset = .zero
+                        } else {
+                            scale = 2; lastScale = 2
+                        }
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var imageView: some View {
+        if let u = URL(string: url), u.isFileURL, let ui = UIImage(contentsOfFile: u.path) {
+            Image(uiImage: ui).resizable().scaledToFit()
+        } else if let u = URL(string: url) {
+            AsyncImage(url: u) { phase in
+                switch phase {
+                case .success(let img): img.resizable().scaledToFit()
+                case .failure: Image(systemName: "photo").font(.system(size: 40)).foregroundStyle(.white)
+                default: ProgressView().tint(.white)
+                }
+            }
+        }
+    }
+}
+
+struct EmojiPickerSheet: View {
+    let onPick: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private let emojis: [String] = [
+        "❤️","🧡","💛","💚","💙","💜","🖤","🤍",
+        "👍","👎","👏","🙌","🙏","🤝","💪","🫶",
+        "😂","🤣","😅","😊","😍","🥰","😘","😎",
+        "😮","😲","😱","😭","😢","😤","😡","🤬",
+        "🎉","🔥","✨","💯","⭐️","💫","⚡️","💥",
+        "👀","💭","💡","🧠","📌","✅","❌","🚀",
+    ]
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 8)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("React")
+                .font(.geist(16, weight: .semibold))
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(emojis, id: \.self) { e in
+                        Button {
+                            Haptics.selection()
+                            onPick(e)
+                        } label: {
+                            Text(e).font(.system(size: 30))
+                                .frame(width: 40, height: 40)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+        }
     }
 }
 
 struct ReactorsSheet: View {
     let message: Message
     let participants: [ConversationParticipant]
+    let myLogin: String?
     @Environment(\.dismiss) private var dismiss
+    @State private var selectedTab: String = "all"
 
-    private var grouped: [(String, [String])] {
-        let rows = message.reactionRows ?? []
-        var bag: [String: [String]] = [:]
-        for r in rows {
-            bag[r.emoji, default: []].append(r.user_login ?? "")
-        }
-        return bag.map { ($0.key, $0.value) }.sorted { $0.1.count > $1.1.count }
+    private struct Reactor: Hashable { let login: String; let emoji: String }
+
+    private var allReactors: [Reactor] {
+        (message.reactionRows ?? []).map { Reactor(login: $0.user_login ?? "", emoji: $0.emoji) }
+    }
+
+    private var grouped: [(String, Int)] {
+        var counts: [String: Int] = [:]
+        for r in allReactors { counts[r.emoji, default: 0] += 1 }
+        return counts.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }
+    }
+
+    private var filtered: [Reactor] {
+        if selectedTab == "all" { return allReactors }
+        return allReactors.filter { $0.emoji == selectedTab }
     }
 
     private func avatar(for login: String) -> String? {
-        participants.first(where: { $0.login == login })?.avatar_url
+        if let p = participants.first(where: { $0.login == login })?.avatar_url { return p }
+        if !login.isEmpty { return "https://github.com/\(login).png" }
+        return nil
     }
 
     var body: some View {
-        List {
-            ForEach(grouped, id: \.0) { emoji, logins in
-                Section {
-                    ForEach(logins, id: \.self) { login in
-                        HStack(spacing: 12) {
-                            AvatarView(url: avatar(for: login), size: 36)
-                            Text("@\(login)").font(.subheadline)
-                            Spacer()
-                            Text(emoji).font(.system(size: 22))
-                        }
-                        .listRowSeparator(.hidden)
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    tabChip("all", title: "All \(allReactors.count)")
+                    ForEach(grouped, id: \.0) { emoji, count in
+                        tabChip(emoji, title: "\(emoji) \(count)")
                     }
-                } header: {
-                    Text("\(emoji)  \(logins.count)")
-                        .font(.headline)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             }
-        }
-        .listStyle(.plain)
-        .overlay {
-            if grouped.isEmpty {
-                ContentUnavailableCompat(
-                    title: "No reactions",
-                    systemImage: "face.smiling",
-                    description: "Tap an emoji to react."
-                )
+            List(filtered, id: \.self) { r in
+                NavigationLink {
+                    ProfileView(login: r.login)
+                } label: {
+                    HStack(spacing: 12) {
+                        AvatarView(url: avatar(for: r.login), size: 36)
+                        Text(r.login.isEmpty ? "@me" : "@\(r.login)")
+                            .font(.subheadline)
+                        Spacer()
+                        Text(r.emoji).font(.system(size: 22))
+                    }
+                }
+                .listRowSeparator(.hidden)
+            }
+            .listStyle(.plain)
+            .overlay {
+                if allReactors.isEmpty {
+                    ContentUnavailableCompat(
+                        title: "No reactions",
+                        systemImage: "face.smiling",
+                        description: "Tap an emoji to react."
+                    )
+                }
             }
         }
         .navigationTitle("Reactions")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("Done") { dismiss() } } }
+    }
+
+    private func tabChip(_ key: String, title: String) -> some View {
+        Button {
+            selectedTab = key
+        } label: {
+            Text(title)
+                .font(.geist(13, weight: .semibold))
+                .foregroundStyle(selectedTab == key ? Color.white : Color(.label))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    selectedTab == key ? Color.accentColor : Color(.secondarySystemBackground),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -1008,8 +1331,12 @@ struct MessageBubble: View {
     let isMe: Bool
     var resolvedAvatar: String? = nil
     var showHeader: Bool = true
+    var isPinned: Bool = false
     var onReactionsTap: (() -> Void)? = nil
     var onReplyTap: (() -> Void)? = nil
+    var onAttachmentTap: ((String) -> Void)? = nil
+    var isPulsing: Bool = false
+    var bubbleContextMenu: (() -> AnyView)? = nil
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
@@ -1022,14 +1349,32 @@ struct MessageBubble: View {
             }
             VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
                 if !isMe && showHeader {
-                    Text(message.sender).font(.caption2).foregroundStyle(.secondary)
+                    HStack(spacing: 4) {
+                        Text(message.sender).font(.caption2).foregroundStyle(.secondary)
+                        if isPinned {
+                            Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
+                        }
+                    }
+                } else if isMe && isPinned {
+                    HStack(spacing: 4) {
+                        Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
+                        Text("Pinned").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
                 if let reply = message.reply {
                     replyPreview(reply)
                         .contentShape(Rectangle())
                         .onTapGesture { onReplyTap?() }
                 }
-                bubbleContent
+                Group {
+                    if let menuBuilder = bubbleContextMenu {
+                        bubbleContent.contextMenu { menuBuilder() }.tint(.primary)
+                    } else {
+                        bubbleContent
+                    }
+                }
+                .scaleEffect(isPulsing ? 1.05 : 1)
+                .shadow(color: isPulsing ? Color.accentColor.opacity(0.6) : .clear, radius: 12)
                 if message.edited_at != nil {
                     Text("edited").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
@@ -1104,9 +1449,11 @@ struct MessageBubble: View {
                     attachmentImage(for: imageURL)
                         .frame(maxWidth: 240)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .onTapGesture { onAttachmentTap?(url) }
                 }
                 if !message.content.isEmpty {
-                    Text(message.content)
+                    Text(Self.attributed(message.content, isMe: isMe))
+                        .tint(isMe ? .white : Color.accentColor)
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .background(
                             isMe ? Color.accentColor : Color(.secondarySystemBackground)
@@ -1116,6 +1463,38 @@ struct MessageBubble: View {
                 }
             }
         }
+    }
+
+    static func attributed(_ raw: String, isMe: Bool) -> AttributedString {
+        var attr = AttributedString(raw)
+        // URLs via NSDataDetector
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let ns = raw as NSString
+            let matches = detector.matches(in: raw, options: [], range: NSRange(location: 0, length: ns.length))
+            for m in matches {
+                guard let url = m.url,
+                      let r = Range(m.range, in: raw),
+                      let aRange = attr.range(of: String(raw[r])) else { continue }
+                attr[aRange].link = url
+                attr[aRange].font = .body.bold()
+                attr[aRange].underlineStyle = .single
+            }
+        }
+        // @mentions
+        if let regex = try? NSRegularExpression(pattern: "@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", options: []) {
+            let ns = raw as NSString
+            let matches = regex.matches(in: raw, options: [], range: NSRange(location: 0, length: ns.length))
+            for m in matches {
+                guard let r = Range(m.range, in: raw) else { continue }
+                let token = String(raw[r])
+                if let aRange = attr.range(of: token) {
+                    attr[aRange].font = .body.bold()
+                    let login = String(token.dropFirst())
+                    attr[aRange].link = URL(string: "gitchat://user/\(login)")
+                }
+            }
+        }
+        return attr
     }
 
     @ViewBuilder
@@ -1128,6 +1507,7 @@ struct MessageBubble: View {
                         .frame(maxWidth: atts.count == 1 ? 240 : 120, maxHeight: atts.count == 1 ? 240 : 120)
                         .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .onTapGesture { onAttachmentTap?(a.url) }
                 }
             }
         }

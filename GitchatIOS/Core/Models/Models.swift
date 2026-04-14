@@ -274,6 +274,11 @@ struct RawReactionRow: Decodable, Hashable {
     let emoji: String
     let user_login: String?
 
+    init(emoji: String, user_login: String?) {
+        self.emoji = emoji
+        self.user_login = user_login
+    }
+
     enum CodingKeys: String, CodingKey {
         case emoji
         case user_login

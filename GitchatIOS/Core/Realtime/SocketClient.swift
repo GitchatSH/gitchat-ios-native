@@ -95,4 +95,8 @@ final class SocketClient: ObservableObject {
         subscribedConversations.remove(id)
         socket?.emit("unsubscribe:conversation", ["conversationId": id])
     }
+
+    func subscribeUser(login: String) {
+        socket?.emit("subscribe:user", ["login": login])
+    }
 }
