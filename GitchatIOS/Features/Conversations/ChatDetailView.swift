@@ -1461,7 +1461,6 @@ struct MessageBubble: View {
                     }
                 }
                 .scaleEffect(isPulsing ? 1.05 : 1)
-                .shadow(color: isPulsing ? Color.accentColor.opacity(0.6) : .clear, radius: 12)
                 .onTapGesture {
                     withAnimation(.easeInOut(duration: 0.2)) { showTime.toggle() }
                 }

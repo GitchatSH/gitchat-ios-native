@@ -34,22 +34,31 @@ struct NotificationsView: View {
                     )
                 } else {
                     List(vm.items) { n in
-                        HStack(spacing: 12) {
-                            AvatarView(url: n.actor_avatar_url, size: 40)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(notifText(n)).font(.subheadline)
-                                if let preview = n.metadata?.preview {
-                                    Text(preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        Button {
+                            route(for: n)
+                        } label: {
+                            HStack(spacing: 12) {
+                                AvatarView(
+                                    url: n.actor_avatar_url ?? "https://github.com/\(n.actor_login).png",
+                                    size: 40
+                                )
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(notifText(n)).font(.subheadline).foregroundStyle(Color(.label))
+                                    if let preview = n.metadata?.preview {
+                                        Text(preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                    }
+                                    Text(RelativeTime.format(n.created_at))
+                                        .font(.caption2)
+                                        .foregroundStyle(.tertiary)
                                 }
-                                Text(RelativeTime.format(n.created_at))
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
+                                Spacer()
+                                if !n.is_read {
+                                    Circle().fill(Color.accentColor).frame(width: 8, height: 8)
+                                }
                             }
-                            Spacer()
-                            if !n.is_read {
-                                Circle().fill(Color.accentColor).frame(width: 8, height: 8)
-                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         .listRowSeparator(.hidden)
                     }
                     .listStyle(.plain)
@@ -66,6 +75,28 @@ struct NotificationsView: View {
                 await vm.load()
                 socket.onNotificationNew = { Task { await vm.load() } }
             }
+        }
+    }
+
+    private func route(for n: Notification) {
+        Haptics.selection()
+        switch n.type {
+        case "new_message", "chat_message":
+            if let id = n.metadata?.conversationId, !id.isEmpty {
+                AppRouter.shared.openConversation(id: id)
+            } else {
+                AppRouter.shared.openProfile(login: n.actor_login)
+            }
+        case "mention":
+            if let id = n.metadata?.conversationId, !id.isEmpty {
+                AppRouter.shared.openConversation(id: id)
+            } else {
+                AppRouter.shared.openProfile(login: n.actor_login)
+            }
+        case "follow", "wave":
+            AppRouter.shared.openProfile(login: n.actor_login)
+        default:
+            AppRouter.shared.openProfile(login: n.actor_login)
         }
     }
 

@@ -60,7 +60,7 @@ struct SkeletonRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .shimmering()
     }
 }
@@ -74,6 +74,7 @@ struct SkeletonList: View {
         List(0..<count, id: \.self) { _ in
             SkeletonRow(avatarSize: avatarSize, showSubtitle: showSubtitle)
                 .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
         }
         .listStyle(.plain)
         .allowsHitTesting(false)
