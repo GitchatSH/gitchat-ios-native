@@ -66,7 +66,7 @@ struct ToastHostModifier: ViewModifier {
             if let t = center.current {
                 ToastView(toast: t)
                     .padding(.top, 8)
-                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .onTapGesture { center.dismiss() }
                     .zIndex(10_000)
@@ -97,11 +97,10 @@ private struct ToastView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 18)
         .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
         .background {
             if #available(iOS 26.0, *) {
                 Capsule().fill(.clear).glassEffect(.regular, in: Capsule())

@@ -110,6 +110,23 @@ struct ReplyPreview: Decodable, Hashable {
     }
 }
 
+struct MessageAttachment: Decodable, Hashable, Identifiable {
+    let attachment_id: String?
+    let url: String
+    let type: String?
+    let filename: String?
+    let mime_type: String?
+    let width: Int?
+    let height: Int?
+
+    var id: String { attachment_id ?? url }
+
+    enum CodingKeys: String, CodingKey {
+        case attachment_id = "id"
+        case url, type, filename, mime_type, width, height
+    }
+}
+
 struct Message: Decodable, Identifiable, Hashable {
     let id: String
     let conversation_id: String?
@@ -118,8 +135,11 @@ struct Message: Decodable, Identifiable, Hashable {
     let content: String
     let created_at: String?
     let edited_at: String?
+    let unsent_at: String?
     let reactions: [MessageReaction]?
+    let reactionRows: [RawReactionRow]?
     let attachment_url: String?
+    let attachments: [MessageAttachment]?
     let type: String?
     let reply_to_id: String?
     let reply: ReplyPreview?
@@ -127,12 +147,13 @@ struct Message: Decodable, Identifiable, Hashable {
     // Decode defensively: backend may send `sender` as a string OR as an
     // object `{ login, avatar_url }`, and may use slightly different keys.
     private enum CodingKeys: String, CodingKey {
-        case id, sender, content, type, reply
+        case id, sender, content, type, reply, attachments
         case sender_login, senderLogin
         case conversation_id, conversationId
         case sender_avatar, senderAvatar, sender_avatar_url
         case created_at, createdAt
         case edited_at, editedAt
+        case unsent_at, unsentAt
         case reactions
         case attachment_url, attachmentUrl
         case reply_to_id, replyToId
@@ -156,7 +177,10 @@ struct Message: Decodable, Identifiable, Hashable {
         attachment_url: String?,
         type: String?,
         reply_to_id: String?,
-        reply: ReplyPreview? = nil
+        reply: ReplyPreview? = nil,
+        attachments: [MessageAttachment]? = nil,
+        unsent_at: String? = nil,
+        reactionRows: [RawReactionRow]? = nil
     ) {
         self.id = id
         self.conversation_id = conversation_id
@@ -165,8 +189,11 @@ struct Message: Decodable, Identifiable, Hashable {
         self.content = content
         self.created_at = created_at
         self.edited_at = edited_at
+        self.unsent_at = unsent_at
         self.reactions = reactions
+        self.reactionRows = reactionRows
         self.attachment_url = attachment_url
+        self.attachments = attachments
         self.type = type
         self.reply_to_id = reply_to_id
         self.reply = reply
@@ -210,17 +237,23 @@ struct Message: Decodable, Identifiable, Hashable {
             ?? c.decodeIfPresent(String.self, forKey: .createdAt)
         self.edited_at = try c.decodeIfPresent(String.self, forKey: .edited_at)
             ?? c.decodeIfPresent(String.self, forKey: .editedAt)
+        self.unsent_at = try c.decodeIfPresent(String.self, forKey: .unsent_at)
+            ?? c.decodeIfPresent(String.self, forKey: .unsentAt)
+        self.attachments = try c.decodeIfPresent([MessageAttachment].self, forKey: .attachments)
         // Backend returns raw reaction rows ({emoji, userLogin, ...}) not the
         // aggregated {emoji, count, reacted} shape. Try structured decode first,
         // otherwise aggregate raw rows manually. Never fail the whole message.
         if let decoded = try? c.decodeIfPresent([MessageReaction].self, forKey: .reactions) {
             self.reactions = decoded
+            self.reactionRows = nil
         } else if let raw = try? c.decodeIfPresent([RawReactionRow].self, forKey: .reactions) {
             var counts: [String: Int] = [:]
             for row in raw { counts[row.emoji, default: 0] += 1 }
             self.reactions = counts.map { MessageReaction(emoji: $0.key, count: $0.value, reacted: false) }
+            self.reactionRows = raw
         } else {
             self.reactions = nil
+            self.reactionRows = nil
         }
         self.attachment_url = try c.decodeIfPresent(String.self, forKey: .attachment_url)
             ?? c.decodeIfPresent(String.self, forKey: .attachmentUrl)
@@ -237,8 +270,22 @@ struct MessageReaction: Decodable, Hashable {
     let reacted: Bool
 }
 
-private struct RawReactionRow: Decodable {
+struct RawReactionRow: Decodable, Hashable {
     let emoji: String
+    let user_login: String?
+
+    enum CodingKeys: String, CodingKey {
+        case emoji
+        case user_login
+        case userLogin
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.emoji = try c.decode(String.self, forKey: .emoji)
+        self.user_login = try c.decodeIfPresent(String.self, forKey: .user_login)
+            ?? c.decodeIfPresent(String.self, forKey: .userLogin)
+    }
 }
 
 struct MessagesResponse: Decodable {

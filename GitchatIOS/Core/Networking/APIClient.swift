@@ -265,16 +265,59 @@ struct APIClient {
         conversationId: String,
         body: String,
         replyTo: String? = nil,
-        attachmentURL: String? = nil
+        attachmentURL: String? = nil,
+        attachmentURLs: [String]? = nil
     ) async throws -> Message {
         struct Body: Encodable {
             let body: String
             let reply_to_id: String?
             let attachments: [[String: String]]?
         }
-        let attachments: [[String: String]]? = attachmentURL.map { [["url": $0]] }
+        var attachments: [[String: String]]? = nil
+        if let many = attachmentURLs, !many.isEmpty {
+            attachments = many.map { ["url": $0] }
+        } else if let single = attachmentURL {
+            attachments = [["url": single]]
+        }
         let req = Body(body: body, reply_to_id: replyTo, attachments: attachments)
         return try await request("messages/conversations/\(conversationId)", method: "POST", body: req)
+    }
+
+    func unsendMessage(messageId: String) async throws {
+        let _: EmptyResponse = try await request("messages/\(messageId)/unsend", method: "POST")
+    }
+
+    func forwardMessage(messageId: String, toConversationIds: [String]) async throws {
+        struct Body: Encodable { let conversation_ids: [String] }
+        let _: EmptyResponse = try await request(
+            "messages/\(messageId)/forward",
+            method: "POST",
+            body: Body(conversation_ids: toConversationIds)
+        )
+    }
+
+    func muteConversation(id: String) async throws {
+        let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "POST")
+    }
+
+    func unmuteConversation(id: String) async throws {
+        let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "DELETE")
+    }
+
+    func searchMessagesInConversation(id: String, q: String) async throws -> [Message] {
+        struct Wrap: Decodable { let messages: [Message]?; let data: Inner? }
+        struct Inner: Decodable { let messages: [Message] }
+        let w: Wrap = try await request(
+            "messages/conversations/\(id)/search",
+            query: [URLQueryItem(name: "q", value: q)]
+        )
+        return w.messages ?? w.data?.messages ?? []
+    }
+
+    func pinnedMessages(conversationId: String) async throws -> [Message] {
+        struct Wrap: Decodable { let messages: [Message]?; let pinned_messages: [Message]? }
+        let w: Wrap = try await request("messages/conversations/\(conversationId)/pinned-messages")
+        return w.messages ?? w.pinned_messages ?? []
     }
 
     // Channel feeds

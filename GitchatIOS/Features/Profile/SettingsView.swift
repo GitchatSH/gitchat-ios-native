@@ -102,13 +102,11 @@ struct SettingsView: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog(
-            "Sign out of Gitchat?",
-            isPresented: $showingSignOutConfirm,
-            titleVisibility: .visible
-        ) {
+        .alert("Sign out of Gitchat?", isPresented: $showingSignOutConfirm) {
             Button("Sign out", role: .destructive) { auth.signOut() }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You'll need to sign in again to see your chats.")
         }
         .sheet(item: Binding<URLIdentifiableSettings?>(
             get: { legalURL.map(URLIdentifiableSettings.init) },

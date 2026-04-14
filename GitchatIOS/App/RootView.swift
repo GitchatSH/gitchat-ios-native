@@ -1,8 +1,10 @@
 import SwiftUI
+import StoreKit
 
 struct RootView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var socket: SocketClient
+    @Environment(\.requestReview) private var requestReview
     @State private var heartbeatTask: Task<Void, Never>?
 
     var body: some View {
@@ -25,6 +27,9 @@ struct RootView: View {
             if isAuth {
                 socket.connect()
                 startHeartbeat()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    requestReview()
+                }
             } else {
                 socket.disconnect()
                 heartbeatTask?.cancel()
