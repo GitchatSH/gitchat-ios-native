@@ -520,7 +520,11 @@ struct ChatDetailView: View {
                 .onChange(of: vm.isLoading) { loading in
                     if !loading, let last = vm.messages.last {
                         DispatchQueue.main.async {
-                            proxy.scrollTo(last.id, anchor: .bottom)
+                            var tx = Transaction()
+                            tx.disablesAnimations = true
+                            withTransaction(tx) {
+                                proxy.scrollTo(last.id, anchor: .bottom)
+                            }
                         }
                     }
                 }

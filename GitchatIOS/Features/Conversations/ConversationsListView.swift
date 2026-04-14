@@ -90,6 +90,7 @@ struct ConversationsListView: View {
                             ConversationRow(conversation: convo)
                         }
                         .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 2, leading: 16, bottom: 2, trailing: 16))
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             Button {
                                 Task { await vm.togglePin(convo) }
@@ -236,7 +237,7 @@ struct ConversationRow: View {
                     .lineLimit(2)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 }
 
