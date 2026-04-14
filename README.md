@@ -4,6 +4,10 @@ Native SwiftUI port of the [Gitchat VS Code extension](https://github.com/Gitcha
 Bundle ID `git.chat`, iOS 16+, shares the same backend as the extension
 (`api-dev.gitstar.ai`, `ws-dev.gitstar.ai`) so your IDE and phone stay in lock-step.
 
+See the [Releases](https://github.com/GitchatSH/gitchat-ios-native/releases)
+page for per-build notes; builds `10` through `18` cover the big refactor
+pass (messaging features, push, realtime, UX polish).
+
 ## Quick start
 
 ```bash
@@ -94,7 +98,7 @@ GitchatIOS/
   bubble to react ❤️.
 - **Reply**: tapping Reply auto-focuses the composer. Reply preview above a
   bubble is tappable — scrolls to the original message and triggers a subtle
-  pulse on the target (scale 1.05 + accent shadow).
+  scale pulse on the target.
 - **Pinned state**: bubbles show a small pin indicator when pinned. Menu flips
   between Pin and Unpin based on the locally-tracked `pinnedIds` set.
 - **Forward**: picker sheet with multi-select conversation list, posts the
@@ -134,8 +138,16 @@ GitchatIOS/
     that profile.
   - URLs detected via `NSDataDetector` are bolded + underlined; tapping opens
     them in an in-app `SafariSheet` via a custom `OpenURLAction` handler.
-- **Reply preview quoting**, **typing-free read receipts** placeholder,
-  **scroll-to-bottom on open** with an invisible anchor + 8pt bottom spacer.
+- **Reply preview quoting**, **scroll-to-bottom on open** with an invisible
+  anchor + 8pt bottom spacer. Entry scroll uses
+  `Transaction(disablesAnimations: true)` so the chat opens already at the
+  last message with no visible scroll.
+- **Tap a bubble** to reveal its relative timestamp above the bubble with a
+  subtle opacity + top-slide transition. Tap again to hide.
+- **Typing indicators**: composer emits `typing:start` / `typing:stop`; chat
+  shows an animated glass-capsule three-dot row when others are typing.
+- **Read receipts**: subtle "Seen" footer when the other side's read cursor
+  covers your last sent message.
 
 ### Profile
 - **Me view** with settings gear in the toolbar.
@@ -178,6 +190,10 @@ GitchatIOS/
   helper wrapping `RelativeDateTimeFormatter`.
 - Hidden separators, unread dot.
 - Read-all toolbar action.
+- Rows are tappable and route via `AppRouter`: `chat_message` / `new_message`
+  / `mention` with a `conversation_id` → open the chat; `mention` / `follow`
+  / `wave` / fallback → open the actor's profile. Selection haptic on tap.
+- Missing actor avatars fall back to `github.com/<login>.png`.
 
 ### System UI / polish
 - Global `UIScrollView.appearance()` — all scroll indicators hidden.
@@ -198,8 +214,25 @@ GitchatIOS/
     `conversation:updated`, `unread:updated`, `presence:updated`).
   - `conversation:<id>` room when a chat detail is opened.
 - Events handled: `message:sent`, `conversation:updated`, `presence:updated`,
-  `reaction:updated`, `notification:new`.
+  `reaction:updated`, `notification:new`, `typing:start` / `typing:stop`,
+  `conversation:read`.
+- `globalOnMessageSent` fires in parallel with the view-local hook so the
+  root view can show an **in-app toast banner** when a message arrives for
+  a different conversation than the one you're currently viewing.
+- `currentConversationId` tracks which chat is on screen so banners are
+  suppressed for the active conversation.
+- `emitTyping(conversationId:isTyping:)` pushes typing:start / typing:stop
+  when the composer draft changes.
 - Heartbeat ping every `Config.presenceHeartbeatSeconds` while authed.
+
+### AppRouter
+Shared singleton (`Core/UI/AppRouter.swift`) exposing `selectedTab`,
+`pendingConversationId`, and `pendingProfileLogin`. Drives external
+navigation from push clicks, activity taps, and mention links. `MainTabView`
+binds to `selectedTab`; `ConversationsListView` watches
+`pendingConversationId` and pushes the matching `Conversation` onto its
+`NavigationPath`; `RootView` presents a `ProfileView` sheet for
+`pendingProfileLogin`.
 
 ### StoreKit / Pro
 - `StoreManager` — Gitchat Pro auto-renewing subscription product.
@@ -210,21 +243,31 @@ GitchatIOS/
 ### Push notifications
 - OneSignal v5 SDK integrated via `OneSignalXCFramework` SPM.
 - Notification Service Extension (`OneSignalNotificationServiceExtension`)
-  registered and app group `group.chat.git.onesignal` configured.
-- Backend currently only sends a push on new chat messages
-  (`messages.service.ts`). Other notification types (mentions, follows,
-  likes, post replies, group invites, …) write DB rows but don't send pushes
-  yet. Communication Notifications (big-avatar + small-app-icon) via
-  `INSendMessageIntent` are not wired yet — see Known gaps.
+  registered, app group `group.chat.git.onesignal` configured, and
+  `com.apple.developer.usernotifications.communication` entitlement enabled.
+- **Communication Notifications**: the NSE donates an `INSendMessageIntent`
+  with a downloaded sender avatar and calls
+  `UNNotificationContent.updating(from:)`, so pushes render with the
+  sender's avatar as the hero + the app icon as a small corner badge on
+  iOS 15+. NSE links `Intents.framework` via xcodegen
+  `sdk: Intents.framework`.
+- **Deep-link routing**: `PushManager` registers an
+  `OSNotificationClickListener` that drives `AppRouter`:
+  - `chat_message` / `group_add` / `reply` → open conversation
+  - `mention` with `conversation_id` → open conversation
+  - `mention` / `follow` without one → open actor profile
+  - everything else → switch to the Activity tab
+- Backend push parity: a shared helper `src/shared/push/push.ts` (typed
+  `PushType` + `PushData` payload) sends pushes on follow, event_like,
+  repo_starred, event_comment, mention, post_like, post_reply, and reply
+  mentions — alongside the existing chat message push.
 
 ## Known gaps / next pass
 
-- Communication Notifications (big avatar + app icon badge) via Intents
-  donation in the Notification Service Extension.
-- Backend push sender hard-codes `data.type = 'chat_message'`; needs type-
-  per-event + deep-link targets for follow, mention, like, post reply.
-- Push senders missing for: mentions, follows, post/event likes, post
-  replies, group add-member, awesome-list milestones, pin notifications.
+- Backend push senders still missing for group add-member, awesome-list
+  milestones, and pin-message broadcasts (helper is in place, just not
+  wired at those call sites).
+- MVVM file split — `ChatDetailView.swift` is still monolithic (~1800 lines).
 - Multi-file document attachments (only images today).
 - Global message search (cross-conversation).
 - Typing indicators (`typing:start` / `typing:stop` already emitted by
