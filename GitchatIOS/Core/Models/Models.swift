@@ -107,6 +107,7 @@ struct Message: Decodable, Identifiable, Hashable {
     // object `{ login, avatar_url }`, and may use slightly different keys.
     private enum CodingKeys: String, CodingKey {
         case id, sender, content, type
+        case sender_login, senderLogin
         case conversation_id, conversationId
         case sender_avatar, senderAvatar, sender_avatar_url
         case created_at, createdAt
@@ -154,7 +155,7 @@ struct Message: Decodable, Identifiable, Hashable {
         self.conversation_id = try c.decodeIfPresent(String.self, forKey: .conversation_id)
             ?? c.decodeIfPresent(String.self, forKey: .conversationId)
 
-        // sender: string or object
+        // sender: string, object, or separate sender_login field
         if let s = try? c.decode(String.self, forKey: .sender) {
             self.sender = s
             self.sender_avatar = try c.decodeIfPresent(String.self, forKey: .sender_avatar)
@@ -163,6 +164,16 @@ struct Message: Decodable, Identifiable, Hashable {
         } else if let obj = try? c.decode(SenderObject.self, forKey: .sender) {
             self.sender = obj.login ?? "unknown"
             self.sender_avatar = obj.avatar_url
+        } else if let s = try? c.decode(String.self, forKey: .sender_login) {
+            self.sender = s
+            self.sender_avatar = try c.decodeIfPresent(String.self, forKey: .sender_avatar)
+                ?? c.decodeIfPresent(String.self, forKey: .senderAvatar)
+                ?? c.decodeIfPresent(String.self, forKey: .sender_avatar_url)
+        } else if let s = try? c.decode(String.self, forKey: .senderLogin) {
+            self.sender = s
+            self.sender_avatar = try c.decodeIfPresent(String.self, forKey: .sender_avatar)
+                ?? c.decodeIfPresent(String.self, forKey: .senderAvatar)
+                ?? c.decodeIfPresent(String.self, forKey: .sender_avatar_url)
         } else {
             self.sender = "unknown"
             self.sender_avatar = nil
