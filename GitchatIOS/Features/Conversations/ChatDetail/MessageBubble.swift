@@ -113,6 +113,15 @@ struct MessageBubble: View {
         CachedAsyncImage(url: url, contentMode: .fit, fixedHeight: 220)
     }
 
+    /// Single-image chat attachment: caps at 260 wide / 280 tall and
+    /// keeps the image's natural aspect ratio. Wide photos shrink in
+    /// height; tall photos shrink in width so neither dimension
+    /// dominates the bubble.
+    private func singleAttachmentImage(for url: URL) -> some View {
+        CachedAsyncImage(url: url, contentMode: .fit)
+            .frame(maxWidth: 260, maxHeight: 280)
+    }
+
     @ViewBuilder
     private func reactionsRow(_ reactions: [MessageReaction]) -> some View {
         HStack(spacing: 4) {
@@ -175,8 +184,7 @@ struct MessageBubble: View {
                 if let atts = message.attachments, !atts.isEmpty {
                     attachmentGrid(atts)
                 } else if let url = message.attachment_url, let imageURL = URL(string: url) {
-                    attachmentImage(for: imageURL)
-                        .frame(maxWidth: 240)
+                    singleAttachmentImage(for: imageURL)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                         .onTapGesture { onAttachmentTap?(url) }
                 }
@@ -289,7 +297,7 @@ struct MessageBubble: View {
     @ViewBuilder
     private func attachmentGrid(_ atts: [MessageAttachment]) -> some View {
         if atts.count == 1, let a = atts.first, let url = URL(string: a.url) {
-            attachmentImage(for: url)
+            singleAttachmentImage(for: url)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .contentShape(Rectangle())
                 .onTapGesture { onAttachmentTap?(a.url) }
