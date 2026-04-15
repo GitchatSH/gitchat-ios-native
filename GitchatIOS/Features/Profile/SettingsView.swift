@@ -11,6 +11,8 @@ struct SettingsView: View {
     @AppStorage("gitchat.pref.compactMode") private var compactMode: Bool = false
     @AppStorage("gitchat.pref.appearance") private var appearance: String = "system"
     @State private var showingSignOutConfirm = false
+    @State private var showingDeleteConfirm = false
+    @State private var deletingAccount = false
     @State private var legalURL: URL?
     @State private var showBlockedList = false
     @State private var showUpgrade = false
@@ -95,6 +97,26 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Section {
+                Button(role: .destructive) {
+                    showingDeleteConfirm = true
+                } label: {
+                    HStack {
+                        Spacer()
+                        if deletingAccount {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Delete account").bold()
+                        }
+                        Spacer()
+                    }
+                }
+                .disabled(deletingAccount)
+            } footer: {
+                Text("Permanently removes your Gitchat account. This can't be undone.")
+                    .font(.caption2)
+            }
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
@@ -103,6 +125,12 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You'll need to sign in again to see your chats.")
+        }
+        .alert("Delete your Gitchat account?", isPresented: $showingDeleteConfirm) {
+            Button("Delete", role: .destructive) { Task { await deleteAccount() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your profile, conversations, and follows will be permanently removed. This can't be undone.")
         }
         .sheet(item: Binding<URLIdentifiableSettings?>(
             get: { legalURL.map(URLIdentifiableSettings.init) },
@@ -115,6 +143,18 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showUpgrade) {
             UpgradeView()
+        }
+    }
+
+    private func deleteAccount() async {
+        deletingAccount = true
+        defer { deletingAccount = false }
+        do {
+            try await APIClient.shared.deleteAccount()
+            ToastCenter.shared.show(.success, "Account deleted")
+            auth.signOut()
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't delete", error.localizedDescription)
         }
     }
 

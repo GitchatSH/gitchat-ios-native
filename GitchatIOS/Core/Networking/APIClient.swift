@@ -447,6 +447,10 @@ struct APIClient {
     func followStatus(login: String) async throws -> FollowStatus {
         try await request("follow/\(login)")
     }
+    func deleteAccount() async throws {
+        let _: EmptyResponse = try await request("user/account", method: "DELETE")
+    }
+
     func reportUser(login: String, reason: String, detail: String?) async throws {
         struct Body: Encodable { let reason: String; let detail: String? }
         let _: EmptyResponse = try await request(
