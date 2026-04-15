@@ -35,12 +35,16 @@ struct NotificationsView: View {
                 } else {
                     List(vm.items) { n in
                         Button {
+                            // Fire-and-forget mark-as-read so the badge
+                            // clears without waiting on the route.
+                            Task { try? await APIClient.shared.markNotificationsRead(ids: [n.id]) }
                             route(for: n)
                         } label: {
                             HStack(spacing: 12) {
                                 AvatarView(
                                     url: n.actor_avatar_url ?? "https://github.com/\(n.actor_login).png",
-                                    size: 40
+                                    size: 40,
+                                    login: n.actor_login
                                 )
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(notifText(n)).font(.subheadline).foregroundStyle(Color(.label))

@@ -166,8 +166,14 @@ struct ChatDetailView: View {
         .toolbar {
             chatToolbar
             ToolbarItem(placement: .principal) {
-                ChatDetailTitleBar(conversation: vm.conversation, isSyncing: vm.isSyncing)
-                    .animation(.easeInOut(duration: 0.2), value: vm.isSyncing)
+                ChatDetailTitleBar(
+                    conversation: vm.conversation,
+                    isSyncing: vm.isSyncing,
+                    onTap: {
+                        if vm.conversation.isGroup { showMembers = true }
+                    }
+                )
+                .animation(.easeInOut(duration: 0.2), value: vm.isSyncing)
             }
         }
         .navigationDestination(for: ProfileLoginRoute.self) { route in

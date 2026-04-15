@@ -67,7 +67,7 @@ struct FollowingView: View {
                             ProfileView(login: u.login)
                         } label: {
                             HStack(spacing: 12) {
-                                AvatarView(url: u.avatar_url, size: 40)
+                                AvatarView(url: u.avatar_url, size: 40, login: u.login)
                                 VStack(alignment: .leading) {
                                     Text(u.name ?? u.login).font(.headline)
                                     Text("@\(u.login)").font(.caption).foregroundStyle(.secondary)

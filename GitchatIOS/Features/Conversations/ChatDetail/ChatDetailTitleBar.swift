@@ -7,6 +7,7 @@ import SwiftUI
 struct ChatDetailTitleBar: View {
     let conversation: Conversation
     let isSyncing: Bool
+    var onTap: (() -> Void)? = nil
     @ObservedObject private var presence = PresenceStore.shared
 
     var body: some View {
@@ -23,6 +24,8 @@ struct ChatDetailTitleBar: View {
                     .transition(.opacity)
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
         .onAppear {
             if conversation.isGroup {
                 presence.ensure(conversation.participantsOrEmpty.map(\.login))

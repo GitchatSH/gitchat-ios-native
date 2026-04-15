@@ -500,6 +500,12 @@ struct APIClient {
         let _: EmptyResponse = try await request("notifications/read", method: "PATCH", body: Body(all: all))
     }
 
+    func markNotificationsRead(ids: [String]) async throws {
+        guard !ids.isEmpty else { return }
+        struct Body: Encodable { let ids: [String] }
+        let _: EmptyResponse = try await request("notifications/read", method: "PATCH", body: Body(ids: ids))
+    }
+
     // Channels
     func channels() async throws -> ChannelListResponse {
         try await request("channels")
