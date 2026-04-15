@@ -1,9 +1,11 @@
 import SwiftUI
 
 struct MembersSheet: View {
+    let conversationId: String
     let participants: [ConversationParticipant]
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var presence = PresenceStore.shared
+    @State private var showAddMember = false
 
     private var sorted: [ConversationParticipant] {
         // Online first (by the usual alpha ordering within each
@@ -50,8 +52,21 @@ struct MembersSheet: View {
             presence.ensure(participants.map(\.login))
         }
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    showAddMember = true
+                } label: {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                }
+                .accessibilityLabel("Add member")
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Done") { dismiss() }
+            }
+        }
+        .sheet(isPresented: $showAddMember) {
+            AddMemberSheet(conversationId: conversationId) {
+                dismiss()
             }
         }
     }

@@ -32,6 +32,7 @@ struct ChatDetailView: View {
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var router = AppRouter.shared
     @State private var showMembers = false
+    @State private var showAddMember = false
     @FocusState private var composerFocused: Bool
 
     init(conversation: Conversation) {
@@ -138,7 +139,10 @@ struct ChatDetailView: View {
     }
 
     private var chatBody: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            ChatBackground()
+                .ignoresSafeArea()
+            VStack(spacing: 0) {
             messagesList
             if composerVisible {
                 if vm.replyingTo != nil || vm.editingMessage != nil {
@@ -158,6 +162,7 @@ struct ChatDetailView: View {
                     }
                     .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAtBottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             }
         }
         .navigationTitle("")
@@ -264,10 +269,18 @@ struct ChatDetailView: View {
         }
         .sheet(isPresented: $showMembers) {
             NavigationStack {
-                MembersSheet(participants: vm.conversation.participantsOrEmpty)
+                MembersSheet(
+                    conversationId: vm.conversation.id,
+                    participants: vm.conversation.participantsOrEmpty
+                )
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showAddMember) {
+            AddMemberSheet(conversationId: vm.conversation.id) {
+                Task { await vm.load() }
+            }
         }
         .sheet(item: $reportingMessage) { msg in reportSheet(for: msg) }
         .alert("Thanks — we'll review it within 24 hours.", isPresented: $showReportConfirm) {
@@ -390,6 +403,11 @@ struct ChatDetailView: View {
                         showMembers = true
                     } label: {
                         Label("\(vm.conversation.participantsOrEmpty.count) Members", systemImage: "person.2")
+                    }
+                    Button {
+                        showAddMember = true
+                    } label: {
+                        Label("Add member", systemImage: "person.crop.circle.badge.plus")
                     }
                 } else if let other = vm.conversation.other_user {
                     NavigationLink(value: ProfileLoginRoute(login: other.login)) {

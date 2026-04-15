@@ -300,6 +300,15 @@ struct APIClient {
         let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "POST")
     }
 
+    func addMember(conversationId: String, login: String) async throws {
+        struct Body: Encodable { let login: String }
+        let _: EmptyResponse = try await request(
+            "messages/conversations/\(conversationId)/members",
+            method: "POST",
+            body: Body(login: login)
+        )
+    }
+
     func unmuteConversation(id: String) async throws {
         let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "DELETE")
     }

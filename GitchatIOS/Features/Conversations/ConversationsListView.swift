@@ -162,6 +162,11 @@ struct ConversationsListView: View {
                         }
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(
+                            convo.isPinned
+                                ? Color.accentColor.opacity(0.08)
+                                : Color.clear
+                        )
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
                             Button {
                                 Task { await vm.togglePin(convo) }
@@ -313,6 +318,34 @@ struct SyncingIndicator: View {
 struct ConversationRow: View {
     let conversation: Conversation
 
+    /// Pull the most recent attachment URL out of the message cache so
+    /// "📷 Photo" preview rows can show an actual thumbnail instead of
+    /// the camera emoji.
+    private var lastPhotoURL: URL? {
+        guard let messages = MessageCache.shared.get(conversation.id)?.messages,
+              let last = messages.last else { return nil }
+        if let urlString = last.attachments?.first?.url, let url = URL(string: urlString) {
+            return url
+        }
+        if let urlString = last.attachment_url, let url = URL(string: urlString) {
+            return url
+        }
+        return nil
+    }
+
+    private var previewWithoutPhotoEmoji: String {
+        let text = conversation.previewText ?? ""
+        guard lastPhotoURL != nil else { return text }
+        // Drop the leading "📷 Photo" / "📎 …" / etc when we have a real
+        // thumbnail next to it.
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        let prefixes = ["📷 Photo", "🎥 Video", "📎 Attachment", "📎 Shared a post", "📎 Shared an event"]
+        for p in prefixes where trimmed == p {
+            return ""
+        }
+        return text
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if conversation.isGroup && !conversation.participantsOrEmpty.isEmpty {
@@ -336,10 +369,21 @@ struct ConversationRow: View {
                         Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
                     }
                 }
-                Text(conversation.previewText ?? "")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                HStack(alignment: .top, spacing: 6) {
+                    if let thumbURL = lastPhotoURL {
+                        CachedAsyncImage(
+                            url: thumbURL,
+                            contentMode: .fill,
+                            maxPixelSize: 80
+                        )
+                        .frame(width: 22, height: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    }
+                    Text(previewWithoutPhotoEmoji)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 6) {
