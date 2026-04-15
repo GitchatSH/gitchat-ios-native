@@ -50,7 +50,7 @@ targets:
       properties:
         CFBundleDisplayName: Gitchat
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "37"
+        CFBundleVersion: "38"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -97,7 +97,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "37"
+        CFBundleVersion: "38"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

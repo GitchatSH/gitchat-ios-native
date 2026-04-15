@@ -38,9 +38,9 @@ struct ChatDetailTitleBar: View {
     private var subtitle: String? {
         if conversation.isGroup {
             let participants = conversation.participantsOrEmpty.map(\.login)
+            guard !participants.isEmpty else { return nil }
             let onlineCount = participants.filter { presence.isOnline($0) }.count
-            guard onlineCount > 0 else { return nil }
-            return "\(onlineCount) online"
+            return "\(onlineCount)/\(participants.count) online"
         }
         guard let login = conversation.other_user?.login else { return nil }
         if presence.isOnline(login) { return "online" }

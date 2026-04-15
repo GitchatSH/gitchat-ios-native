@@ -17,20 +17,31 @@ struct SystemMessageRow: View {
         }
     }
 
-    /// Build an attributed string where the leading user login (which
-    /// backend always emits bare, e.g. "alice pinned a message") is bold
-    /// and clickable via the gitchat://user/ scheme.
+    private static let nonLoginWords: Set<String> = [
+        "added", "joined", "left", "pinned", "unpinned", "invited",
+        "removed", "kicked", "created", "renamed", "changed", "the",
+        "group", "message", "name", "was", "and", "to", "a", "an",
+        "from", "this", "chat", "conversation",
+    ]
+
+    /// Build an attributed string where every token that looks like a
+    /// GitHub login (and isn't a common English verb/article used in
+    /// system messages) is bold and links to its profile.
     private var attributed: AttributedString {
         let body = message.content.isEmpty ? prettyType : message.content
         var attr = AttributedString(body)
 
-        if let space = body.firstIndex(of: " ") {
-            let login = String(body[..<space])
-            if login.range(of: "^[A-Za-z0-9][A-Za-z0-9-]*$", options: .regularExpression) != nil,
-               let aRange = attr.range(of: login) {
+        let pattern = "\\b[A-Za-z0-9][A-Za-z0-9-]{1,38}\\b"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return attr }
+        let ns = body as NSString
+        let matches = regex.matches(in: body, range: NSRange(location: 0, length: ns.length))
+        for m in matches.reversed() {
+            let token = ns.substring(with: m.range)
+            if Self.nonLoginWords.contains(token.lowercased()) { continue }
+            if let aRange = attr.range(of: token) {
                 attr[aRange].font = .caption.bold()
                 attr[aRange].foregroundColor = .secondary
-                attr[aRange].link = URL(string: "gitchat://user/\(login)")
+                attr[aRange].link = URL(string: "gitchat://user/\(token)")
             }
         }
         return attr

@@ -121,9 +121,32 @@ struct MessageBubble: View {
     /// keeps the image's natural aspect ratio. Wide photos shrink in
     /// height; tall photos shrink in width so neither dimension
     /// dominates the bubble.
-    private func singleAttachmentImage(for url: URL) -> some View {
-        CachedAsyncImage(url: url, contentMode: .fit)
-            .frame(maxWidth: 260, maxHeight: 280)
+    @ViewBuilder
+    private func singleAttachmentImage(for url: URL, width: Int? = nil, height: Int? = nil) -> some View {
+        let maxW: CGFloat = 260
+        let maxH: CGFloat = 280
+        if let w = width, let h = height, w > 0, h > 0 {
+            // Backend gave us the intrinsic dimensions — compute the
+            // fit size up front so the placeholder matches the final
+            // image and portrait photos get a stable narrow frame.
+            let aspect = CGFloat(w) / CGFloat(h)
+            let fitted: CGSize = {
+                if aspect >= 1 {
+                    // Landscape or square: width drives.
+                    let fw = min(maxW, CGFloat(w))
+                    return CGSize(width: fw, height: fw / aspect)
+                } else {
+                    // Portrait: height drives, width follows aspect.
+                    let fh = min(maxH, CGFloat(h))
+                    return CGSize(width: fh * aspect, height: fh)
+                }
+            }()
+            CachedAsyncImage(url: url, contentMode: .fit)
+                .frame(width: fitted.width, height: fitted.height)
+        } else {
+            CachedAsyncImage(url: url, contentMode: .fit)
+                .frame(maxWidth: maxW, maxHeight: maxH)
+        }
     }
 
     @ViewBuilder
@@ -301,7 +324,7 @@ struct MessageBubble: View {
     @ViewBuilder
     private func attachmentGrid(_ atts: [MessageAttachment]) -> some View {
         if atts.count == 1, let a = atts.first, let url = URL(string: a.url) {
-            singleAttachmentImage(for: url)
+            singleAttachmentImage(for: url, width: a.width, height: a.height)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .contentShape(Rectangle())
                 .onTapGesture { onAttachmentTap?(a.url) }
