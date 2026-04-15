@@ -71,6 +71,7 @@ struct ConversationsListView: View {
     @StateObject private var vm = ConversationsViewModel()
     @StateObject private var router = AppRouter.shared
     @EnvironmentObject var socket: SocketClient
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showNewChat = false
     @State private var filter = ""
     @State private var path = NavigationPath()
@@ -212,6 +213,9 @@ struct ConversationsListView: View {
                 await vm.load()
                 socket.onConversationUpdated = { Task { await vm.load() } }
             }
+            .onChange(of: scenePhase) { phase in
+                if phase == .active { Task { await vm.load() } }
+            }
             .onAppear {
                 // Re-bind hook in case chat detail cleared it, and refresh
                 // so the list reflects anything sent from inside a chat.
@@ -233,18 +237,18 @@ struct ConversationsListView: View {
 }
 
 struct SyncingIndicator: View {
-    @State private var rotating = false
     var body: some View {
-        Image(systemName: "arrow.triangle.2.circlepath")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(Color.accentColor)
-            .rotationEffect(.degrees(rotating ? 360 : 0))
-            .onAppear {
-                withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                    rotating = true
-                }
-            }
-            .accessibilityLabel("Syncing")
+        // Wall-clock driven rotation so the glyph is always spinning
+        // whenever this view is on screen — independent of any
+        // .onAppear firing or @State being re-used across reappearances.
+        TimelineView(.animation) { context in
+            let seconds = context.date.timeIntervalSinceReferenceDate
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .rotationEffect(.degrees(seconds.truncatingRemainder(dividingBy: 1) * 360))
+        }
+        .accessibilityLabel("Syncing")
     }
 }
 
