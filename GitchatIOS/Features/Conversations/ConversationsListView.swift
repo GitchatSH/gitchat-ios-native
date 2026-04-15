@@ -4,6 +4,7 @@ import SwiftUI
 final class ConversationsViewModel: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var isLoading = false
+    @Published var isSyncing = false
     @Published var error: String?
 
     init() {
@@ -13,8 +14,9 @@ final class ConversationsViewModel: ObservableObject {
     }
 
     func load() async {
-        // Skip the spinner if we already have cached rows on screen.
         if conversations.isEmpty { isLoading = true }
+        isSyncing = true
+        let started = Date()
         defer { isLoading = false }
         do {
             let resp = try await APIClient.shared.listConversations()
@@ -26,6 +28,13 @@ final class ConversationsViewModel: ObservableObject {
         } catch {
             self.error = error.localizedDescription
         }
+        // Keep the syncing indicator on screen for at least 2s so the
+        // user has time to notice the sync happened.
+        let elapsed = Date().timeIntervalSince(started)
+        if elapsed < 2 {
+            try? await Task.sleep(nanoseconds: UInt64((2 - elapsed) * 1_000_000_000))
+        }
+        isSyncing = false
     }
 
     func togglePin(_ convo: Conversation) async {
@@ -161,6 +170,12 @@ struct ConversationsListView: View {
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search chats")
             .navigationTitle("Chats")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if vm.isSyncing {
+                        SyncingIndicator()
+                            .transition(.scale.combined(with: .opacity))
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showNewChat = true
@@ -170,6 +185,7 @@ struct ConversationsListView: View {
                     .accessibilityLabel("New chat")
                 }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: vm.isSyncing)
             .alert("Delete conversation?", isPresented: Binding(
                 get: { confirmDelete != nil },
                 set: { if !$0 { confirmDelete = nil } }
@@ -213,6 +229,22 @@ struct ConversationsListView: View {
                 }
             }
         }
+    }
+}
+
+struct SyncingIndicator: View {
+    @State private var rotating = false
+    var body: some View {
+        Image(systemName: "arrow.triangle.2.circlepath")
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(Color.accentColor)
+            .rotationEffect(.degrees(rotating ? 360 : 0))
+            .onAppear {
+                withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                    rotating = true
+                }
+            }
+            .accessibilityLabel("Syncing")
     }
 }
 

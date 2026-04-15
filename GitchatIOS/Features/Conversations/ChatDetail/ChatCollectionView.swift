@@ -72,8 +72,10 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         let newIDs = items.map(\.id)
         let prevHeight = cv.contentSize.height
         let prevOffset = cv.contentOffset.y
+        // Be generous about "near bottom" so a newly arrived message
+        // always pulls the list down if the user is parked at the end.
         let wasNearBottom = cv.bounds.height > 0 &&
-            prevHeight - (prevOffset + cv.bounds.height) < 80
+            prevHeight - (prevOffset + cv.bounds.height) < 200
 
         coord.apply(items: items, animated: false)
 
@@ -144,9 +146,19 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
                 coord.scrollToBottom(in: cv, animated: false)
             }
         } else if newIDs != prevIDs && (wasNearBottom || !coord.didInitialScroll) {
+            // Let the new cell's layout settle first, then animate the
+            // scroll so the transition is smooth instead of a jump.
             DispatchQueue.main.async { [weak cv] in
                 guard let cv else { return }
+                cv.layoutIfNeeded()
                 coord.scrollToBottom(in: cv, animated: true)
+            }
+            // Second pass in case estimated heights caused the first
+            // layout to land short — animated: false this time so we
+            // don't queue competing animations.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak cv] in
+                guard let cv else { return }
+                coord.scrollToBottom(in: cv, animated: false)
             }
         }
 
@@ -236,13 +248,22 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         }
 
         func scrollTo(id: String, in cv: UICollectionView, animated: Bool) {
-            guard let idx = lastItems.firstIndex(where: { $0.id == id }) else { return }
-            cv.scrollToItem(at: IndexPath(item: idx, section: 0), at: .centeredVertically, animated: animated)
+            guard let indexPath = dataSource.indexPath(for: id) else { return }
+            cv.scrollToItem(at: indexPath, at: .centeredVertically, animated: animated)
         }
 
         func scrollToBottom(in cv: UICollectionView, animated: Bool) {
-            guard !lastItems.isEmpty else { return }
-            let idx = IndexPath(item: lastItems.count - 1, section: 0)
+            // Always consult the data source's current snapshot rather
+            // than lastItems — a concurrent apply may have shrunk the
+            // item count between scheduling and execution, and
+            // scrollToItem with a stale index path crashes UIKit.
+            let snap = dataSource.snapshot()
+            let total = snap.numberOfItems
+            guard total > 0, !snap.sectionIdentifiers.isEmpty else { return }
+            let section = 0
+            let sectionCount = snap.numberOfItems(inSection: snap.sectionIdentifiers[section])
+            guard sectionCount > 0 else { return }
+            let idx = IndexPath(item: sectionCount - 1, section: section)
             cv.scrollToItem(at: idx, at: .bottom, animated: animated)
         }
 

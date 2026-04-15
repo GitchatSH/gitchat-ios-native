@@ -621,10 +621,18 @@ struct ChatDetailView: View {
         await vm.load()
         socket.subscribe(conversation: vm.conversation.id)
         socket.onMessageSent = { msg in
-            if msg.conversation_id == vm.conversation.id {
-                if !vm.messages.contains(where: { $0.id == msg.id }) {
-                    vm.messages.append(msg)
-                }
+            guard msg.conversation_id == vm.conversation.id else { return }
+            if vm.messages.contains(where: { $0.id == msg.id }) { return }
+            // If we're showing an optimistic copy of the same message
+            // (same sender + body, local- prefixed id), swap it rather
+            // than appending — otherwise we'd end up with both a local
+            // and a server version in the list.
+            if let idx = vm.messages.firstIndex(where: {
+                $0.id.hasPrefix("local-") && $0.sender == msg.sender && $0.content == msg.content
+            }) {
+                vm.messages[idx] = msg
+            } else {
+                vm.messages.append(msg)
             }
         }
         socket.onTyping = { convId, login, typing in

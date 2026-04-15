@@ -172,6 +172,10 @@ final class ChatViewModel: ObservableObject {
                         body: body,
                         replyTo: replyId
                     )
+                    // Purge any duplicate the socket may have inserted
+                    // between the optimistic append and this response —
+                    // the diffable data source crashes on duplicate ids.
+                    messages.removeAll { $0.id == msg.id && $0.id != localID }
                     if let idx = messages.firstIndex(where: { $0.id == localID }) {
                         messages[idx] = msg
                     } else {
@@ -229,18 +233,29 @@ final class ChatViewModel: ObservableObject {
     }
 
     func togglePin(_ msg: Message) async {
-        let isPinned = pinnedIds.contains(msg.id)
+        let wasPinned = pinnedIds.contains(msg.id)
+        // Flip locally first so the UI updates instantly; revert if the
+        // API call fails.
+        if wasPinned {
+            pinnedIds.remove(msg.id)
+        } else {
+            pinnedIds.insert(msg.id)
+        }
+        Haptics.impact(.light)
         do {
-            if isPinned {
+            if wasPinned {
                 try await APIClient.shared.unpinMessage(conversationId: conversation.id, messageId: msg.id)
-                pinnedIds.remove(msg.id)
                 ToastCenter.shared.show(.info, "Unpinned message")
             } else {
                 try await APIClient.shared.pinMessage(conversationId: conversation.id, messageId: msg.id)
-                pinnedIds.insert(msg.id)
                 ToastCenter.shared.show(.success, "Pinned message")
             }
         } catch {
+            if wasPinned {
+                pinnedIds.insert(msg.id)
+            } else {
+                pinnedIds.remove(msg.id)
+            }
             ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
         }
     }
