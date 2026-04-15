@@ -216,26 +216,26 @@ struct ConversationRow: View {
                 AvatarView(url: conversation.displayAvatarURL, size: 50)
             }
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(conversation.displayTitle)
                         .font(.headline)
                         .lineLimit(1)
                     if conversation.isPinned {
                         Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    if conversation.unreadCount > 0 {
-                        Text("\(conversation.unreadCount)")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 8).padding(.vertical, 2)
-                            .background(Color.accentColor, in: .capsule)
-                            .foregroundStyle(.white)
-                    }
                 }
                 Text(conversation.previewText ?? "")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            if conversation.unreadCount > 0 {
+                Text("\(conversation.unreadCount)")
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .background(Color.accentColor, in: .capsule)
+                    .foregroundStyle(.white)
             }
         }
         .padding(.vertical, 4)
