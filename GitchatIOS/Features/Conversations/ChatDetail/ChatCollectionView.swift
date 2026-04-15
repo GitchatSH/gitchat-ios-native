@@ -83,6 +83,29 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         let wasNearBottom = cv.bounds.height > 0 &&
             prevHeight - (prevOffset + cv.bounds.height) < 200
 
+        // Detect in-place edits (same id, different content — e.g. a
+        // new reaction, an edit, an unsend) and reconfigure those
+        // specific cells before the diffable apply, because
+        // identifier-only diffing won't notice field-level changes.
+        if !coord.lastItems.isEmpty {
+            let prevById = Dictionary(uniqueKeysWithValues: coord.lastItems.map { ($0.id, $0) })
+            let changedIDs = items.compactMap { m -> String? in
+                if let prev = prevById[m.id], prev != m { return m.id }
+                return nil
+            }
+            if !changedIDs.isEmpty {
+                var snap = coord.currentSnapshot()
+                let present = changedIDs.filter { snap.itemIdentifiers.contains($0) }
+                if !present.isEmpty {
+                    // Update backing cache first so the cell reads the
+                    // new message object on reconfigure.
+                    coord.lastItems = items
+                    snap.reconfigureItems(present)
+                    coord.applySnapshot(snap, animated: false)
+                }
+            }
+        }
+
         coord.apply(items: items, typingUsers: typingUsers, animated: false)
 
         // If the pinned set changed while the item list stayed the same,
