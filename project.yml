@@ -36,6 +36,7 @@ targets:
       - target: OneSignalNotificationServiceExtension
         embed: true
         codeSign: true
+        platformFilter: iOS
     entitlements:
       path: GitchatIOS/GitchatIOS.entitlements
       properties:
@@ -49,8 +50,9 @@ targets:
       path: GitchatIOS/Info.plist
       properties:
         CFBundleDisplayName: Gitchat
+        CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "42"
+        CFBundleVersion: "43"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -74,14 +76,18 @@ targets:
           - github
     settings:
       base:
+        PRODUCT_NAME: Gitchat
         PRODUCT_BUNDLE_IDENTIFIER: chat.git
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 9S5F8693FB
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: GitchatIOS/Info.plist
+        SUPPORTS_MACCATALYST: YES
+        DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
   OneSignalNotificationServiceExtension:
     type: app-extension
     platform: iOS
@@ -97,7 +103,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "42"
+        CFBundleVersion: "43"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

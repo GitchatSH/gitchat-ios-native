@@ -45,8 +45,9 @@ struct AddMemberSheet: View {
                             .onSubmit { submit() }
                     }
                 }
+                .listRowBackground(Color.clear)
                 if !filteredFriends.isEmpty {
-                    Section("Friends") {
+                    Section {
                         ForEach(filteredFriends) { friend in
                             Button {
                                 add(login: friend.login)
@@ -67,10 +68,13 @@ struct AddMemberSheet: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
                         }
+                    } header: {
+                        Text("Friends")
                     }
                 } else if loadingFriends {
-                    Section { ProgressView() }
+                    Section { ProgressView().listRowBackground(Color.clear) }
                 }
                 if let error {
                     Section {
@@ -78,8 +82,11 @@ struct AddMemberSheet: View {
                             .font(.caption)
                             .foregroundStyle(.red)
                     }
+                    .listRowBackground(Color.clear)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
             .task { await loadFriends() }
             .navigationTitle("Add member")
             .navigationBarTitleDisplayMode(.inline)

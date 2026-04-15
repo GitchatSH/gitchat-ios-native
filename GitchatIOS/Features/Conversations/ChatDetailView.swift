@@ -600,6 +600,43 @@ struct ChatDetailView: View {
         .background(Color(.secondarySystemBackground))
     }
 
+    @ViewBuilder
+    private var composerTextField: some View {
+        let placeholder = vm.editingMessage != nil ? "Edit message" : "Message"
+        #if targetEnvironment(macCatalyst)
+        // Mac: single-line TextField so Return triggers .onSubmit
+        // (multi-line text fields swallow Return for newline). Long
+        // messages still wrap visually because the field has a max
+        // width but no fixed height.
+        TextField(placeholder, text: $vm.draft)
+            .focused($composerFocused)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity)
+            .background(Color.clear)
+            .modifier(GlassPill())
+            .onSubmit {
+                Task {
+                    await vm.send()
+                    // SwiftUI removes focus from a TextField after
+                    // .onSubmit fires — re-focus on the next runloop
+                    // so the user can keep typing the next message.
+                    DispatchQueue.main.async { composerFocused = true }
+                }
+            }
+            .submitLabel(.send)
+        #else
+        TextField(placeholder, text: $vm.draft, axis: .vertical)
+            .focused($composerFocused)
+            .lineLimit(1...5)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity)
+            .background(Color.clear)
+            .modifier(GlassPill())
+        #endif
+    }
+
     private var composer: some View {
         HStack(alignment: .bottom, spacing: 8) {
             PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
@@ -611,14 +648,7 @@ struct ChatDetailView: View {
             }
             .disabled(vm.uploading)
 
-            TextField(vm.editingMessage != nil ? "Edit message" : "Message", text: $vm.draft, axis: .vertical)
-                .focused($composerFocused)
-                .lineLimit(1...5)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .frame(maxWidth: .infinity)
-                .background(Color.clear)
-                .modifier(GlassPill())
+            composerTextField
 
             Button {
                 Task { await vm.send() }

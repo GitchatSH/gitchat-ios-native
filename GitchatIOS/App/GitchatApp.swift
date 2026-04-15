@@ -20,15 +20,27 @@ struct GitchatApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environmentObject(auth)
-                .environmentObject(socket)
-                .tint(.accentColor)
-                .preferredColorScheme(colorScheme)
-                .toastHost()
+            rootContent
                 .onAppear { applyInterfaceStyle() }
                 .onChange(of: appearance) { _ in applyInterfaceStyle() }
         }
+    }
+
+    @ViewBuilder
+    private var rootContent: some View {
+        let base = RootView()
+            .environmentObject(auth)
+            .environmentObject(socket)
+            .tint(.accentColor)
+            .preferredColorScheme(colorScheme)
+            .toastHost()
+        #if targetEnvironment(macCatalyst)
+        // Mac windows need an explicit minimum size; iPhone should
+        // never get any frame override or it stretches/clamps weirdly.
+        base.frame(minWidth: 900, minHeight: 600)
+        #else
+        base
+        #endif
     }
 
     private var colorScheme: ColorScheme? {

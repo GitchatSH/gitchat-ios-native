@@ -95,15 +95,19 @@ struct MainTabView: View {
                 .tabItem { Label("Chats", systemImage: "bubble.left.and.bubble.right.fill") }
                 .tag(0)
             ChannelsView()
+                .macReadableWidth()
                 .tabItem { Label("Channels", systemImage: "number") }
                 .tag(1)
             NotificationsView()
+                .macReadableWidth()
                 .tabItem { Label("Activity", systemImage: "bell.fill") }
                 .tag(2)
             FollowingView()
+                .macReadableWidth()
                 .tabItem { Label("Friends", systemImage: "person.2.fill") }
                 .tag(3)
             MeView()
+                .macReadableWidth()
                 .tabItem { Label("Me", systemImage: "person.crop.circle") }
                 .tag(4)
         }

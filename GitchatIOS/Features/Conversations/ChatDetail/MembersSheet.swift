@@ -4,12 +4,15 @@ struct MembersSheet: View {
     let conversationId: String
     let participants: [ConversationParticipant]
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var auth: AuthStore
     @ObservedObject private var presence = PresenceStore.shared
     @State private var showAddMember = false
+    @State private var followingLogins: Set<String> = []
+    @State private var pendingFollow: Set<String> = []
+    @State private var followingLoaded = false
 
     private var sorted: [ConversationParticipant] {
-        // Online first (by the usual alpha ordering within each
-        // group), offline after.
+        // Online first (alpha within each bucket), offline after.
         let online = participants
             .filter { presence.isOnline($0.login) }
             .sorted { $0.login.lowercased() < $1.login.lowercased() }
@@ -29,18 +32,31 @@ struct MembersSheet: View {
                 )
             } else {
                 List(sorted) { p in
-                    NavigationLink(value: ProfileLoginRoute(login: p.login)) {
+                    ZStack {
+                        // Hidden NavigationLink so the row taps push
+                        // to the profile without showing the default
+                        // disclosure chevron.
+                        NavigationLink(value: ProfileLoginRoute(login: p.login)) {
+                            EmptyView()
+                        }
+                        .opacity(0)
+
                         HStack(spacing: 12) {
                             AvatarView(url: p.avatar_url, size: 40, login: p.login)
                             VStack(alignment: .leading) {
                                 Text(p.name ?? p.login).font(.headline)
                                 Text("@\(p.login)").font(.caption).foregroundStyle(.secondary)
                             }
+                            Spacer()
+                            followControl(for: p.login)
                         }
                     }
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
             }
         }
         .navigationTitle("\(participants.count) Member\(participants.count == 1 ? "" : "s")")
@@ -51,6 +67,7 @@ struct MembersSheet: View {
         .onAppear {
             presence.ensure(participants.map(\.login))
         }
+        .task { await loadFollowing() }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
@@ -68,6 +85,56 @@ struct MembersSheet: View {
             AddMemberSheet(conversationId: conversationId) {
                 dismiss()
             }
+        }
+    }
+
+    @ViewBuilder
+    private func followControl(for login: String) -> some View {
+        // Hide the button until the following list has been fetched —
+        // otherwise we'd briefly show "Follow" on people the user
+        // already follows. Also hide for the current user.
+        if !followingLoaded || login == auth.login || followingLogins.contains(login) {
+            EmptyView()
+        } else {
+            Button {
+                Task { await follow(login) }
+            } label: {
+                if pendingFollow.contains(login) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 64, height: 28)
+                } else {
+                    Text("Follow")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.accentColor, in: Capsule())
+                        .foregroundStyle(.white)
+                }
+            }
+            .buttonStyle(.plain)
+            // The cell is wrapped in a NavigationLink — without this
+            // the button tap also pushes the profile.
+            .onTapGesture {}
+        }
+    }
+
+    private func loadFollowing() async {
+        if let list = try? await APIClient.shared.followingList() {
+            followingLogins = Set(list.map(\.login))
+        }
+        followingLoaded = true
+    }
+
+    private func follow(_ login: String) async {
+        pendingFollow.insert(login)
+        defer { pendingFollow.remove(login) }
+        do {
+            try await APIClient.shared.follow(login: login)
+            followingLogins.insert(login)
+            ToastCenter.shared.show(.success, "Following @\(login)")
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't follow", error.localizedDescription)
         }
     }
 }

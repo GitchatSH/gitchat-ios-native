@@ -23,8 +23,11 @@ struct ForwardSheet: View {
             }
             .buttonStyle(.plain)
             .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)
         .navigationTitle("Forward to…")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

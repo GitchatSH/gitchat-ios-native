@@ -55,8 +55,11 @@ struct ReactorsSheet: View {
                     }
                 }
                 .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
             .overlay {
                 if allReactors.isEmpty {
                     ContentUnavailableCompat(

@@ -123,6 +123,37 @@ struct ConversationsListView: View {
     @State private var filter = ""
     @State private var path = NavigationPath()
     @State private var confirmDelete: Conversation?
+    @State private var selectedConvo: Conversation? = nil
+
+    private var isMac: Bool {
+        #if targetEnvironment(macCatalyst)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    private func openConversation(_ convo: Conversation) {
+        #if targetEnvironment(macCatalyst)
+        selectedConvo = convo
+        #else
+        path.append(convo)
+        #endif
+    }
+
+    #if targetEnvironment(macCatalyst)
+    @ViewBuilder
+    private var macSidebar: some View {
+        if #available(iOS 17.0, *) {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
+                .toolbar(removing: .sidebarToggle)
+        } else {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
+        }
+    }
+    #endif
 
     private var filtered: [Conversation] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -143,8 +174,47 @@ struct ConversationsListView: View {
     }
 
     var body: some View {
+        #if targetEnvironment(macCatalyst)
+        NavigationSplitView(columnVisibility: .constant(.all)) {
+            macSidebar
+        } detail: {
+            if let convo = selectedConvo {
+                NavigationStack {
+                    ChatDetailView(conversation: convo)
+                }
+                // Force a fresh ChatDetailView (new @StateObject) when
+                // a different conversation is selected — without this
+                // the existing view re-uses the old ChatViewModel.
+                .id(convo.id)
+            } else {
+                ContentUnavailableCompat(
+                    title: "Select a conversation",
+                    systemImage: "bubble.left.and.bubble.right",
+                    description: "Pick a chat from the sidebar to start reading."
+                )
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .background(
+            // Hidden button that installs a window-level Esc shortcut.
+            // SwiftUI bridges keyboardShortcut to a UIKeyCommand on
+            // Catalyst, which fires regardless of focus.
+            Button("") { selectedConvo = nil }
+                .keyboardShortcut(.escape, modifiers: [])
+                .hidden()
+        )
+        #else
         NavigationStack(path: $path) {
-            Group {
+            sidebar
+                .navigationDestination(for: Conversation.self) { convo in
+                    ChatDetailView(conversation: convo)
+                }
+        }
+        #endif
+    }
+
+    private var sidebar: some View {
+        Group {
                 if vm.isLoading && vm.conversations.isEmpty {
                     SkeletonList(count: 10, avatarSize: 50)
                 } else if vm.conversations.isEmpty {
@@ -155,11 +225,14 @@ struct ConversationsListView: View {
                     )
                 } else {
                     List(filtered) { convo in
-                        ZStack {
-                            NavigationLink(value: convo) { EmptyView() }
-                                .opacity(0)
+                        Button {
+                            openConversation(convo)
+                        } label: {
                             ConversationRow(conversation: convo)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .macHover()
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .listRowBackground(
@@ -181,6 +254,7 @@ struct ConversationsListView: View {
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
+                            .tint(.red)
                         }
                         .contextMenu {
                             Button {
@@ -213,7 +287,6 @@ struct ConversationsListView: View {
                             }
                             .tint(.red)
                         }
-                        .tint(.primary)
                     }
                     .listStyle(.plain)
                     .scrollIndicators(.hidden)
@@ -251,14 +324,11 @@ struct ConversationsListView: View {
             } message: { _ in
                 Text("Messages will be removed from your list.")
             }
-            .navigationDestination(for: Conversation.self) { convo in
-                ChatDetailView(conversation: convo)
-            }
             .sheet(isPresented: $showNewChat) {
                 NewChatView { convo in
                     Task {
                         await vm.load()
-                        path.append(convo)
+                        openConversation(convo)
                     }
                 }
             }
@@ -277,25 +347,19 @@ struct ConversationsListView: View {
             }
             .onChange(of: router.pendingConversationId) { id in
                 guard let id else { return }
-                // Push immediately using whatever we already have —
-                // the cached conversation list or a minimal stub — so
-                // the user lands in the chat with zero delay. The
-                // chat view model will revalidate from the network on
-                // its own.
                 if let convo = vm.conversations.first(where: { $0.id == id }) {
-                    path.append(convo)
+                    openConversation(convo)
                     router.pendingConversationId = nil
                 } else {
                     Task {
                         await vm.load()
                         if let convo = vm.conversations.first(where: { $0.id == id }) {
-                            path.append(convo)
+                            openConversation(convo)
                         }
                         router.pendingConversationId = nil
                     }
                 }
             }
-        }
     }
 }
 

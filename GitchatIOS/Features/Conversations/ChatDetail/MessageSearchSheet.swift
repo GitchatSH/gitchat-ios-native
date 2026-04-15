@@ -16,8 +16,11 @@ struct MessageSearchSheet: View {
                     .font(.caption2).foregroundStyle(.tertiary)
             }
             .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .scrollIndicators(.hidden)
         .overlay {
             if isLoading {
                 ProgressView()
