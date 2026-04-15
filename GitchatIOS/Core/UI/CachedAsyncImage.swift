@@ -183,10 +183,11 @@ struct CachedAsyncImage: View {
         self.contentMode = contentMode
         self.placeholderStyle = placeholder
         self.fixedHeight = fixedHeight
-        // Default thumbnail size for chat bubbles: cap at the larger of
-        // 320pt or the requested fixed height. Caller can override (e.g.
-        // the full-screen image viewer passes nil for full resolution).
-        self.maxPixelSize = maxPixelSize ?? (fixedHeight.map { max(320, $0) } ?? 320)
+        // Default thumbnail ceiling in points — multiplied by screen
+        // scale inside ImageCache.downsample so the result has enough
+        // pixels for a sharp retina render. Bumped from 320 because a
+        // 220pt-tall portrait needs ~660 physical pixels at @3x.
+        self.maxPixelSize = maxPixelSize ?? (fixedHeight.map { max(320, $0) } ?? 800)
         if let url {
             if url.isFileURL {
                 _image = State(initialValue: UIImage(contentsOfFile: url.path))
@@ -205,9 +206,15 @@ struct CachedAsyncImage: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(height: h)
                 } else {
+                    // Pass the explicit intrinsic aspect ratio so the
+                    // *view* shrinks to the fit size instead of filling
+                    // the parent's offered bounds with blank gutters.
+                    let aspect = image.size.height > 0
+                        ? image.size.width / image.size.height
+                        : 1
                     Image(uiImage: image)
                         .resizable()
-                        .aspectRatio(contentMode: contentMode)
+                        .aspectRatio(aspect, contentMode: contentMode)
                 }
             } else {
                 placeholder
