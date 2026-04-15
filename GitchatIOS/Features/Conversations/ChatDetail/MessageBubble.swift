@@ -15,6 +15,16 @@ struct MessageBubble: View {
     var isPulsing: Bool = false
     var bubbleContextMenu: (() -> AnyView)? = nil
     @State private var showTime = false
+    @State private var appeared = false
+
+    /// Session-wide set of message ids that have already been seen on
+    /// screen — so the pop-in animation only fires the *first* time a
+    /// bubble materializes, not on every scroll recycle.
+    nonisolated(unsafe) static var seenIds: Set<String> = []
+
+    static func markSeen(_ ids: [String]) {
+        for id in ids { seenIds.insert(id) }
+    }
 
     private func didReact(_ emoji: String) -> Bool {
         guard let me = myLogin else { return false }
@@ -71,7 +81,8 @@ struct MessageBubble: View {
                         .offset(x: 10, y: -10)
                     }
                 }
-                .scaleEffect(isPulsing ? 1.05 : 1)
+                .scaleEffect(isPulsing ? 1.08 : 1)
+                .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isPulsing)
                 .onTapGesture {
                     withAnimation(.easeInOut(duration: 0.2)) { showTime.toggle() }
                 }
@@ -83,6 +94,18 @@ struct MessageBubble: View {
                 }
             }
             if !isMe { Spacer(minLength: 40) }
+        }
+        .scaleEffect(appeared ? 1 : 0.7, anchor: isMe ? .bottomTrailing : .bottomLeading)
+        .opacity(appeared ? 1 : 0)
+        .onAppear {
+            if Self.seenIds.contains(message.id) {
+                appeared = true
+            } else {
+                Self.seenIds.insert(message.id)
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.62)) {
+                    appeared = true
+                }
+            }
         }
     }
 

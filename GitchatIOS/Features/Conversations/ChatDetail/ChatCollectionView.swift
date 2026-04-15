@@ -1,6 +1,10 @@
 import SwiftUI
 import UIKit
 
+/// Synthetic snapshot id used for the typing-indicator row at the
+/// bottom of the conversation.
+let ChatTypingRowID = "__typing__"
+
 /// UICollectionView-backed chat list. Wraps a compositional layout with
 /// self-sizing UIHostingConfiguration cells and a diffable data source so
 /// rows are recycled by UIKit instead of re-instantiated by SwiftUI on
@@ -9,6 +13,8 @@ import UIKit
 /// for rich content with images and long lists.
 struct ChatCollectionView<Cell: View>: UIViewRepresentable {
     let items: [Message]
+    let typingUsers: [String]
+    let pinnedIds: Set<String>
     let pulsingId: String?
     let scrollToId: String?
     let isLoadingMore: Bool
@@ -57,10 +63,10 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         cv.keyboardDismissMode = .interactive
         cv.alwaysBounceVertical = true
         cv.showsVerticalScrollIndicator = false
-        cv.contentInsetAdjustmentBehavior = .always
+        cv.contentInsetAdjustmentBehavior = .automatic
 
         context.coordinator.attach(cv: cv)
-        context.coordinator.apply(items: items, animated: false)
+        context.coordinator.apply(items: items, typingUsers: typingUsers, animated: false)
         return cv
     }
 
@@ -77,7 +83,40 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         let wasNearBottom = cv.bounds.height > 0 &&
             prevHeight - (prevOffset + cv.bounds.height) < 200
 
-        coord.apply(items: items, animated: false)
+        coord.apply(items: items, typingUsers: typingUsers, animated: false)
+
+        // If the pinned set changed while the item list stayed the same,
+        // force the affected cells to reconfigure so the pin badge
+        // appears/disappears instantly.
+        if coord.lastPinnedIds != pinnedIds {
+            let diff = coord.lastPinnedIds.symmetricDifference(pinnedIds)
+            coord.lastPinnedIds = pinnedIds
+            if !diff.isEmpty {
+                var snap = coord.currentSnapshot()
+                let affected = diff.filter { snap.itemIdentifiers.contains($0) }
+                if !affected.isEmpty {
+                    snap.reconfigureItems(Array(affected))
+                    coord.applySnapshot(snap, animated: false)
+                }
+            }
+        }
+
+        // Same trick for pulse — reconfigure the leaving and entering
+        // rows so the scale animation actually runs on the bubble.
+        if coord.lastPulsingId != pulsingId {
+            var affected: [String] = []
+            if let previous = coord.lastPulsingId { affected.append(previous) }
+            if let next = pulsingId { affected.append(next) }
+            coord.lastPulsingId = pulsingId
+            if !affected.isEmpty {
+                var snap = coord.currentSnapshot()
+                let present = affected.filter { snap.itemIdentifiers.contains($0) }
+                if !present.isEmpty {
+                    snap.reconfigureItems(present)
+                    coord.applySnapshot(snap, animated: false)
+                }
+            }
+        }
 
         if coord.lastBottomInset != bottomInset {
             coord.lastBottomInset = bottomInset
@@ -183,6 +222,9 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         private weak var collectionView: UICollectionView?
         private var dataSource: UICollectionViewDiffableDataSource<Int, String>!
         var lastItems: [Message] = []
+        var lastTypingUsers: [String] = []
+        var lastPinnedIds: Set<String> = []
+        var lastPulsingId: String?
         var lastLoadingMore = false
         var lastBottomInset: CGFloat = 0
         var lastScrollToBottomToken: Int = 0
@@ -197,6 +239,15 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
             self.collectionView = cv
             let registration = UICollectionView.CellRegistration<UICollectionViewCell, String> { [weak self] cell, indexPath, id in
                 guard let self else { return }
+                if id == ChatTypingRowID {
+                    let logins = self.lastTypingUsers
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        TypingIndicatorRow(logins: logins)
+                    }
+                    .margins(.all, 0)
+                    cell.backgroundConfiguration = .clear()
+                    return
+                }
                 guard let msg = self.lastItems.first(where: { $0.id == id }) else { return }
                 let idx = indexPath.item
                 cell.contentConfiguration = UIHostingConfiguration {
@@ -239,11 +290,22 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
             collectionView?.collectionViewLayout.invalidateLayout()
         }
 
-        func apply(items: [Message], animated: Bool) {
+        func apply(items: [Message], typingUsers: [String], animated: Bool) {
             lastItems = items
+            lastTypingUsers = typingUsers
             var snap = NSDiffableDataSourceSnapshot<Int, String>()
             snap.appendSections([0])
-            snap.appendItems(items.map(\.id))
+            var ids = items.map(\.id)
+            if !typingUsers.isEmpty { ids.append(ChatTypingRowID) }
+            snap.appendItems(ids)
+            dataSource.apply(snap, animatingDifferences: animated)
+        }
+
+        func currentSnapshot() -> NSDiffableDataSourceSnapshot<Int, String> {
+            dataSource.snapshot()
+        }
+
+        func applySnapshot(_ snap: NSDiffableDataSourceSnapshot<Int, String>, animated: Bool) {
             dataSource.apply(snap, animatingDifferences: animated)
         }
 

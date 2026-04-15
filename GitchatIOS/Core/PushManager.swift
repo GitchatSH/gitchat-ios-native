@@ -64,14 +64,15 @@ final class PushManager: ObservableObject {
         let additional = event.notification.additionalData as? [String: Any] ?? [:]
         guard let type = additional["type"] as? String else { return }
 
+        let msgId = additional["message_id"] as? String
         switch type {
         case "chat_message", "group_add", "reply", "pin_message":
             if let id = additional["conversation_id"] as? String, !id.isEmpty {
-                AppRouter.shared.openConversation(id: id)
+                AppRouter.shared.openConversation(id: id, messageId: msgId)
             }
         case "mention":
             if let id = additional["conversation_id"] as? String, !id.isEmpty {
-                AppRouter.shared.openConversation(id: id)
+                AppRouter.shared.openConversation(id: id, messageId: msgId)
             } else if let login = additional["actor_login"] as? String, !login.isEmpty {
                 AppRouter.shared.openProfile(login: login)
             }

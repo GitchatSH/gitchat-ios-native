@@ -30,6 +30,7 @@ struct ChatDetailView: View {
     @State private var isAtBottom: Bool = true
     @State private var scrollToBottomToken: Int = 0
     @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var router = AppRouter.shared
     @State private var showMembers = false
     @FocusState private var composerFocused: Bool
 
@@ -120,6 +121,8 @@ struct ChatDetailView: View {
     private var chatCollection: some View {
         ChatCollectionView(
             items: visibleMessages,
+            typingUsers: Array(vm.typingUsers),
+            pinnedIds: vm.pinnedIds,
             pulsingId: pulsingId,
             scrollToId: pendingJumpId,
             isLoadingMore: vm.isLoadingMore,
@@ -158,6 +161,7 @@ struct ChatDetailView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             chatToolbar
@@ -241,7 +245,8 @@ struct ChatDetailView: View {
         })
         .sheet(item: $reactingFor) { msg in
             EmojiPickerSheet { emoji in
-                Task { await vm.react(messageId: msg.id, emoji: emoji, myLogin: auth.login) }
+                vm.applyOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
+                Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: true) }
                 reactingFor = nil
             }
             .presentationDetents([.height(360)])
@@ -270,6 +275,14 @@ struct ChatDetailView: View {
             Button("OK", role: .cancel) {}
         }
         .task { await onAppearTask() }
+        .onAppear {
+            // If we were opened from a notification that carried a
+            // target message id, hand it to the jump-and-pulse path.
+            if let mid = router.pendingMessageId {
+                pendingJumpId = mid
+                router.pendingMessageId = nil
+            }
+        }
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await vm.load() } }
         }
@@ -348,7 +361,10 @@ struct ChatDetailView: View {
             .padding(.top, showHeader ? 6 : 0)
             .onTapGesture(count: 2) {
                 Haptics.impact(.light)
-                Task { await vm.react(messageId: msg.id, emoji: "❤️", myLogin: auth.login) }
+                // Mutate state synchronously so the heart renders
+                // immediately, then fire the API in the background.
+                vm.applyOptimisticReaction(messageId: msg.id, emoji: "❤️", myLogin: auth.login)
+                Task { try? await APIClient.shared.react(messageId: msg.id, emoji: "❤️", add: true) }
             }
         }
     }
@@ -384,31 +400,17 @@ struct ChatDetailView: View {
                 Button { showSearch = true } label: { Label("Search", systemImage: "magnifyingglass") }
                 Button { showPinned = true } label: { Label("Pinned messages", systemImage: "pin") }
                 Button {
-                    Task { await toggleMute() }
+                    Task { await vm.toggleMute() }
                 } label: {
                     Label(
-                        vm.conversation.is_muted == true ? "Unmute" : "Mute",
-                        systemImage: vm.conversation.is_muted == true ? "bell" : "bell.slash"
+                        vm.isMuted ? "Unmute" : "Mute",
+                        systemImage: vm.isMuted ? "bell" : "bell.slash"
                     )
                 }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
             .tint(.primary)
-        }
-    }
-
-    private func toggleMute() async {
-        do {
-            if vm.conversation.is_muted == true {
-                try await APIClient.shared.unmuteConversation(id: vm.conversation.id)
-                ToastCenter.shared.show(.info, "Unmuted")
-            } else {
-                try await APIClient.shared.muteConversation(id: vm.conversation.id)
-                ToastCenter.shared.show(.success, "Muted")
-            }
-        } catch {
-            ToastCenter.shared.show(.error, "Mute failed", error.localizedDescription)
         }
     }
 
@@ -650,6 +652,12 @@ struct ChatDetailView: View {
                 vm.messages[idx] = msg
             } else {
                 vm.messages.append(msg)
+                // Mark read immediately when a new message arrives
+                // while the chat is open, so the conversation list
+                // doesn't show an unread badge when we back out.
+                if msg.sender != auth.login {
+                    Task { try? await APIClient.shared.markRead(conversationId: vm.conversation.id) }
+                }
             }
         }
         socket.onTyping = { convId, login, typing in

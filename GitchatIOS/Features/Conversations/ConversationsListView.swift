@@ -49,8 +49,15 @@ final class ConversationsViewModel: ObservableObject {
             }
             await load()
         } catch {
-            self.error = error.localizedDescription
-            ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
+            // Backend caps pinned conversations at 3 (LIMIT_REACHED →
+            // "Maximum 3 pinned conversations"). Show the exact copy.
+            let raw = error.localizedDescription.lowercased()
+            if raw.contains("maximum") || raw.contains("limit") || raw.contains("pinned") {
+                ToastCenter.shared.show(.warning, "Maximum 3 pinned conversations")
+            } else {
+                self.error = error.localizedDescription
+                ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
+            }
         }
     }
 
@@ -166,6 +173,7 @@ struct ConversationsListView: View {
                     .listStyle(.plain)
                     .scrollIndicators(.hidden)
                     .refreshable { await vm.load() }
+                    .animation(.spring(response: 0.45, dampingFraction: 0.82), value: vm.conversations.map(\.id))
                 }
             }
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search chats")
@@ -224,12 +232,22 @@ struct ConversationsListView: View {
             }
             .onChange(of: router.pendingConversationId) { id in
                 guard let id else { return }
-                Task {
-                    await vm.load()
-                    if let convo = vm.conversations.first(where: { $0.id == id }) {
-                        path.append(convo)
-                    }
+                // Push immediately using whatever we already have —
+                // the cached conversation list or a minimal stub — so
+                // the user lands in the chat with zero delay. The
+                // chat view model will revalidate from the network on
+                // its own.
+                if let convo = vm.conversations.first(where: { $0.id == id }) {
+                    path.append(convo)
                     router.pendingConversationId = nil
+                } else {
+                    Task {
+                        await vm.load()
+                        if let convo = vm.conversations.first(where: { $0.id == id }) {
+                            path.append(convo)
+                        }
+                        router.pendingConversationId = nil
+                    }
                 }
             }
         }

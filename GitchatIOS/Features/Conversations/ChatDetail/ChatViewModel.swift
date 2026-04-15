@@ -9,6 +9,7 @@ final class ChatViewModel: ObservableObject {
     @Published var otherReadAt: String?
     @Published var isLoading = false
     @Published var isSyncing = false
+    @Published var isMuted: Bool = false
     @Published var draft = "" {
         didSet { saveDraft() }
     }
@@ -24,6 +25,7 @@ final class ChatViewModel: ObservableObject {
 
     init(conversation: Conversation) {
         self.conversation = conversation
+        self.isMuted = conversation.is_muted == true
         if let saved = UserDefaults.standard.string(forKey: "gitchat.draft.\(conversation.id)") {
             self.draft = saved
         }
@@ -31,6 +33,7 @@ final class ChatViewModel: ObservableObject {
             self.messages = cached.messages
             self.nextCursor = cached.nextCursor
             self.otherReadAt = cached.otherReadAt
+            MessageBubble.markSeen(cached.messages.map(\.id))
         }
     }
 
@@ -72,6 +75,10 @@ final class ChatViewModel: ObservableObject {
             if messages.isEmpty {
                 self.messages = Array(fetched)
                 self.nextCursor = resp.nextCursor
+                // Mark the initial page as already-seen so bubbles
+                // don't all pop in on first entry — only newly arrived
+                // messages should animate in.
+                MessageBubble.markSeen(self.messages.map(\.id))
             } else {
                 var existing = messages
                 let existingIds = Set(existing.map(\.id))
@@ -106,6 +113,9 @@ final class ChatViewModel: ObservableObject {
             let older = resp.messages.reversed()
             let known = Set(messages.map(\.id))
             let deduped = older.filter { !known.contains($0.id) }
+            // Older paginated messages should appear immediately, not
+            // pop in — mark them seen before they hit the UI.
+            MessageBubble.markSeen(deduped.map(\.id))
             messages.insert(contentsOf: deduped, at: 0)
             nextCursor = resp.nextCursor
             persistCache()
@@ -208,6 +218,37 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    /// Synchronous optimistic reaction update — so double-tap renders
+    /// the heart instantly, before any async hop.
+    func applyOptimisticReaction(messageId: String, emoji: String, myLogin: String?) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        var existing = messages[idx].reactions ?? []
+        if let ri = existing.firstIndex(where: { $0.emoji == emoji }) {
+            let r = existing[ri]
+            existing[ri] = MessageReaction(emoji: emoji, count: r.count + 1, reacted: true)
+        } else {
+            existing.append(MessageReaction(emoji: emoji, count: 1, reacted: true))
+        }
+        let m = messages[idx]
+        messages[idx] = Message(
+            id: m.id,
+            conversation_id: m.conversation_id,
+            sender: m.sender,
+            sender_avatar: m.sender_avatar,
+            content: m.content,
+            created_at: m.created_at,
+            edited_at: m.edited_at,
+            reactions: existing,
+            attachment_url: m.attachment_url,
+            type: m.type,
+            reply_to_id: m.reply_to_id,
+            reply: m.reply,
+            attachments: m.attachments,
+            unsent_at: m.unsent_at,
+            reactionRows: (m.reactionRows ?? []) + [RawReactionRow(emoji: emoji, user_login: myLogin)]
+        )
+    }
+
     func react(messageId: String, emoji: String, myLogin: String? = nil) async {
         // Optimistic: bump the count (or add a new chip) on the local message immediately.
         if let idx = messages.firstIndex(where: { $0.id == messageId }) {
@@ -245,6 +286,24 @@ final class ChatViewModel: ObservableObject {
             try await APIClient.shared.deleteMessage(conversationId: conversation.id, messageId: msg.id)
             messages.removeAll { $0.id == msg.id }
         } catch { self.error = error.localizedDescription }
+    }
+
+    func toggleMute() async {
+        // Flip optimistically so the menu label updates instantly.
+        let wasMuted = isMuted
+        isMuted.toggle()
+        do {
+            if wasMuted {
+                try await APIClient.shared.unmuteConversation(id: conversation.id)
+                ToastCenter.shared.show(.info, "Unmuted")
+            } else {
+                try await APIClient.shared.muteConversation(id: conversation.id)
+                ToastCenter.shared.show(.success, "Muted")
+            }
+        } catch {
+            isMuted = wasMuted
+            ToastCenter.shared.show(.error, "Mute failed", error.localizedDescription)
+        }
     }
 
     func togglePin(_ msg: Message) async {
