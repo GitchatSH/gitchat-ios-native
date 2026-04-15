@@ -4,7 +4,6 @@ import UIKit
 
 struct ChatDetailView: View {
     @StateObject private var vm: ChatViewModel
-    @StateObject private var blocks = BlockStore.shared
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var socket: SocketClient
     @State private var photoItem: PhotosPickerItem?
@@ -31,6 +30,7 @@ struct ChatDetailView: View {
     @State private var scrollToBottomToken: Int = 0
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var router = AppRouter.shared
+    @ObservedObject private var blocks = BlockStore.shared
     @State private var showMembers = false
     @State private var showAddMember = false
     @FocusState private var composerFocused: Bool
@@ -43,6 +43,17 @@ struct ChatDetailView: View {
 
     private var visibleMessages: [Message] {
         vm.messages.filter { !blocks.isBlocked($0.sender) }
+    }
+
+    /// For 1:1 chats, returns the other user's login if they are
+    /// currently blocked. Group chats return nil — blocking inside a
+    /// group only filters messages, it doesn't disable the chat.
+    private var otherBlockedLogin: String? {
+        guard !vm.conversation.isGroup,
+              let login = vm.conversation.other_user?.login,
+              blocks.isBlocked(login)
+        else { return nil }
+        return login
     }
 
     private var mentionSuggestions: [ConversationParticipant] {
@@ -144,7 +155,9 @@ struct ChatDetailView: View {
                 .ignoresSafeArea()
             VStack(spacing: 0) {
             messagesList
-            if composerVisible {
+            if let blockedLogin = otherBlockedLogin {
+                blockedBanner(login: blockedLogin)
+            } else if composerVisible {
                 if vm.replyingTo != nil || vm.editingMessage != nil {
                     replyEditBar
                 }
@@ -555,6 +568,36 @@ struct ChatDetailView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private func blockedBanner(login: String) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "hand.raised.fill")
+                    .foregroundStyle(.secondary)
+                Text("You blocked @\(login). Unblock to keep chatting.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            Button {
+                blocks.unblock(login)
+                ToastCenter.shared.show(.success, "Unblocked", "@\(login)")
+            } label: {
+                Text("Unblock")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+        .background(Color(.secondarySystemBackground))
     }
 
     private var composer: some View {
