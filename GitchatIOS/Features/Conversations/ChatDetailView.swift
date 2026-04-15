@@ -122,6 +122,7 @@ struct ChatDetailView: View {
         ChatCollectionView(
             items: visibleMessages,
             typingUsers: Array(vm.typingUsers),
+            showSeen: shouldShowSeen && !vm.conversation.isGroup,
             pinnedIds: vm.pinnedIds,
             pulsingId: pulsingId,
             scrollToId: pendingJumpId,

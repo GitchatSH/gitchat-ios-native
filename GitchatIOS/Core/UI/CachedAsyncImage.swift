@@ -159,6 +159,11 @@ struct CachedAsyncImage: View {
     let contentMode: ContentMode
     let placeholderStyle: PlaceholderStyle
     let fixedHeight: CGFloat?
+    /// When set, the loaded image is rendered in a `.frame(width:, height:)`
+    /// computed from its intrinsic aspect ratio so the view never has
+    /// blank gutters around a portrait photo.
+    let fitMaxWidth: CGFloat?
+    let fitMaxHeight: CGFloat?
     let maxPixelSize: CGFloat?
 
     enum PlaceholderStyle {
@@ -177,12 +182,16 @@ struct CachedAsyncImage: View {
         contentMode: ContentMode = .fit,
         placeholder: PlaceholderStyle = .filled,
         fixedHeight: CGFloat? = nil,
+        fitMaxWidth: CGFloat? = nil,
+        fitMaxHeight: CGFloat? = nil,
         maxPixelSize: CGFloat? = nil
     ) {
         self.url = url
         self.contentMode = contentMode
         self.placeholderStyle = placeholder
         self.fixedHeight = fixedHeight
+        self.fitMaxWidth = fitMaxWidth
+        self.fitMaxHeight = fitMaxHeight
         // Default thumbnail ceiling in points — multiplied by screen
         // scale inside ImageCache.downsample so the result has enough
         // pixels for a sharp retina render. Bumped from 320 because a
@@ -205,16 +214,29 @@ struct CachedAsyncImage: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(height: h)
-                } else {
-                    // Pass the explicit intrinsic aspect ratio so the
-                    // *view* shrinks to the fit size instead of filling
-                    // the parent's offered bounds with blank gutters.
-                    let aspect = image.size.height > 0
-                        ? image.size.width / image.size.height
-                        : 1
+                } else if let maxW = fitMaxWidth, let maxH = fitMaxHeight {
+                    // Compute an exact fit size from the loaded image's
+                    // intrinsic aspect, then pin the view to those
+                    // dimensions. `.frame(width:height:)` is concrete
+                    // so the view cannot pick up blank gutters from
+                    // the parent's offered bounds.
+                    let aspect = max(0.0001, image.size.width / max(image.size.height, 1))
+                    let fitted: CGSize = {
+                        if aspect >= 1 {
+                            let fw = min(maxW, image.size.width)
+                            return CGSize(width: fw, height: fw / aspect)
+                        } else {
+                            let fh = min(maxH, image.size.height)
+                            return CGSize(width: fh * aspect, height: fh)
+                        }
+                    }()
                     Image(uiImage: image)
                         .resizable()
-                        .aspectRatio(aspect, contentMode: contentMode)
+                        .frame(width: fitted.width, height: fitted.height)
+                } else {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: contentMode)
                 }
             } else {
                 placeholder

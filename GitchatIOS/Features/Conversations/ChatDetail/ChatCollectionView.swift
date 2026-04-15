@@ -5,6 +5,10 @@ import UIKit
 /// bottom of the conversation.
 let ChatTypingRowID = "__typing__"
 
+/// Synthetic snapshot id used for the "Seen" row rendered under the
+/// last outgoing message once the peer has read it.
+let ChatSeenRowID = "__seen__"
+
 /// UICollectionView-backed chat list. Wraps a compositional layout with
 /// self-sizing UIHostingConfiguration cells and a diffable data source so
 /// rows are recycled by UIKit instead of re-instantiated by SwiftUI on
@@ -14,6 +18,7 @@ let ChatTypingRowID = "__typing__"
 struct ChatCollectionView<Cell: View>: UIViewRepresentable {
     let items: [Message]
     let typingUsers: [String]
+    let showSeen: Bool
     let pinnedIds: Set<String>
     let pulsingId: String?
     let scrollToId: String?
@@ -66,7 +71,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         cv.contentInsetAdjustmentBehavior = .automatic
 
         context.coordinator.attach(cv: cv)
-        context.coordinator.apply(items: items, typingUsers: typingUsers, animated: false)
+        context.coordinator.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: false)
         return cv
     }
 
@@ -106,7 +111,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
             }
         }
 
-        coord.apply(items: items, typingUsers: typingUsers, animated: false)
+        coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: false)
 
         // If the pinned set changed while the item list stayed the same,
         // force the affected cells to reconfigure so the pin badge
@@ -246,6 +251,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         private var dataSource: UICollectionViewDiffableDataSource<Int, String>!
         var lastItems: [Message] = []
         var lastTypingUsers: [String] = []
+        var lastShowSeen: Bool = false
         var lastPinnedIds: Set<String> = []
         var lastPulsingId: String?
         var lastLoadingMore = false
@@ -266,6 +272,21 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
                     let logins = self.lastTypingUsers
                     cell.contentConfiguration = UIHostingConfiguration {
                         TypingIndicatorRow(logins: logins)
+                    }
+                    .margins(.all, 0)
+                    cell.backgroundConfiguration = .clear()
+                    return
+                }
+                if id == ChatSeenRowID {
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        HStack {
+                            Spacer()
+                            Text("Seen")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.trailing, 4)
+                        .padding(.top, 2)
                     }
                     .margins(.all, 0)
                     cell.backgroundConfiguration = .clear()
@@ -313,12 +334,14 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
             collectionView?.collectionViewLayout.invalidateLayout()
         }
 
-        func apply(items: [Message], typingUsers: [String], animated: Bool) {
+        func apply(items: [Message], typingUsers: [String], showSeen: Bool, animated: Bool) {
             lastItems = items
             lastTypingUsers = typingUsers
+            lastShowSeen = showSeen
             var snap = NSDiffableDataSourceSnapshot<Int, String>()
             snap.appendSections([0])
             var ids = items.map(\.id)
+            if showSeen { ids.append(ChatSeenRowID) }
             if !typingUsers.isEmpty { ids.append(ChatTypingRowID) }
             snap.appendItems(ids)
             dataSource.apply(snap, animatingDifferences: animated)

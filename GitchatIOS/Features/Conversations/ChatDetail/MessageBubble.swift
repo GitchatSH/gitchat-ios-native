@@ -124,30 +124,29 @@ struct MessageBubble: View {
     @ViewBuilder
     private func singleAttachmentImage(for url: URL, width: Int? = nil, height: Int? = nil) -> some View {
         let maxW: CGFloat = 260
-        // Portrait images use a smaller ceiling so they don't tower
-        // over the chat. Landscape keeps the wider frame.
-        let maxHLandscape: CGFloat = 220
-        let maxHPortrait: CGFloat = 220
+        let maxH: CGFloat = 220
         if let w = width, let h = height, w > 0, h > 0 {
             let aspect = CGFloat(w) / CGFloat(h)
             let fitted: CGSize = {
                 if aspect >= 1 {
-                    // Landscape or square: width drives, height follows.
                     let fw = min(maxW, CGFloat(w))
                     return CGSize(width: fw, height: fw / aspect)
                 } else {
-                    // Portrait: cap the height, width follows the
-                    // aspect ratio — no left/right padding, shorter
-                    // than before.
-                    let fh = min(maxHPortrait, CGFloat(h))
+                    let fh = min(maxH, CGFloat(h))
                     return CGSize(width: fh * aspect, height: fh)
                 }
             }()
             CachedAsyncImage(url: url, contentMode: .fit)
                 .frame(width: fitted.width, height: fitted.height)
         } else {
-            CachedAsyncImage(url: url, contentMode: .fit)
-                .frame(maxWidth: maxW, maxHeight: maxHLandscape)
+            // Dimensionless: CachedAsyncImage computes its own tight
+            // frame from the loaded image's intrinsic aspect ratio.
+            CachedAsyncImage(
+                url: url,
+                contentMode: .fit,
+                fitMaxWidth: maxW,
+                fitMaxHeight: maxH
+            )
         }
     }
 
