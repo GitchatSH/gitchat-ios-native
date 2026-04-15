@@ -35,9 +35,13 @@ struct MessageBubble: View {
         HStack(alignment: .bottom, spacing: 6) {
             if isMe { Spacer(minLength: 40) } else {
                 if showHeader {
-                    AvatarView(url: resolvedAvatar ?? message.sender_avatar, size: 28)
-                        .contentShape(Circle())
-                        .onTapGesture { onAvatarTap?() }
+                    AvatarView(
+                        url: resolvedAvatar ?? message.sender_avatar,
+                        size: 28,
+                        login: message.sender
+                    )
+                    .contentShape(Circle())
+                    .onTapGesture { onAvatarTap?() }
                 } else {
                     Color.clear.frame(width: 28, height: 28)
                 }

@@ -14,6 +14,7 @@ struct GitchatApp: App {
         Task { @MainActor in
             StoreManager.shared.start()
             PushManager.shared.bootstrap()
+            PresenceStore.shared.start()
         }
     }
 

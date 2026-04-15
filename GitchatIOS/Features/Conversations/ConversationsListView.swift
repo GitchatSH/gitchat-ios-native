@@ -281,7 +281,11 @@ struct ConversationRow: View {
                     size: 50
                 )
             } else {
-                AvatarView(url: conversation.displayAvatarURL, size: 50)
+                AvatarView(
+                    url: conversation.displayAvatarURL,
+                    size: 50,
+                    login: conversation.other_user?.login
+                )
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -354,11 +358,25 @@ struct GroupAvatarCluster: View {
 struct AvatarView: View {
     let url: String?
     let size: CGFloat
+    var login: String? = nil
+    @ObservedObject private var presence = PresenceStore.shared
 
     var body: some View {
         CachedAvatarImage(url: url.flatMap(URL.init(string:)))
             .frame(width: size, height: size)
             .clipShape(Circle())
+            .overlay(alignment: .bottomTrailing) {
+                if let login, presence.isOnline(login) {
+                    let dot = max(8, size * 0.28)
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: dot, height: dot)
+                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: max(1, dot * 0.18)))
+                }
+            }
+            .onAppear {
+                if let login { presence.ensure([login]) }
+            }
     }
 }
 

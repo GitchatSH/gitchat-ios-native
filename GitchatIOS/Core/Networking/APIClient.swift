@@ -509,6 +509,15 @@ struct APIClient {
     func heartbeat() async throws {
         let _: EmptyResponse = try await request("presence", method: "PATCH")
     }
+
+    func getPresence(logins: [String]) async throws -> [String: String?] {
+        guard !logins.isEmpty else { return [:] }
+        struct Resp: Decodable { let presence: [String: String?] }
+        let list = logins.joined(separator: ",")
+        let encoded = list.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? list
+        let resp: Resp = try await request("presence?logins=\(encoded)")
+        return resp.presence
+    }
 }
 
 // MARK: - Helpers

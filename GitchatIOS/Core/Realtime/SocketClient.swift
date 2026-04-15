@@ -73,10 +73,13 @@ final class SocketClient: ObservableObject {
             Task { @MainActor in self?.onConversationUpdated?() }
         }
         socket.on("presence:updated") { [weak self] data, _ in
+            // Backend shape: { event_name, data: { login, status: "online" | "offline" } }
             guard let dict = data.first as? [String: Any],
-                  let user = dict["user"] as? String,
-                  let online = dict["online"] as? Bool else { return }
-            Task { @MainActor in self?.onPresenceUpdated?(user, online) }
+                  let inner = dict["data"] as? [String: Any],
+                  let login = inner["login"] as? String,
+                  let status = inner["status"] as? String else { return }
+            let online = (status == "online")
+            Task { @MainActor in self?.onPresenceUpdated?(login, online) }
         }
         socket.on("reaction:updated") { [weak self] data, _ in
             guard let dict = data.first as? [String: Any],
@@ -136,6 +139,10 @@ final class SocketClient: ObservableObject {
     func unsubscribe(conversation id: String) {
         subscribedConversations.remove(id)
         socket?.emit("unsubscribe:conversation", ["conversationId": id])
+    }
+
+    func watchPresence(login: String) {
+        socket?.emit("watch:presence", ["login": login])
     }
 
     func subscribeUser(login: String) {

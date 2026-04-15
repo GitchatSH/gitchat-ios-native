@@ -6,7 +6,7 @@ struct TypingIndicatorRow: View {
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
             if let first = logins.first {
-                AvatarView(url: "https://github.com/\(first).png", size: 28)
+                AvatarView(url: "https://github.com/\(first).png", size: 28, login: first)
             } else {
                 Color.clear.frame(width: 28, height: 28)
             }

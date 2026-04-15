@@ -79,7 +79,7 @@ struct ProfileView: View {
                 .padding(.top, 60)
             } else if let p = vm.profile {
                 VStack(spacing: 16) {
-                    AvatarView(url: p.avatar_url, size: 96)
+                    AvatarView(url: p.avatar_url, size: 96, login: p.login)
                         .padding(.top)
                     HStack(spacing: 8) {
                         Text(p.name ?? p.login).font(.title2.bold())
@@ -474,7 +474,7 @@ struct FollowListSheet: View {
                         ProfileView(login: u.login)
                     } label: {
                         HStack(spacing: 12) {
-                            AvatarView(url: u.avatar_url, size: 40)
+                            AvatarView(url: u.avatar_url, size: 40, login: u.login)
                             VStack(alignment: .leading) {
                                 Text(u.name ?? u.login).font(.headline)
                                 Text("@\(u.login)").font(.caption).foregroundStyle(.secondary)
