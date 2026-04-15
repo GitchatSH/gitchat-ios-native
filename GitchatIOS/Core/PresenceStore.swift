@@ -56,26 +56,32 @@ final class PresenceStore: ObservableObject {
         return onlineLogins.contains(login)
     }
 
-    /// Called by views that render avatars. Ensures the given logins
-    /// are being watched on the socket and seeds initial state via REST.
+    /// Called by views that render avatars. Subscribes to `watch:presence`
+    /// the first time we see a login, AND re-fetches the REST presence
+    /// snapshot every call so a stale cached state can recover when the
+    /// user actually comes online.
     func ensure(_ logins: [String]) {
-        let new = logins.filter { !watched.contains($0) && !$0.isEmpty }
-        guard !new.isEmpty else { return }
-        for login in new {
+        let cleaned = logins.filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return }
+        for login in cleaned where !watched.contains(login) {
             watched.insert(login)
             SocketClient.shared.watchPresence(login: login)
         }
-        // REST fallback — treat users seen in the last 90s as online.
+        // REST refresh — treat users seen in the last 90s as online.
         Task { [weak self] in
             guard let self else { return }
-            if let map = try? await APIClient.shared.getPresence(logins: new) {
+            if let map = try? await APIClient.shared.getPresence(logins: cleaned) {
                 let formatter = ISO8601DateFormatter()
                 formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 let fallback = ISO8601DateFormatter()
                 fallback.formatOptions = [.withInternetDateTime]
                 let now = Date()
                 for (login, iso) in map {
-                    guard let iso else { continue }
+                    guard let iso else {
+                        // Server says we have no last_seen_at on file
+                        // — leave any in-memory state as-is.
+                        continue
+                    }
                     let date = formatter.date(from: iso) ?? fallback.date(from: iso)
                     guard let date else { continue }
                     self.lastSeen[login] = date
@@ -84,6 +90,15 @@ final class PresenceStore: ObservableObject {
                     }
                 }
             }
+        }
+    }
+
+    /// Force a re-subscribe to all known watched logins. Call after
+    /// the socket reconnects so the WS server starts streaming
+    /// presence updates for them again.
+    func resubscribeAll() {
+        for login in watched {
+            SocketClient.shared.watchPresence(login: login)
         }
     }
 

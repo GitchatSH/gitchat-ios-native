@@ -31,18 +31,29 @@ final class NotificationsViewModel: ObservableObject {
 struct NotificationsView: View {
     @StateObject private var vm = NotificationsViewModel()
     @EnvironmentObject var socket: SocketClient
+    @EnvironmentObject var auth: AuthStore
+
+    private var visible: [Notification] {
+        vm.items.filter { n in
+            // Hide self-notifications and rows with no renderable
+            // action text — those are usually backend bugs and just
+            // confuse the user.
+            guard n.actor_login != auth.login else { return false }
+            return !notifText(n).trimmingCharacters(in: .whitespaces).isEmpty
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Group {
-                if vm.items.isEmpty && !vm.isLoading {
+                if visible.isEmpty && !vm.isLoading {
                     ContentUnavailableCompat(
                         title: "No notifications",
                         systemImage: "bell",
                         description: "Follows, mentions, and messages land here."
                     )
                 } else {
-                    List(vm.items) { n in
+                    List(visible) { n in
                         Button {
                             // Hide the orange dot immediately.
                             vm.markReadLocally(n.id)
@@ -52,7 +63,13 @@ struct NotificationsView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 AvatarView(
-                                    url: n.actor_avatar_url ?? "https://github.com/\(n.actor_login).png",
+                                    // Always use github.com/<login>.png
+                                    // — the backend has been seen to
+                                    // store the wrong actor_avatar_url
+                                    // for some notifications, which
+                                    // resulted in arthurbijan showing
+                                    // leeknowsai's face.
+                                    url: "https://github.com/\(n.actor_login).png",
                                     size: 40,
                                     login: n.actor_login
                                 )
@@ -122,7 +139,11 @@ struct NotificationsView: View {
         case "follow": return "\(n.actor_login) followed you"
         case "repo_activity": return "\(n.actor_login) in \(n.metadata?.repoFullName ?? "a repo")"
         case "wave": return "\(n.actor_login) waved 👋"
-        default: return n.actor_login
+        default:
+            // Unknown notification type — return empty so the row is
+            // hidden by the `visible` filter instead of rendering an
+            // ambiguous bare username.
+            return ""
         }
     }
 }

@@ -13,14 +13,33 @@ final class FollowingViewModel: ObservableObject {
         catch { self.error = error.localizedDescription }
     }
 
-    func syncGitHubFollows() async {
-        isSyncing = true; defer { isSyncing = false }
+    func syncGitHubFollows(silent: Bool = false) async {
+        isSyncing = true
+        let started = Date()
+        defer {
+            // Keep the syncing indicator visible for at least 2s so the
+            // user notices the sync happened, mirroring ConversationsViewModel.
+            let elapsed = Date().timeIntervalSince(started)
+            if elapsed < 2 {
+                let remaining = 2 - elapsed
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                    self?.isSyncing = false
+                }
+            } else {
+                isSyncing = false
+            }
+        }
         do {
             try await APIClient.shared.syncGitHubFollows()
             await load()
-            ToastCenter.shared.show(.success, "Synced", "Pulled your latest GitHub follows.")
+            if !silent {
+                ToastCenter.shared.show(.success, "Synced", "Pulled your latest GitHub follows.")
+            }
         } catch {
-            ToastCenter.shared.show(.error, "Sync failed", error.localizedDescription)
+            if !silent {
+                ToastCenter.shared.show(.error, "Sync failed", error.localizedDescription)
+            }
         }
     }
 }
@@ -98,22 +117,19 @@ struct FollowingView: View {
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search friends")
             .navigationTitle("Friends")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        Task { await vm.syncGitHubFollows() }
-                    } label: {
-                        if vm.isSyncing {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                        }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if vm.isSyncing {
+                        SyncingIndicator()
+                            .transition(.scale.combined(with: .opacity))
                     }
-                    .disabled(vm.isSyncing)
-                    .accessibilityLabel("Sync GitHub follows")
                 }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: vm.isSyncing)
             .task {
                 if vm.users.isEmpty { await vm.load() }
+                // Pull latest GitHub follows automatically so new
+                // followers show up without tapping the sync icon.
+                await vm.syncGitHubFollows(silent: true)
                 presence.ensure(vm.users.map(\.login))
             }
             .onChange(of: vm.users.count) { _ in

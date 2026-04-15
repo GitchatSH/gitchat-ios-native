@@ -121,9 +121,9 @@ struct ProfileView: View {
 
                             Menu {
                                 ShareLink(
-                                    item: URL(string: "https://github.com/\(p.login)")!,
-                                    subject: Text("@\(p.login) on GitHub"),
-                                    message: Text("Check out @\(p.login) on Gitchat")
+                                    item: URL(string: "https://gitstar.ai/\(p.login)")!,
+                                    subject: Text("@\(p.login) on Gitstar"),
+                                    message: Text("Check out @\(p.login) on Gitstar")
                                 ) {
                                     Label("Share", systemImage: "square.and.arrow.up")
                                 }
@@ -137,6 +137,7 @@ struct ProfileView: View {
                                 if blocks.isBlocked(p.login) {
                                     Button {
                                         blocks.unblock(p.login)
+                                        ToastCenter.shared.show(.success, "Unblocked", "@\(p.login)")
                                     } label: {
                                         Label("Unblock", systemImage: "hand.raised.slash")
                                     }
@@ -249,7 +250,11 @@ struct ProfileView: View {
                                         try await APIClient.shared.reportUser(login: l, reason: reportReason, detail: reportDetail.isEmpty ? nil : reportDetail)
                                         ToastCenter.shared.show(.success, "Report sent", "Thanks for keeping Gitchat safe.")
                                     } catch {
-                                        ToastCenter.shared.show(.error, "Report failed", error.localizedDescription)
+                                        ToastCenter.shared.show(
+                                            .error,
+                                            "Couldn't send report",
+                                            "Please try again in a moment."
+                                        )
                                     }
                                 }
                             }
@@ -500,6 +505,15 @@ struct FollowListSheet: View {
 struct MeView: View {
     @EnvironmentObject var auth: AuthStore
     @State private var showSettings = false
+    @AppStorage("gitchat.pref.appearance") private var appearance: String = "system"
+
+    private var colorScheme: ColorScheme? {
+        switch appearance {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -508,11 +522,11 @@ struct MeView: View {
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
                         if let login = auth.login,
-                           let url = URL(string: "https://github.com/\(login)") {
+                           let url = URL(string: "https://gitstar.ai/\(login)") {
                             ShareLink(
                                 item: url,
-                                subject: Text("@\(login) on Gitchat"),
-                                message: Text("Chat with @\(login) on Gitchat")
+                                subject: Text("@\(login) on Gitstar"),
+                                message: Text("Chat with @\(login) on Gitstar")
                             ) {
                                 Image(systemName: "square.and.arrow.up")
                             }
@@ -537,6 +551,14 @@ struct MeView: View {
                                 }
                             }
                     }
+                    // Re-apply the app-wide appearance to the sheet
+                    // scene so changing Theme in Settings updates the
+                    // Settings background immediately. `.id(appearance)`
+                    // forces a rebuild when the value changes —
+                    // `.preferredColorScheme(nil)` alone doesn't reset
+                    // a previously forced override on the sheet scene.
+                    .preferredColorScheme(colorScheme)
+                    .id(appearance)
                 }
         }
     }

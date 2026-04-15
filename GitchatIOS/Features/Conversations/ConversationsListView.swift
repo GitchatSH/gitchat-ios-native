@@ -13,6 +13,40 @@ final class ConversationsViewModel: ObservableObject {
         }
     }
 
+    /// Keep one conversation per case-insensitive `repo_full_name`
+    /// (or `group_name` fallback). Picks the entry with the most
+    /// recent `last_message_at` so users see the active row.
+    static func dedupeChannels(_ list: [Conversation]) -> [Conversation] {
+        var byKey: [String: Conversation] = [:]
+        var ordered: [Conversation] = []
+        for convo in list {
+            let key: String?
+            if convo.isGroup, let repo = convo.repo_full_name, !repo.isEmpty {
+                key = "repo:\(repo.lowercased())"
+            } else if convo.isGroup, let name = convo.group_name, !name.isEmpty {
+                key = "group:\(name.lowercased())"
+            } else {
+                key = nil
+            }
+            guard let key else {
+                ordered.append(convo)
+                continue
+            }
+            if let existing = byKey[key] {
+                if (convo.last_message_at ?? "") > (existing.last_message_at ?? "") {
+                    byKey[key] = convo
+                    if let idx = ordered.firstIndex(where: { $0.id == existing.id }) {
+                        ordered[idx] = convo
+                    }
+                }
+            } else {
+                byKey[key] = convo
+                ordered.append(convo)
+            }
+        }
+        return ordered
+    }
+
     func load() async {
         if conversations.isEmpty { isLoading = true }
         isSyncing = true
@@ -20,9 +54,15 @@ final class ConversationsViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             let resp = try await APIClient.shared.listConversations()
-            self.conversations = resp.conversations
-            ConversationsCache.shared.store(resp.conversations)
-            for convo in resp.conversations {
+            // Dedupe group/channel conversations whose repo_full_name
+            // collides case-insensitively. Backend stores both
+            // `open-acp/openacp` and `Open-ACP/OpenACP` as separate
+            // rows; on the client we keep the one with the most
+            // recent activity so the user sees a single chat.
+            let deduped = Self.dedupeChannels(resp.conversations)
+            self.conversations = deduped
+            ConversationsCache.shared.store(deduped)
+            for convo in deduped {
                 MessageCache.shared.prefetch(conversationId: convo.id)
             }
         } catch {

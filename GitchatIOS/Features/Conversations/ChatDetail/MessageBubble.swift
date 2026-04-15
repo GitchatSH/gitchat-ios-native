@@ -154,26 +154,44 @@ struct MessageBubble: View {
     private func reactionsRow(_ reactions: [MessageReaction]) -> some View {
         HStack(spacing: 4) {
             ForEach(reactions, id: \.emoji) { r in
-                let mine = didReact(r.emoji)
-                Text("\(r.emoji) \(r.count)")
-                    .font(.caption2)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(
-                        mine
-                            ? AnyShapeStyle(Color.accentColor.opacity(0.25))
-                            : AnyShapeStyle(.ultraThinMaterial)
-                    )
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule().stroke(
-                            mine ? Color.accentColor.opacity(0.6) : Color.clear,
-                            lineWidth: 1
-                        )
-                    )
+                reactionChip(r)
+                    .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
         }
+        .animation(
+            .spring(response: 0.35, dampingFraction: 0.55),
+            value: reactions.map { "\($0.emoji)|\($0.count)" }
+        )
         .contentShape(Rectangle())
         .onTapGesture { onReactionsTap?() }
+    }
+
+    @ViewBuilder
+    private func reactionChip(_ r: MessageReaction) -> some View {
+        let mine = didReact(r.emoji)
+        let label = Group {
+            if #available(iOS 17.0, *) {
+                Text("\(r.emoji) \(r.count)")
+                    .contentTransition(.numericText(value: Double(r.count)))
+            } else {
+                Text("\(r.emoji) \(r.count)")
+            }
+        }
+        label
+            .font(.caption2)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(
+                mine
+                    ? AnyShapeStyle(Color.accentColor.opacity(0.25))
+                    : AnyShapeStyle(.ultraThinMaterial)
+            )
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(
+                    mine ? Color.accentColor.opacity(0.6) : Color.clear,
+                    lineWidth: 1
+                )
+            )
     }
 
     private func replyPreview(_ reply: ReplyPreview) -> some View {

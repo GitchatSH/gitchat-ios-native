@@ -26,6 +26,8 @@ struct GitchatApp: App {
                 .tint(.accentColor)
                 .preferredColorScheme(colorScheme)
                 .toastHost()
+                .onAppear { applyInterfaceStyle() }
+                .onChange(of: appearance) { _ in applyInterfaceStyle() }
         }
     }
 
@@ -34,6 +36,26 @@ struct GitchatApp: App {
         case "light": return .light
         case "dark": return .dark
         default: return nil
+        }
+    }
+
+    /// Apply the stored appearance to every UIWindow's
+    /// `overrideUserInterfaceStyle`. `.preferredColorScheme` alone
+    /// doesn't propagate to sheet-owned windows, so the Settings sheet
+    /// stays stuck on the last forced scheme. Forcing the style here
+    /// covers the root window AND all sheet windows.
+    private func applyInterfaceStyle() {
+        let style: UIUserInterfaceStyle
+        switch appearance {
+        case "light": style = .light
+        case "dark": style = .dark
+        default: style = .unspecified
+        }
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            for window in windowScene.windows {
+                window.overrideUserInterfaceStyle = style
+            }
         }
     }
 }

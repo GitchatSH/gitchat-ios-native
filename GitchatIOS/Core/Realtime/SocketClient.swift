@@ -54,6 +54,10 @@ final class SocketClient: ObservableObject {
                 if let subs = self?.subscribedConversations {
                     for id in subs { self?.subscribe(conversation: id) }
                 }
+                // Re-emit watch:presence for every user we previously
+                // subscribed to so the WS server resumes streaming
+                // their online/offline status after a disconnect.
+                PresenceStore.shared.resubscribeAll()
             }
         }
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in

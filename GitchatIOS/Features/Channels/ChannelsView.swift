@@ -9,7 +9,28 @@ final class ChannelsViewModel: ObservableObject {
         isLoading = true; defer { isLoading = false }
         do {
             let resp = try await APIClient.shared.channels()
-            self.channels = resp.channels
+            // Dedupe by case-insensitive full_name — GitHub repo
+            // slugs are case-insensitive so `open-acp/openacp` and
+            // `Open-ACP/OpenACP` refer to the same repo. Keep the
+            // entry with the higher subscriber count and drop the
+            // dupe.
+            var byKey: [String: RepoChannel] = [:]
+            for channel in resp.channels {
+                let key = "\(channel.repoOwner.lowercased())/\(channel.repoName.lowercased())"
+                if let existing = byKey[key] {
+                    if channel.subscriberCount > existing.subscriberCount {
+                        byKey[key] = channel
+                    }
+                } else {
+                    byKey[key] = channel
+                }
+            }
+            self.channels = Array(byKey.values).sorted { a, b in
+                if a.subscriberCount != b.subscriberCount {
+                    return a.subscriberCount > b.subscriberCount
+                }
+                return a.repoName.lowercased() < b.repoName.lowercased()
+            }
         } catch { }
     }
 }

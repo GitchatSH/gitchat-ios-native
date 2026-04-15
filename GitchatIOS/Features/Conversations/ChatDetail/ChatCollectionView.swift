@@ -205,14 +205,24 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         } else if !coord.didInitialScroll && !items.isEmpty {
             // Defer to next runloop so the collection view has a chance
             // to lay out — otherwise contentSize is still zero and
-            // scrollToItem becomes a no-op.
+            // scrollToItem becomes a no-op. Fire several passes to
+            // handle group chats whose estimated-height cells settle
+            // over a few frames as they render.
             coord.didInitialScroll = true
-            DispatchQueue.main.async { [weak cv] in
-                guard let cv else { return }
-                cv.layoutIfNeeded()
-                coord.scrollToBottom(in: cv, animated: false)
+            coord.initialScrollAt = Date()
+            let delays: [Double] = [0, 0.05, 0.15, 0.35, 0.6]
+            for d in delays {
+                DispatchQueue.main.asyncAfter(deadline: .now() + d) { [weak cv] in
+                    guard let cv else { return }
+                    cv.layoutIfNeeded()
+                    coord.scrollToBottom(in: cv, animated: false)
+                }
             }
-        } else if newIDs != prevIDs && (wasNearBottom || !coord.didInitialScroll) {
+        } else if newIDs != prevIDs && (
+            wasNearBottom
+            || !coord.didInitialScroll
+            || (coord.initialScrollAt.map { Date().timeIntervalSince($0) < 1.5 } ?? false)
+        ) {
             // Let the new cell's layout settle first, then animate the
             // scroll so the transition is smooth instead of a jump.
             DispatchQueue.main.async { [weak cv] in
@@ -252,6 +262,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         var lastItems: [Message] = []
         var lastTypingUsers: [String] = []
         var lastShowSeen: Bool = false
+        var initialScrollAt: Date? = nil
         var lastPinnedIds: Set<String> = []
         var lastPulsingId: String?
         var lastLoadingMore = false

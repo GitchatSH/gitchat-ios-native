@@ -6,7 +6,7 @@ import SwiftUI
 ///   3. for group chats: "N online" (at least 1)
 struct ChatDetailTitleBar: View {
     let conversation: Conversation
-    let isSyncing: Bool
+    @ObservedObject var vm: ChatViewModel
     var onTap: (() -> Void)? = nil
     @ObservedObject private var presence = PresenceStore.shared
 
@@ -14,7 +14,7 @@ struct ChatDetailTitleBar: View {
         VStack(spacing: 1) {
             Text(conversation.displayTitle)
                 .font(.headline)
-            if isSyncing {
+            if vm.isSyncing {
                 SyncingDotsLabel()
                     .transition(.opacity)
             } else if let subtitle {
@@ -24,6 +24,7 @@ struct ChatDetailTitleBar: View {
                     .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: vm.isSyncing)
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
         .onAppear {

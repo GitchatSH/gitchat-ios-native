@@ -55,14 +55,19 @@ final class ChatViewModel: ObservableObject {
         defer {
             isLoading = false
             let elapsed = Date().timeIntervalSince(started)
-            if elapsed < 2 {
-                let remaining = 2 - elapsed
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
-                    self?.isSyncing = false
-                }
-            } else {
+            if elapsed >= 2 {
                 isSyncing = false
+            } else {
+                let remaining = 2 - elapsed
+                // Strong-capture self so the deferred reset can't be
+                // dropped if SwiftUI rebuilds anything that referenced
+                // the view model. The view model lives as long as the
+                // chat detail view does.
+                let me = self
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                    me.isSyncing = false
+                }
             }
         }
         do {
