@@ -13,17 +13,13 @@ struct RootView: View {
     var body: some View {
         Group {
             if auth.isAuthenticated {
-                if auth.needsGithubLink {
-                    LinkGithubWall()
-                } else {
-                    MainTabView()
-                        .task {
-                            socket.connect()
-                            if let login = auth.login { socket.subscribeUser(login: login) }
-                            wireGlobalMessageBanner()
-                            startHeartbeat()
-                        }
-                }
+                MainTabView()
+                    .task {
+                        socket.connect()
+                        if let login = auth.login { socket.subscribeUser(login: login) }
+                        wireGlobalMessageBanner()
+                        startHeartbeat()
+                    }
             } else {
                 SignInView()
             }
