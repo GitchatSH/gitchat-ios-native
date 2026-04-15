@@ -8,6 +8,7 @@ final class ChatViewModel: ObservableObject {
     @Published var typingUsers: Set<String> = []
     @Published var otherReadAt: String?
     @Published var isLoading = false
+    @Published var isSyncing = false
     @Published var draft = "" {
         didSet { saveDraft() }
     }
@@ -46,7 +47,21 @@ final class ChatViewModel: ObservableObject {
 
     func load() async {
         if messages.isEmpty { isLoading = true }
-        defer { isLoading = false }
+        isSyncing = true
+        let started = Date()
+        defer {
+            isLoading = false
+            let elapsed = Date().timeIntervalSince(started)
+            if elapsed < 2 {
+                let remaining = 2 - elapsed
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                    self?.isSyncing = false
+                }
+            } else {
+                isSyncing = false
+            }
+        }
         do {
             let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
             let fetched = resp.messages.reversed()

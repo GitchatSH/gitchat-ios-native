@@ -29,6 +29,7 @@ struct ChatDetailView: View {
     @State private var composerVisible = true
     @State private var isAtBottom: Bool = true
     @State private var scrollToBottomToken: Int = 0
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showMembers = false
     @FocusState private var composerFocused: Bool
 
@@ -155,10 +156,23 @@ struct ChatDetailView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .navigationTitle(vm.conversation.displayTitle)
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .toolbar { chatToolbar }
+        .toolbar {
+            chatToolbar
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 1) {
+                    Text(vm.conversation.displayTitle)
+                        .font(.headline)
+                    if vm.isSyncing {
+                        SyncingDotsLabel()
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: vm.isSyncing)
+            }
+        }
         .navigationDestination(for: ProfileLoginRoute.self) { route in
             ProfileView(login: route.login)
         }
@@ -256,6 +270,9 @@ struct ChatDetailView: View {
             Button("OK", role: .cancel) {}
         }
         .task { await onAppearTask() }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { Task { await vm.load() } }
+        }
         .onChange(of: vm.messages.last?.id) { _ in
             // Whenever the latest message is one I just sent, force the
             // collection view to scroll to it — even if the user had
