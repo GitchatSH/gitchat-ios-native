@@ -27,7 +27,8 @@ struct ChatDetailView: View {
     @State private var reportDetail: String = ""
     @State private var showReportConfirm = false
     @State private var composerVisible = true
-    @State private var renderLimit: Int = 10
+    @State private var isAtBottom: Bool = true
+    @State private var scrollToBottomToken: Int = 0
     @State private var showMembers = false
     @FocusState private var composerFocused: Bool
 
@@ -38,9 +39,7 @@ struct ChatDetailView: View {
     // MARK: - Derived state
 
     private var visibleMessages: [Message] {
-        let all = vm.messages.filter { !blocks.isBlocked($0.sender) }
-        if all.count <= renderLimit { return all }
-        return Array(all.suffix(renderLimit))
+        vm.messages.filter { !blocks.isBlocked($0.sender) }
     }
 
     private var mentionSuggestions: [ConversationParticipant] {
@@ -108,34 +107,34 @@ struct ChatDetailView: View {
             .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
+    @ViewBuilder
+    private var messagesList: some View {
+        if vm.isLoading && visibleMessages.isEmpty {
+            ChatSkeleton()
+        } else {
+            chatCollection
+        }
+    }
+
+    private var chatCollection: some View {
+        ChatCollectionView(
+            items: visibleMessages,
+            pulsingId: pulsingId,
+            scrollToId: pendingJumpId,
+            isLoadingMore: vm.isLoadingMore,
+            bottomInset: keyboard.height,
+            scrollToBottomToken: scrollToBottomToken,
+            isAtBottom: $isAtBottom,
+            onScrollToIdConsumed: { pendingJumpId = nil },
+            onTopReached: { Task { await vm.loadMoreIfNeeded() } },
+            cellBuilder: { msg, idx in messageRow(for: msg, at: idx) }
+        )
+        .onTapGesture { composerFocused = false }
+    }
+
     private var chatBody: some View {
         VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                messagesScroll(proxy: proxy)
-                    .scrollDismissesKeyboard(.immediately)
-                    .onTapGesture { composerFocused = false }
-                    .onChange(of: vm.messages.count) { _ in
-                        if let last = vm.messages.last {
-                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                        }
-                    }
-                    .onChange(of: vm.isLoading) { loading in
-                        if !loading, let last = vm.messages.last {
-                            DispatchQueue.main.async {
-                                var tx = Transaction()
-                                tx.disablesAnimations = true
-                                withTransaction(tx) {
-                                    proxy.scrollTo(last.id, anchor: .bottom)
-                                }
-                            }
-                        }
-                    }
-                    .onChange(of: pendingJumpId) { id in
-                        guard let id else { return }
-                        jumpTo(id: id, proxy: proxy)
-                        pendingJumpId = nil
-                    }
-            }
+            messagesList
             if composerVisible {
                 if vm.replyingTo != nil || vm.editingMessage != nil {
                     replyEditBar
@@ -144,6 +143,15 @@ struct ChatDetailView: View {
                     mentionSuggestionList
                 }
                 composer
+                    .overlay(alignment: .topTrailing) {
+                        if !isAtBottom {
+                            jumpToBottomButton
+                                .padding(.trailing, 6)
+                                .offset(y: -52)
+                                .transition(.scale(scale: 0.4).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAtBottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -248,15 +256,18 @@ struct ChatDetailView: View {
             Button("OK", role: .cancel) {}
         }
         .task { await onAppearTask() }
-        .task {
-            // Progressively grow the render window so the chat opens
-            // instantly with the 10 newest messages, then fills in older
-            // ones in chunks off the critical path.
-            try? await Task.sleep(nanoseconds: 600_000_000)
-            var tx = Transaction(); tx.disablesAnimations = true
-            withTransaction(tx) { renderLimit = 25 }
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            withTransaction(tx) { renderLimit = .max }
+        .onChange(of: vm.messages.last?.id) { _ in
+            // Whenever the latest message is one I just sent, force the
+            // collection view to scroll to it — even if the user had
+            // scrolled up before tapping send.
+            guard let last = vm.messages.last, last.sender == auth.login else { return }
+            scrollToBottomToken &+= 1
+        }
+        .onChange(of: composerFocused) { focused in
+            // When the user focuses the composer to start typing, jump
+            // to the latest message so the keyboard doesn't cover the
+            // conversation they're replying to.
+            if focused { scrollToBottomToken &+= 1 }
         }
         .onDisappear { onDisappearCleanup() }
         .onChange(of: vm.draft) { newValue in
@@ -280,47 +291,10 @@ struct ChatDetailView: View {
         }
     }
 
-    // MARK: - Scroll content
+    // MARK: - Row builder
 
     @ViewBuilder
-    private func messagesScroll(proxy: ScrollViewProxy) -> some View {
-        let content = LazyVStack(spacing: 8) {
-            if vm.isLoadingMore {
-                ProgressView().padding(.top, 8)
-            }
-            ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { idx, msg in
-                messageRow(for: msg, at: idx, proxy: proxy)
-                    .transition(.opacity)
-                    .onAppear {
-                        if idx == 0 {
-                            Task { await vm.loadMoreIfNeeded() }
-                        }
-                    }
-            }
-            typingAndReadFooter
-            Color.clear.frame(height: 8).id("__bottom__")
-        }
-        .padding()
-
-        ScrollView { content }
-            .scrollIndicators(.hidden)
-    }
-
-    @ViewBuilder
-    private var typingAndReadFooter: some View {
-        if !vm.typingUsers.isEmpty {
-            TypingIndicatorRow(logins: Array(vm.typingUsers))
-        }
-        if shouldShowSeen {
-            HStack {
-                Spacer()
-                Text("Seen").font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func messageRow(for msg: Message, at idx: Int, proxy: ScrollViewProxy) -> some View {
+    private func messageRow(for msg: Message, at idx: Int) -> some View {
         if let t = msg.type, t != "user" {
             SystemMessageRow(message: msg) {
                 if let target = msg.reply_to_id {
@@ -331,7 +305,6 @@ struct ChatDetailView: View {
                     showPinned = true
                 }
             }
-            .id(msg.id)
         } else {
             let prev = idx > 0 ? visibleMessages[idx - 1] : nil
             let showHeader = prev?.sender != msg.sender || (prev?.type ?? "user") != "user"
@@ -343,7 +316,7 @@ struct ChatDetailView: View {
                 showHeader: showHeader,
                 isPinned: vm.pinnedIds.contains(msg.id),
                 onReactionsTap: { reactorsFor = msg },
-                onReplyTap: { jumpToReply(from: msg, proxy: proxy) },
+                onReplyTap: { jumpToReply(from: msg) },
                 onAttachmentTap: { url in
                     let urls = (msg.attachments?.map(\.url) ?? [msg.attachment_url].compactMap { $0 })
                     if let start = urls.firstIndex(of: url) {
@@ -355,7 +328,6 @@ struct ChatDetailView: View {
                 isPulsing: pulsingId == msg.id,
                 bubbleContextMenu: { AnyView(messageActions(for: msg)) }
             )
-            .id(msg.id)
             .padding(.top, showHeader ? 6 : 0)
             .onTapGesture(count: 2) {
                 Haptics.impact(.light)
@@ -364,31 +336,9 @@ struct ChatDetailView: View {
         }
     }
 
-    // MARK: - Jumping
-
-    private func jumpTo(id: String, proxy: ScrollViewProxy) {
-        Task {
-            var attempts = 0
-            while !vm.messages.contains(where: { $0.id == id }),
-                  vm.nextCursor != nil, attempts < 5 {
-                await vm.loadMoreIfNeeded()
-                attempts += 1
-            }
-            await MainActor.run {
-                withAnimation { proxy.scrollTo(id, anchor: .center) }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    withAnimation(.easeInOut(duration: 0.25)) { pulsingId = id }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                        withAnimation(.easeInOut(duration: 0.3)) { pulsingId = nil }
-                    }
-                }
-            }
-        }
-    }
-
-    private func jumpToReply(from msg: Message, proxy: ScrollViewProxy) {
+    private func jumpToReply(from msg: Message) {
         guard let targetId = msg.reply?.id else { return }
-        withAnimation { proxy.scrollTo(targetId, anchor: .center) }
+        pendingJumpId = targetId
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             withAnimation(.easeInOut(duration: 0.25)) { pulsingId = targetId }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
@@ -542,8 +492,37 @@ struct ChatDetailView: View {
         .background(Color(.secondarySystemBackground))
     }
 
+    @ViewBuilder
+    private var jumpToBottomButton: some View {
+        let action: () -> Void = {
+            Haptics.selection()
+            scrollToBottomToken &+= 1
+        }
+        if #available(iOS 26.0, *) {
+            Button(action: action) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 16, weight: .bold))
+            }
+            .buttonBorderShape(.circle)
+            .buttonStyle(.glass)
+            .controlSize(.large)
+            .tint(Color(.label))
+        } else {
+            Button(action: action) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color(.label))
+                    .frame(width: 38, height: 38)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().stroke(Color(.separator).opacity(0.4), lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private var composer: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .bottom, spacing: 8) {
             PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
                 Image(systemName: "paperclip")
                     .font(.system(size: 20, weight: .semibold))

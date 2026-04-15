@@ -26,6 +26,11 @@ final class ChatViewModel: ObservableObject {
         if let saved = UserDefaults.standard.string(forKey: "gitchat.draft.\(conversation.id)") {
             self.draft = saved
         }
+        if let cached = MessageCache.shared.get(conversation.id) {
+            self.messages = cached.messages
+            self.nextCursor = cached.nextCursor
+            self.otherReadAt = cached.otherReadAt
+        }
     }
 
     private func saveDraft() {
@@ -40,12 +45,37 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Loading
 
     func load() async {
-        isLoading = true; defer { isLoading = false }
+        if messages.isEmpty { isLoading = true }
+        defer { isLoading = false }
         do {
             let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
-            self.messages = resp.messages.reversed()
-            self.nextCursor = resp.nextCursor
+            let fetched = resp.messages.reversed()
+            // Merge the fetched newest page into our (possibly larger)
+            // cached list instead of overwriting it. This preserves
+            // older pages that the user already paged into via
+            // scroll-up in a previous session.
+            if messages.isEmpty {
+                self.messages = Array(fetched)
+                self.nextCursor = resp.nextCursor
+            } else {
+                var existing = messages
+                let existingIds = Set(existing.map(\.id))
+                // Replace edited/updated rows in place.
+                let fetchedById = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
+                for i in existing.indices {
+                    if let updated = fetchedById[existing[i].id] {
+                        existing[i] = updated
+                    }
+                }
+                // Append truly new (newer than cache) messages.
+                let newOnes = fetched.filter { !existingIds.contains($0.id) }
+                existing.append(contentsOf: newOnes)
+                self.messages = existing
+                // nextCursor stays as-is — we still know about older
+                // pages from the previous session.
+            }
             self.otherReadAt = resp.otherReadAt
+            persistCache()
             try? await APIClient.shared.markRead(conversationId: conversation.id)
         } catch { self.error = error.localizedDescription }
         await loadPinned()
@@ -63,8 +93,18 @@ final class ChatViewModel: ObservableObject {
             let deduped = older.filter { !known.contains($0.id) }
             messages.insert(contentsOf: deduped, at: 0)
             nextCursor = resp.nextCursor
+            persistCache()
         } catch { }
         await loadPinned()
+    }
+
+    private func persistCache() {
+        MessageCache.shared.store(conversation.id, entry: MessageCache.Entry(
+            messages: self.messages,
+            nextCursor: self.nextCursor,
+            otherReadAt: self.otherReadAt,
+            fetchedAt: Date()
+        ))
     }
 
     func loadPinned() async {
@@ -107,13 +147,40 @@ final class ChatViewModel: ObservableObject {
                 }
                 editingMessage = nil
             } else {
-                let msg = try await APIClient.shared.sendMessage(
-                    conversationId: conversation.id,
-                    body: body,
-                    replyTo: replyId
+                // Optimistic insert so the bubble pops up the instant
+                // the user taps send. We keep a local id and swap it for
+                // the real one once the server responds.
+                let localID = "local-\(UUID().uuidString)"
+                let optimistic = Message(
+                    id: localID,
+                    conversation_id: conversation.id,
+                    sender: AuthStore.shared.login ?? "me",
+                    sender_avatar: nil,
+                    content: body,
+                    created_at: ISO8601DateFormatter().string(from: Date()),
+                    edited_at: nil,
+                    reactions: nil,
+                    attachment_url: nil,
+                    type: "user",
+                    reply_to_id: replyId
                 )
-                messages.append(msg)
+                messages.append(optimistic)
                 Haptics.impact(.light)
+                do {
+                    let msg = try await APIClient.shared.sendMessage(
+                        conversationId: conversation.id,
+                        body: body,
+                        replyTo: replyId
+                    )
+                    if let idx = messages.firstIndex(where: { $0.id == localID }) {
+                        messages[idx] = msg
+                    } else {
+                        messages.append(msg)
+                    }
+                } catch {
+                    messages.removeAll { $0.id == localID }
+                    throw error
+                }
             }
         } catch {
             self.error = error.localizedDescription

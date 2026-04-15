@@ -27,7 +27,7 @@ struct AuthLinkResponse: Decodable {
 
 // MARK: - Conversation / Message
 
-struct Conversation: Decodable, Identifiable, Hashable {
+struct Conversation: Codable, Identifiable, Hashable {
     let id: String
     let type: String?
     let is_group: Bool?
@@ -82,7 +82,7 @@ struct ConversationListResponse: Decodable {
     let nextCursor: String?
 }
 
-struct ConversationParticipant: Decodable, Identifiable, Hashable {
+struct ConversationParticipant: Codable, Identifiable, Hashable {
     var id: String { login }
     let login: String
     let avatar_url: String?
@@ -90,7 +90,7 @@ struct ConversationParticipant: Decodable, Identifiable, Hashable {
     let online: Bool?
 }
 
-struct ReplyPreview: Decodable, Hashable {
+struct ReplyPreview: Codable, Hashable {
     let id: String
     let body: String?
     let sender_login: String?
@@ -108,9 +108,16 @@ struct ReplyPreview: Decodable, Hashable {
         self.sender_login = try c.decodeIfPresent(String.self, forKey: .sender_login)
             ?? c.decodeIfPresent(String.self, forKey: .senderLogin)
     }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(body, forKey: .body)
+        try c.encodeIfPresent(sender_login, forKey: .sender_login)
+    }
 }
 
-struct MessageAttachment: Decodable, Hashable, Identifiable {
+struct MessageAttachment: Codable, Hashable, Identifiable {
     let attachment_id: String?
     let url: String
     let type: String?
@@ -127,7 +134,7 @@ struct MessageAttachment: Decodable, Hashable, Identifiable {
     }
 }
 
-struct Message: Decodable, Identifiable, Hashable {
+struct Message: Codable, Identifiable, Hashable {
     let id: String
     let conversation_id: String?
     let sender: String
@@ -262,15 +269,33 @@ struct Message: Decodable, Identifiable, Hashable {
             ?? c.decodeIfPresent(String.self, forKey: .replyToId)
         self.reply = try? c.decodeIfPresent(ReplyPreview.self, forKey: .reply)
     }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(conversation_id, forKey: .conversation_id)
+        try c.encode(sender, forKey: .sender)
+        try c.encodeIfPresent(sender_avatar, forKey: .sender_avatar)
+        try c.encode(content, forKey: .content)
+        try c.encodeIfPresent(created_at, forKey: .created_at)
+        try c.encodeIfPresent(edited_at, forKey: .edited_at)
+        try c.encodeIfPresent(unsent_at, forKey: .unsent_at)
+        try c.encodeIfPresent(reactions, forKey: .reactions)
+        try c.encodeIfPresent(attachment_url, forKey: .attachment_url)
+        try c.encodeIfPresent(attachments, forKey: .attachments)
+        try c.encodeIfPresent(type, forKey: .type)
+        try c.encodeIfPresent(reply_to_id, forKey: .reply_to_id)
+        try c.encodeIfPresent(reply, forKey: .reply)
+    }
 }
 
-struct MessageReaction: Decodable, Hashable {
+struct MessageReaction: Codable, Hashable {
     let emoji: String
     let count: Int
     let reacted: Bool
 }
 
-struct RawReactionRow: Decodable, Hashable {
+struct RawReactionRow: Codable, Hashable {
     let emoji: String
     let user_login: String?
 
@@ -290,6 +315,12 @@ struct RawReactionRow: Decodable, Hashable {
         self.emoji = try c.decode(String.self, forKey: .emoji)
         self.user_login = try c.decodeIfPresent(String.self, forKey: .user_login)
             ?? c.decodeIfPresent(String.self, forKey: .userLogin)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(emoji, forKey: .emoji)
+        try c.encodeIfPresent(user_login, forKey: .user_login)
     }
 }
 

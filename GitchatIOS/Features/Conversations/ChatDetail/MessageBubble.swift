@@ -273,7 +273,7 @@ struct MessageBubble: View {
                 .contextMenu { imageActions(for: url) }
         } else {
             LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 2),
+                columns: Array(repeating: GridItem(.fixed(120), spacing: 4), count: 2),
                 spacing: 4
             ) {
                 ForEach(atts) { a in

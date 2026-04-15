@@ -80,30 +80,35 @@ private struct ZoomableImage: View {
                 .scaleEffect(scale)
                 .offset(offset)
                 .frame(width: geo.size.width, height: geo.size.height)
+                // Magnification is always active — pinch to zoom in/out.
                 .gesture(
-                    SimultaneousGesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                scale = max(1, min(4, lastScale * value))
-                            }
-                            .onEnded { _ in
-                                lastScale = scale
-                                if scale <= 1 {
-                                    withAnimation(.spring()) {
-                                        offset = .zero; lastOffset = .zero
-                                    }
+                    MagnificationGesture()
+                        .onChanged { value in
+                            scale = max(1, min(4, lastScale * value))
+                        }
+                        .onEnded { _ in
+                            lastScale = scale
+                            if scale <= 1 {
+                                withAnimation(.spring()) {
+                                    offset = .zero; lastOffset = .zero
                                 }
-                            },
-                        DragGesture()
-                            .onChanged { value in
-                                guard scale > 1 else { return }
-                                offset = CGSize(
-                                    width: lastOffset.width + value.translation.width,
-                                    height: lastOffset.height + value.translation.height
-                                )
                             }
-                            .onEnded { _ in lastOffset = offset }
-                    )
+                        }
+                )
+                // Pan gesture only when zoomed — otherwise horizontal
+                // touches must reach the parent TabView so it can page
+                // between images.
+                .gesture(
+                    scale > 1 ?
+                    DragGesture()
+                        .onChanged { value in
+                            offset = CGSize(
+                                width: lastOffset.width + value.translation.width,
+                                height: lastOffset.height + value.translation.height
+                            )
+                        }
+                        .onEnded { _ in lastOffset = offset }
+                    : nil
                 )
                 .onTapGesture(count: 2) {
                     withAnimation(.spring()) {
@@ -119,6 +124,6 @@ private struct ZoomableImage: View {
     }
 
     private var imageView: some View {
-        CachedAsyncImage(url: URL(string: url), contentMode: .fit, placeholder: .transparent)
+        CachedAsyncImage(url: URL(string: url), contentMode: .fit, placeholder: .transparent, maxPixelSize: 2048)
     }
 }

@@ -1,5 +1,7 @@
 import SwiftUI
 import UIKit
+import ImageIO
+import CryptoKit
 
 /// A tiny in-memory image cache shared across the app. `AsyncImage`
 /// re-fetches every time it appears, which causes visible flicker and
@@ -10,39 +12,136 @@ import UIKit
 final class ImageCache {
     static let shared = ImageCache()
 
-    private let cache = NSCache<NSURL, UIImage>()
-    private var inflight: [URL: Task<UIImage?, Never>] = [:]
+    // Strong-reference dictionary so images survive scrolling without
+    // being evicted under memory pressure. Only cleared on explicit
+    // memory warning. nonisolated(unsafe) so we can read/write from any
+    // thread guarded by the lock.
+    private nonisolated(unsafe) var storage: [String: UIImage] = [:]
+    private let storageLock = NSLock()
+    private var inflight: [String: Task<UIImage?, Never>] = [:]
+    private nonisolated static let diskQueue = DispatchQueue(
+        label: "chat.git.ImageCache.disk", qos: .utility, attributes: .concurrent
+    )
+
+    private nonisolated static func key(_ url: URL, _ maxPixelSize: CGFloat?) -> String {
+        if let s = maxPixelSize { return "\(url.absoluteString)|\(Int(s))" }
+        return url.absoluteString
+    }
+
+    private nonisolated static var diskDirectory: URL {
+        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let dir = base.appendingPathComponent("ImageCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    private nonisolated static func diskFile(_ key: String) -> URL {
+        let hash = SHA256.hash(data: Data(key.utf8))
+        let name = hash.map { String(format: "%02x", $0) }.joined()
+        return diskDirectory.appendingPathComponent("\(name).jpg")
+    }
 
     private init() {
-        cache.countLimit = 500
-        cache.totalCostLimit = 64 * 1024 * 1024 // 64 MB
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.purge()
+        }
     }
 
-    nonisolated func image(for url: URL) -> UIImage? {
-        cache.object(forKey: url as NSURL)
+    nonisolated func image(for url: URL, maxPixelSize: CGFloat? = nil) -> UIImage? {
+        let key = Self.key(url, maxPixelSize)
+        storageLock.lock()
+        if let mem = storage[key] { storageLock.unlock(); return mem }
+        storageLock.unlock()
+        // Disk fallback — small file, sync read is fast (~ms).
+        let file = Self.diskFile(key)
+        guard let data = try? Data(contentsOf: file),
+              let img = UIImage(data: data)
+        else { return nil }
+        storageLock.lock(); storage[key] = img; storageLock.unlock()
+        return img
     }
 
-    nonisolated func store(_ image: UIImage, for url: URL) {
-        let cost = Int(image.size.width * image.size.height * 4)
-        cache.setObject(image, forKey: url as NSURL, cost: cost)
+    nonisolated func store(_ image: UIImage, for url: URL, maxPixelSize: CGFloat? = nil) {
+        let key = Self.key(url, maxPixelSize)
+        storageLock.lock(); storage[key] = image; storageLock.unlock()
+        // Persist to disk in the background.
+        let file = Self.diskFile(key)
+        Self.diskQueue.async {
+            if let data = image.jpegData(compressionQuality: 0.85) {
+                try? data.write(to: file, options: .atomic)
+            }
+        }
     }
 
-    func load(_ url: URL) async -> UIImage? {
-        if let cached = image(for: url) { return cached }
-        if let task = inflight[url] { return await task.value }
+    func purge() {
+        storageLock.lock(); defer { storageLock.unlock() }
+        storage.removeAll(keepingCapacity: false)
+    }
+
+    func load(_ url: URL, maxPixelSize: CGFloat? = nil) async -> UIImage? {
+        if let cached = image(for: url, maxPixelSize: maxPixelSize) { return cached }
+        let cacheKey = Self.key(url, maxPixelSize)
+        if let task = inflight[cacheKey] { return await task.value }
 
         let task = Task<UIImage?, Never> { [weak self] in
-            defer { self?.inflight[url] = nil }
+            defer { self?.inflight[cacheKey] = nil }
             guard let (data, resp) = try? await URLSession.shared.data(from: url),
                   let http = resp as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode),
-                  let image = UIImage(data: data)
+                  (200..<300).contains(http.statusCode)
             else { return nil }
-            self?.store(image, for: url)
-            return image
+            let processed: UIImage?
+            if let maxPixelSize {
+                // Use ImageIO to downsample directly from the source data
+                // without ever decoding the full-resolution image. Massive
+                // memory + CPU win for large camera shots displayed in
+                // small chat bubbles.
+                processed = Self.downsample(data: data, maxPixelSize: maxPixelSize)
+            } else if let raw = UIImage(data: data) {
+                processed = Self.decode(raw) ?? raw
+            } else {
+                processed = nil
+            }
+            if let processed {
+                self?.store(processed, for: url, maxPixelSize: maxPixelSize)
+            }
+            return processed
         }
-        inflight[url] = task
+        inflight[cacheKey] = task
         return await task.value
+    }
+
+    private static func decode(_ image: UIImage) -> UIImage? {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = false
+        format.scale = image.scale
+        let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
+        }
+    }
+
+    private static func downsample(data: Data, maxPixelSize: CGFloat) -> UIImage? {
+        let opts: [CFString: Any] = [
+            kCGImageSourceShouldCache: false,
+        ]
+        guard let src = CGImageSourceCreateWithData(data as CFData, opts as CFDictionary) else {
+            return nil
+        }
+        let scale = UIScreen.main.scale
+        let pixelSize = maxPixelSize * scale
+        let thumbOpts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: pixelSize,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, thumbOpts as CFDictionary) else {
+            return nil
+        }
+        return UIImage(cgImage: cg, scale: scale, orientation: .up)
     }
 }
 
@@ -60,6 +159,7 @@ struct CachedAsyncImage: View {
     let contentMode: ContentMode
     let placeholderStyle: PlaceholderStyle
     let fixedHeight: CGFloat?
+    let maxPixelSize: CGFloat?
 
     enum PlaceholderStyle {
         /// Filled rectangle placeholder — good for chat bubbles where
@@ -76,20 +176,22 @@ struct CachedAsyncImage: View {
         url: URL?,
         contentMode: ContentMode = .fit,
         placeholder: PlaceholderStyle = .filled,
-        fixedHeight: CGFloat? = nil
+        fixedHeight: CGFloat? = nil,
+        maxPixelSize: CGFloat? = nil
     ) {
         self.url = url
         self.contentMode = contentMode
         self.placeholderStyle = placeholder
         self.fixedHeight = fixedHeight
-        // Prime the state synchronously from the in-memory cache so
-        // rows recycled by LazyVStack don't flash a placeholder on
-        // reappearance — the image is already there on first render.
+        // Default thumbnail size for chat bubbles: cap at the larger of
+        // 320pt or the requested fixed height. Caller can override (e.g.
+        // the full-screen image viewer passes nil for full resolution).
+        self.maxPixelSize = maxPixelSize ?? (fixedHeight.map { max(320, $0) } ?? 320)
         if let url {
             if url.isFileURL {
                 _image = State(initialValue: UIImage(contentsOfFile: url.path))
             } else {
-                _image = State(initialValue: ImageCache.shared.image(for: url))
+                _image = State(initialValue: ImageCache.shared.image(for: url, maxPixelSize: self.maxPixelSize))
             }
         }
     }
@@ -139,11 +241,11 @@ struct CachedAsyncImage: View {
             image = UIImage(contentsOfFile: url.path)
             return
         }
-        if let cached = await ImageCache.shared.image(for: url) {
+        if let cached = ImageCache.shared.image(for: url, maxPixelSize: maxPixelSize) {
             image = cached
             return
         }
-        let loaded = await ImageCache.shared.load(url)
+        let loaded = await ImageCache.shared.load(url, maxPixelSize: maxPixelSize)
         image = loaded
     }
 }

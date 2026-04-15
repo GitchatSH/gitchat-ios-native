@@ -6,11 +6,23 @@ final class ConversationsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
+    init() {
+        if let cached = ConversationsCache.shared.get() {
+            self.conversations = cached
+        }
+    }
+
     func load() async {
-        isLoading = true; defer { isLoading = false }
+        // Skip the spinner if we already have cached rows on screen.
+        if conversations.isEmpty { isLoading = true }
+        defer { isLoading = false }
         do {
             let resp = try await APIClient.shared.listConversations()
             self.conversations = resp.conversations
+            ConversationsCache.shared.store(resp.conversations)
+            for convo in resp.conversations {
+                MessageCache.shared.prefetch(conversationId: convo.id)
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -86,7 +98,9 @@ struct ConversationsListView: View {
                     )
                 } else {
                     List(filtered) { convo in
-                        NavigationLink(value: convo) {
+                        ZStack {
+                            NavigationLink(value: convo) { EmptyView() }
+                                .opacity(0)
                             ConversationRow(conversation: convo)
                         }
                         .listRowSeparator(.hidden)
@@ -230,12 +244,19 @@ struct ConversationRow: View {
                     .lineLimit(2)
             }
             Spacer(minLength: 0)
-            if conversation.unreadCount > 0 {
-                Text("\(conversation.unreadCount)")
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 8).padding(.vertical, 2)
-                    .background(Color.accentColor, in: .capsule)
-                    .foregroundStyle(.white)
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(RelativeTime.chatListStamp(conversation.last_message_at))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                if conversation.unreadCount > 0 {
+                    Text("\(conversation.unreadCount)")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8).padding(.vertical, 2)
+                        .background(Color.accentColor, in: .capsule)
+                        .foregroundStyle(.white)
+                } else {
+                    Color.clear.frame(width: 1, height: 18)
+                }
             }
         }
         .padding(.vertical, 4)
@@ -289,12 +310,13 @@ struct AvatarView: View {
 
 private struct CachedAvatarImage: View {
     let url: URL?
+    private let maxPixelSize: CGFloat = 96
     @State private var image: UIImage?
 
     init(url: URL?) {
         self.url = url
         if let url {
-            _image = State(initialValue: ImageCache.shared.image(for: url))
+            _image = State(initialValue: ImageCache.shared.image(for: url, maxPixelSize: maxPixelSize))
         }
     }
 
@@ -311,7 +333,7 @@ private struct CachedAvatarImage: View {
         }
         .task(id: url) {
             guard image == nil, let url else { return }
-            let loaded = await ImageCache.shared.load(url)
+            let loaded = await ImageCache.shared.load(url, maxPixelSize: maxPixelSize)
             await MainActor.run { self.image = loaded }
         }
     }
