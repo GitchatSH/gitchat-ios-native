@@ -27,6 +27,7 @@ struct ChatDetailView: View {
     @State private var reportDetail: String = ""
     @State private var showReportConfirm = false
     @State private var composerVisible = true
+    @State private var renderLimit: Int = 10
     @State private var showMembers = false
     @FocusState private var composerFocused: Bool
 
@@ -37,7 +38,9 @@ struct ChatDetailView: View {
     // MARK: - Derived state
 
     private var visibleMessages: [Message] {
-        vm.messages.filter { !blocks.isBlocked($0.sender) }
+        let all = vm.messages.filter { !blocks.isBlocked($0.sender) }
+        if all.count <= renderLimit { return all }
+        return Array(all.suffix(renderLimit))
     }
 
     private var mentionSuggestions: [ConversationParticipant] {
@@ -245,6 +248,16 @@ struct ChatDetailView: View {
             Button("OK", role: .cancel) {}
         }
         .task { await onAppearTask() }
+        .task {
+            // Progressively grow the render window so the chat opens
+            // instantly with the 10 newest messages, then fills in older
+            // ones in chunks off the critical path.
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            var tx = Transaction(); tx.disablesAnimations = true
+            withTransaction(tx) { renderLimit = 25 }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            withTransaction(tx) { renderLimit = .max }
+        }
         .onDisappear { onDisappearCleanup() }
         .onChange(of: vm.draft) { newValue in
             socket.emitTyping(
