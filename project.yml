@@ -50,7 +50,7 @@ targets:
       properties:
         CFBundleDisplayName: Gitchat
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "19"
+        CFBundleVersion: "20"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -61,6 +61,7 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         NSCameraUsageDescription: Gitchat needs camera access to attach photos to messages.
         NSPhotoLibraryUsageDescription: Gitchat needs photo library access to attach images to messages.
+        NSPhotoLibraryAddUsageDescription: Gitchat needs permission to save images from chats to your Photos library.
         NSMicrophoneUsageDescription: Gitchat needs microphone access for voice messages.
         ITSAppUsesNonExemptEncryption: false
         UIAppFonts:
@@ -96,7 +97,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "19"
+        CFBundleVersion: "20"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

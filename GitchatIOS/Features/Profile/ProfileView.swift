@@ -120,6 +120,13 @@ struct ProfileView: View {
                             .disabled(startingChat)
 
                             Menu {
+                                ShareLink(
+                                    item: URL(string: "https://github.com/\(p.login)")!,
+                                    subject: Text("@\(p.login) on GitHub"),
+                                    message: Text("Check out @\(p.login) on Gitchat")
+                                ) {
+                                    Label("Share", systemImage: "square.and.arrow.up")
+                                }
                                 if followState?.following == true {
                                     Button {
                                         Task { await toggleFollow(login: p.login) }
@@ -201,11 +208,7 @@ struct ProfileView: View {
                 }
             }
         }
-        .confirmationDialog(
-            "Block @\(vm.profile?.login ?? "")?",
-            isPresented: $showBlockConfirm,
-            titleVisibility: .visible
-        ) {
+        .alert("Block @\(vm.profile?.login ?? "")?", isPresented: $showBlockConfirm) {
             Button("Block", role: .destructive) {
                 if let l = vm.profile?.login {
                     blocks.block(l)

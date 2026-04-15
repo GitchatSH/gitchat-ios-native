@@ -140,6 +140,7 @@ struct ConversationsListView: View {
                         .tint(.primary)
                     }
                     .listStyle(.plain)
+                    .scrollIndicators(.hidden)
                     .refreshable { await vm.load() }
                 }
             }

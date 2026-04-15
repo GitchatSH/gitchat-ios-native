@@ -62,6 +62,7 @@ struct NotificationsView: View {
                         .listRowSeparator(.hidden)
                     }
                     .listStyle(.plain)
+                    .scrollIndicators(.hidden)
                     .refreshable { await vm.load() }
                 }
             }

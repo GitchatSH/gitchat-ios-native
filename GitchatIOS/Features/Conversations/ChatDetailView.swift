@@ -36,15 +36,36 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    @Published var nextCursor: String?
+    @Published var isLoadingMore = false
+
     func load() async {
         isLoading = true; defer { isLoading = false }
         do {
             let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
             self.messages = resp.messages.reversed()
+            self.nextCursor = resp.nextCursor
             self.otherReadAt = resp.otherReadAt
             try? await APIClient.shared.markRead(conversationId: conversation.id)
         } catch { self.error = error.localizedDescription }
         await loadPinned()
+    }
+
+    func loadMoreIfNeeded() async {
+        guard !isLoadingMore, let cursor = nextCursor else { return }
+        isLoadingMore = true; defer { isLoadingMore = false }
+        do {
+            let resp = try await APIClient.shared.getConversationMessages(
+                id: conversation.id, cursor: cursor
+            )
+            // Older page comes back DESC → oldest last; reversed gives ASC
+            // so we can prepend to the existing list.
+            let older = resp.messages.reversed()
+            let known = Set(messages.map(\.id))
+            let deduped = older.filter { !known.contains($0.id) }
+            messages.insert(contentsOf: deduped, at: 0)
+            nextCursor = resp.nextCursor
+        } catch { }
     }
 
     func loadPinned() async {
@@ -342,6 +363,7 @@ struct ChatDetailView: View {
     @State private var profileRoute: ProfileLoginRoute?
     @State private var confirmDelete: Message?
     @State private var confirmUnsend: Message?
+    @StateObject private var keyboard = KeyboardObserver()
     @State private var reportingMessage: Message?
     @State private var reportReason: String = "Spam"
     @State private var reportDetail: String = ""
@@ -414,6 +436,35 @@ struct ChatDetailView: View {
         let before = text[..<atIdx]
         vm.draft = "\(before)@\(login) "
         Haptics.selection()
+    }
+
+    @ViewBuilder
+    private func messagesScroll(proxy: ScrollViewProxy) -> some View {
+        let content = LazyVStack(spacing: 8) {
+            if vm.isLoadingMore {
+                ProgressView().padding(.top, 8)
+            }
+            ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { idx, msg in
+                messageRow(for: msg, at: idx, proxy: proxy)
+                    .onAppear {
+                        if idx == 0 {
+                            Task { await vm.loadMoreIfNeeded() }
+                        }
+                    }
+            }
+            typingAndReadFooter
+            Color.clear.frame(height: 8).id("__bottom__")
+        }
+        .padding()
+
+        if #available(iOS 17.0, *) {
+            ScrollView { content }
+                .defaultScrollAnchor(.bottom)
+                .scrollIndicators(.hidden)
+        } else {
+            ScrollView { content }
+                .scrollIndicators(.hidden)
+        }
     }
 
     @ViewBuilder
@@ -491,27 +542,28 @@ struct ChatDetailView: View {
     }
 
     var body: some View {
+        chatBody
+            .padding(.bottom, keyboard.height > 0 ? keyboard.height - safeAreaBottom : 0)
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+
+    private var safeAreaBottom: CGFloat {
+        UIApplication.shared
+            .connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?
+            .windows.first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
+    }
+
+    private var chatBody: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { idx, msg in
-                            messageRow(for: msg, at: idx, proxy: proxy)
-                        }
-                        typingAndReadFooter
-                        Color.clear.frame(height: 8).id("__bottom__")
-                    }
-                    .padding()
+                messagesScroll(proxy: proxy)
+                .scrollDismissesKeyboard(.immediately)
+                .onTapGesture {
+                    composerFocused = false
                 }
-                .scrollDismissesKeyboard(.interactively)
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil, from: nil, for: nil
-                        )
-                    }
-                )
                 .onChange(of: vm.messages.count) { _ in
                     if let last = vm.messages.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -1012,6 +1064,7 @@ struct ImageViewerSheet: View {
     let urls: [String]
     let startIndex: Int
     @State private var index: Int
+    @State private var dragOffset: CGFloat = 0
     @Environment(\.dismiss) private var dismiss
 
     init(urls: [String], startIndex: Int) {
@@ -1020,9 +1073,15 @@ struct ImageViewerSheet: View {
         _index = State(initialValue: startIndex)
     }
 
+    private var dismissProgress: CGFloat {
+        min(1, abs(dragOffset) / 220)
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+            Color.black
+                .opacity(1 - dismissProgress)
+                .ignoresSafeArea()
             TabView(selection: $index) {
                 ForEach(Array(urls.enumerated()), id: \.offset) { i, url in
                     ZoomableImage(url: url).tag(i)
@@ -1030,6 +1089,26 @@ struct ImageViewerSheet: View {
             }
             .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .automatic : .never))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .offset(y: dragOffset)
+            .scaleEffect(1 - dismissProgress * 0.15)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { value in
+                        // Only vertical drags — horizontal keeps the pager working.
+                        if abs(value.translation.height) > abs(value.translation.width) {
+                            dragOffset = value.translation.height
+                        }
+                    }
+                    .onEnded { value in
+                        if abs(value.translation.height) > 120 {
+                            dismiss()
+                        } else {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                dragOffset = 0
+                            }
+                        }
+                    }
+            )
 
             Button {
                 dismiss()
@@ -1043,6 +1122,7 @@ struct ImageViewerSheet: View {
             }
             .padding(.top, 12)
             .padding(.trailing, 16)
+            .opacity(1 - dismissProgress)
         }
         .statusBarHidden(true)
     }
@@ -1099,19 +1179,8 @@ private struct ZoomableImage: View {
         }
     }
 
-    @ViewBuilder
     private var imageView: some View {
-        if let u = URL(string: url), u.isFileURL, let ui = UIImage(contentsOfFile: u.path) {
-            Image(uiImage: ui).resizable().scaledToFit()
-        } else if let u = URL(string: url) {
-            AsyncImage(url: u) { phase in
-                switch phase {
-                case .success(let img): img.resizable().scaledToFit()
-                case .failure: Image(systemName: "photo").font(.system(size: 40)).foregroundStyle(.white)
-                default: ProgressView().tint(.white)
-                }
-            }
-        }
+        CachedAsyncImage(url: URL(string: url), contentMode: .fit)
     }
 }
 
@@ -1484,18 +1553,8 @@ struct MessageBubble: View {
         }
     }
 
-    @ViewBuilder
     private func attachmentImage(for url: URL) -> some View {
-        if url.isFileURL, let ui = UIImage(contentsOfFile: url.path) {
-            Image(uiImage: ui).resizable().scaledToFit()
-        } else {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img): img.resizable().scaledToFit()
-                default: Color(.secondarySystemBackground).frame(height: 160)
-                }
-            }
-        }
+        CachedAsyncImage(url: url, contentMode: .fit)
     }
 
     private func replyPreview(_ reply: ReplyPreview) -> some View {
@@ -1626,19 +1685,44 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private func attachmentGrid(_ atts: [MessageAttachment]) -> some View {
-        let cols = atts.count == 1 ? 1 : 2
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: cols), spacing: 4) {
-            ForEach(atts) { a in
-                if let url = URL(string: a.url) {
-                    attachmentImage(for: url)
-                        .frame(maxWidth: atts.count == 1 ? 240 : 120, maxHeight: atts.count == 1 ? 240 : 120)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .onTapGesture { onAttachmentTap?(a.url) }
+        if atts.count == 1, let a = atts.first, let url = URL(string: a.url) {
+            attachmentImage(for: url)
+                .frame(maxWidth: 240)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .contentShape(Rectangle())
+                .onTapGesture { onAttachmentTap?(a.url) }
+                .contextMenu { imageActions(for: url) }
+        } else {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 2),
+                spacing: 4
+            ) {
+                ForEach(atts) { a in
+                    if let url = URL(string: a.url) {
+                        attachmentImage(for: url)
+                            .frame(width: 120, height: 120)
+                            .clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .contentShape(Rectangle())
+                            .onTapGesture { onAttachmentTap?(a.url) }
+                            .contextMenu { imageActions(for: url) }
+                    }
                 }
             }
+            .frame(maxWidth: 248)
         }
-        .frame(maxWidth: atts.count == 1 ? 240 : 248)
+    }
+
+    @ViewBuilder
+    private func imageActions(for url: URL) -> some View {
+        ShareLink(item: url) {
+            Label("Share", systemImage: "square.and.arrow.up")
+        }
+        Button {
+            Task { await ImageDownloader.saveToPhotos(url: url) }
+        } label: {
+            Label("Save to Photos", systemImage: "arrow.down.to.line")
+        }
     }
 }
 
