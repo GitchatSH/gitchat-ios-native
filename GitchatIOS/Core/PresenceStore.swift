@@ -20,36 +20,33 @@ final class PresenceStore: ObservableObject {
     static let shared = PresenceStore()
 
     @Published private(set) var onlineLogins: Set<String> = []
+    @Published private(set) var lastSeen: [String: Date] = [:]
 
     /// Logins we've already asked the server about (so `ensure(_:)`
     /// doesn't spam the REST endpoint as the user scrolls).
     private var watched: Set<String> = []
-    private var heartbeatTask: Task<Void, Never>?
 
     private init() {}
 
     func start() {
-        // Live updates from the socket.
+        // Live updates from the socket. The actual PATCH /presence
+        // heartbeat is driven by RootView.startHeartbeat() so we don't
+        // double up on timers here.
         SocketClient.shared.onPresenceUpdated = { [weak self] login, online in
             guard let self else { return }
-            if online { self.onlineLogins.insert(login) }
-            else { self.onlineLogins.remove(login) }
-        }
-        // Kick off the heartbeat so the server considers us online.
-        heartbeatTask?.cancel()
-        heartbeatTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await APIClient.shared.heartbeat()
-                try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
-                if Task.isCancelled { return }
-                await self?.tick()
+            if online {
+                self.onlineLogins.insert(login)
+            } else {
+                if self.onlineLogins.remove(login) != nil {
+                    self.lastSeen[login] = Date()
+                }
             }
         }
     }
 
-    private func tick() {}
-
-    /// Call the server heartbeat once immediately (on foreground etc.).
+    /// Fire a PATCH /presence immediately — used on app foreground so
+    /// the DB `last_seen_at` column is fresh the moment the user
+    /// returns to the app.
     func heartbeatNow() {
         Task { try? await APIClient.shared.heartbeat() }
     }
@@ -80,7 +77,9 @@ final class PresenceStore: ObservableObject {
                 for (login, iso) in map {
                     guard let iso else { continue }
                     let date = formatter.date(from: iso) ?? fallback.date(from: iso)
-                    if let date, now.timeIntervalSince(date) < 90 {
+                    guard let date else { continue }
+                    self.lastSeen[login] = date
+                    if now.timeIntervalSince(date) < 90 {
                         self.onlineLogins.insert(login)
                     }
                 }
@@ -88,8 +87,4 @@ final class PresenceStore: ObservableObject {
         }
     }
 
-    func stop() {
-        heartbeatTask?.cancel()
-        heartbeatTask = nil
-    }
 }

@@ -166,15 +166,8 @@ struct ChatDetailView: View {
         .toolbar {
             chatToolbar
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 1) {
-                    Text(vm.conversation.displayTitle)
-                        .font(.headline)
-                    if vm.isSyncing {
-                        SyncingDotsLabel()
-                            .transition(.opacity)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: vm.isSyncing)
+                ChatDetailTitleBar(conversation: vm.conversation, isSyncing: vm.isSyncing)
+                    .animation(.easeInOut(duration: 0.2), value: vm.isSyncing)
             }
         }
         .navigationDestination(for: ProfileLoginRoute.self) { route in

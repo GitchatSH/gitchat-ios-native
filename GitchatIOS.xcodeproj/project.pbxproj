@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		00DB4217A078DC17FD451462 /* ChannelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9685947BA9F7F47948D0D9FD /* ChannelDetailView.swift */; };
+		03DA54DAB6CB0C9146CF00DB /* ChatDetailTitleBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F3F9D645B6410E4BD1139FC /* ChatDetailTitleBar.swift */; };
 		0992E140C62E0F3779B22A78 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70C13ECDA5B85E7FDEDB9D8 /* Models.swift */; };
 		1002899F9F99F440D42DC48F /* GlassPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DA1766BE87B16368E73F58 /* GlassPill.swift */; };
 		1297F23217D80C72EB69A324 /* OneSignalExtension in Frameworks */ = {isa = PBXBuildFile; productRef = A804AE540868411FDE202E67 /* OneSignalExtension */; };
@@ -106,6 +107,7 @@
 		2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactorsSheet.swift; sourceTree = "<group>"; };
 		2D5340BD447D966282E2E67D /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
+		2F3F9D645B6410E4BD1139FC /* ChatDetailTitleBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailTitleBar.swift; sourceTree = "<group>"; };
 		3240F18DF11804D759392EA5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3255839AE4B52EEE916274AF /* RelativeTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelativeTime.swift; sourceTree = "<group>"; };
 		36F06688A6AEFA05D9DA56B8 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
@@ -398,6 +400,7 @@
 			isa = PBXGroup;
 			children = (
 				3EA68A0F7BDA1DAF3632082F /* ChatCollectionView.swift */,
+				2F3F9D645B6410E4BD1139FC /* ChatDetailTitleBar.swift */,
 				5DA6355A70C27DBE9EA3F912 /* ChatSkeleton.swift */,
 				2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */,
 				4ED56669CED0DEE797EABF78 /* EmojiPickerSheet.swift */,
@@ -554,6 +557,7 @@
 				00DB4217A078DC17FD451462 /* ChannelDetailView.swift in Sources */,
 				9FF34A6AA21F0417CEF2D2D5 /* ChannelsView.swift in Sources */,
 				F468BB4EB9F2D15D17EFA9A1 /* ChatCollectionView.swift in Sources */,
+				03DA54DAB6CB0C9146CF00DB /* ChatDetailTitleBar.swift in Sources */,
 				CD8AD7132CAC90482CAD8C90 /* ChatDetailView.swift in Sources */,
 				8EC49E171B11904ED31ED2C4 /* ChatSkeleton.swift in Sources */,
 				58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */,

@@ -7,6 +7,7 @@ struct RootView: View {
     @StateObject private var push = PushManager.shared
     @StateObject private var router = AppRouter.shared
     @Environment(\.requestReview) private var requestReview
+    @Environment(\.scenePhase) private var scenePhase
     @State private var heartbeatTask: Task<Void, Never>?
 
     var body: some View {
@@ -32,6 +33,13 @@ struct RootView: View {
             set: { router.pendingProfileLogin = $0?.login }
         )) { route in
             NavigationStack { ProfileView(login: route.login) }
+        }
+        .onChange(of: scenePhase) { phase in
+            // Fresh heartbeat the moment the app comes back to the
+            // foreground so `last_seen_at` in the DB is up to date.
+            if phase == .active, auth.isAuthenticated {
+                PresenceStore.shared.heartbeatNow()
+            }
         }
         .onChange(of: auth.isAuthenticated) { isAuth in
             if isAuth {
