@@ -275,17 +275,15 @@ struct ProfileView: View {
 
     private var followButtonLabel: some View {
         let following = followState?.following == true
-        return HStack(spacing: 6) {
-            Image(systemName: following ? "checkmark" : "plus")
-            Text(following ? "Following" : "Follow").font(.geist(14, weight: .semibold))
-        }
-        .foregroundStyle(following ? Color(.label) : .white)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(
-            (following ? Color(.secondarySystemBackground) : Color.accentColor),
-            in: .rect(cornerRadius: 12)
-        )
+        return Text(following ? "Following" : "Follow")
+            .font(.geist(14, weight: .semibold))
+            .foregroundStyle(following ? Color(.label) : .white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                (following ? Color(.secondarySystemBackground) : Color.accentColor),
+                in: .rect(cornerRadius: 12)
+            )
     }
 
     private func loadFollowStatus(login: String) async {
@@ -326,13 +324,12 @@ struct ProfileView: View {
     }
 
     private func actionLabel(systemImage: String, title: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: systemImage)
-            Text(title).font(.geist(14, weight: .semibold))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+        Text(title)
+            .font(.geist(14, weight: .semibold))
+            .foregroundStyle(Color(.label))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
     }
 
     private func stat(_ label: String, _ value: Int) -> some View {

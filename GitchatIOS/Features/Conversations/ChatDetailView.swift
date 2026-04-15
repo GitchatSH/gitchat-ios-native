@@ -26,7 +26,7 @@ struct ChatDetailView: View {
     @State private var reportReason: String = "Spam"
     @State private var reportDetail: String = ""
     @State private var showReportConfirm = false
-    @State private var composerVisible = false
+    @State private var composerVisible = true
     @State private var showMembers = false
     @FocusState private var composerFocused: Bool
 
@@ -244,11 +244,6 @@ struct ChatDetailView: View {
         .alert("Thanks — we'll review it within 24 hours.", isPresented: $showReportConfirm) {
             Button("OK", role: .cancel) {}
         }
-        .onAppear {
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.85).delay(0.05)) {
-                composerVisible = true
-            }
-        }
         .task { await onAppearTask() }
         .onDisappear { onDisappearCleanup() }
         .onChange(of: vm.draft) { newValue in
@@ -282,6 +277,7 @@ struct ChatDetailView: View {
             }
             ForEach(Array(visibleMessages.enumerated()), id: \.element.id) { idx, msg in
                 messageRow(for: msg, at: idx, proxy: proxy)
+                    .transition(.opacity)
                     .onAppear {
                         if idx == 0 {
                             Task { await vm.loadMoreIfNeeded() }
@@ -329,6 +325,7 @@ struct ChatDetailView: View {
             MessageBubble(
                 message: msg,
                 isMe: msg.sender == auth.login,
+                myLogin: auth.login,
                 resolvedAvatar: resolveAvatar(for: msg),
                 showHeader: showHeader,
                 isPinned: vm.pinnedIds.contains(msg.id),
@@ -340,6 +337,8 @@ struct ChatDetailView: View {
                         imagePreview = ImagePreviewState(urls: urls, index: start)
                     }
                 },
+                onPinTap: { showPinned = true },
+                onAvatarTap: { profileRoute = ProfileLoginRoute(login: msg.sender) },
                 isPulsing: pulsingId == msg.id,
                 bubbleContextMenu: { AnyView(messageActions(for: msg)) }
             )

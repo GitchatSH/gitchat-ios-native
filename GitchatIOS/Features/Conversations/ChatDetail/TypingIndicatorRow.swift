@@ -6,7 +6,11 @@ struct TypingIndicatorRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle().fill(Color(.secondarySystemBackground)).frame(width: 28, height: 28)
+            if let first = logins.first {
+                AvatarView(url: "https://github.com/\(first).png", size: 28)
+            } else {
+                Color.clear.frame(width: 28, height: 28)
+            }
             HStack(spacing: 4) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()

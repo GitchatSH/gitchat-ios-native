@@ -3,21 +3,31 @@ import SwiftUI
 struct MessageBubble: View {
     let message: Message
     let isMe: Bool
+    var myLogin: String? = nil
     var resolvedAvatar: String? = nil
     var showHeader: Bool = true
     var isPinned: Bool = false
     var onReactionsTap: (() -> Void)? = nil
     var onReplyTap: (() -> Void)? = nil
     var onAttachmentTap: ((String) -> Void)? = nil
+    var onPinTap: (() -> Void)? = nil
+    var onAvatarTap: (() -> Void)? = nil
     var isPulsing: Bool = false
     var bubbleContextMenu: (() -> AnyView)? = nil
     @State private var showTime = false
+
+    private func didReact(_ emoji: String) -> Bool {
+        guard let me = myLogin else { return false }
+        return (message.reactionRows ?? []).contains { $0.emoji == emoji && $0.user_login == me }
+    }
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
             if isMe { Spacer(minLength: 40) } else {
                 if showHeader {
                     AvatarView(url: resolvedAvatar ?? message.sender_avatar, size: 28)
+                        .contentShape(Circle())
+                        .onTapGesture { onAvatarTap?() }
                 } else {
                     Color.clear.frame(width: 28, height: 28)
                 }
@@ -46,14 +56,19 @@ struct MessageBubble: View {
                 }
                 .overlay(alignment: .topTrailing) {
                     if isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .rotationEffect(.degrees(45))
-                            .padding(5)
-                            .background(Color.accentColor, in: Circle())
-                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                            .offset(x: 10, y: -10)
+                        Button {
+                            onPinTap?()
+                        } label: {
+                            Image(systemName: "pin.fill")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .rotationEffect(.degrees(45))
+                                .padding(5)
+                                .background(Color.accentColor, in: Circle())
+                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                        }
+                        .buttonStyle(.plain)
+                        .offset(x: 10, y: -10)
                     }
                 }
                 .scaleEffect(isPulsing ? 1.05 : 1)
@@ -64,17 +79,7 @@ struct MessageBubble: View {
                     Text("edited").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
                 if let reactions = message.reactions, !reactions.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(reactions, id: \.emoji) { r in
-                            Text("\(r.emoji) \(r.count)")
-                                .font(.caption2)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Capsule())
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { onReactionsTap?() }
+                    reactionsRow(reactions)
                 }
             }
             if !isMe { Spacer(minLength: 40) }
@@ -83,6 +88,32 @@ struct MessageBubble: View {
 
     private func attachmentImage(for url: URL) -> some View {
         CachedAsyncImage(url: url, contentMode: .fit, fixedHeight: 220)
+    }
+
+    @ViewBuilder
+    private func reactionsRow(_ reactions: [MessageReaction]) -> some View {
+        HStack(spacing: 4) {
+            ForEach(reactions, id: \.emoji) { r in
+                let mine = didReact(r.emoji)
+                Text("\(r.emoji) \(r.count)")
+                    .font(.caption2)
+                    .padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(
+                        mine
+                            ? AnyShapeStyle(Color.accentColor.opacity(0.25))
+                            : AnyShapeStyle(.ultraThinMaterial)
+                    )
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule().stroke(
+                            mine ? Color.accentColor.opacity(0.6) : Color.clear,
+                            lineWidth: 1
+                        )
+                    )
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onReactionsTap?() }
     }
 
     private func replyPreview(_ reply: ReplyPreview) -> some View {
@@ -143,6 +174,7 @@ struct MessageBubble: View {
                         }
                         Text(Self.attributed(parsed.body, isMe: isMe))
                             .tint(isMe ? .white : Color.accentColor)
+                            .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 12)
                             .padding(.vertical, parsed.forwardedFrom == nil ? 8 : 6)
                             .padding(.bottom, parsed.forwardedFrom == nil ? 0 : 2)
@@ -164,9 +196,26 @@ struct MessageBubble: View {
         }
     }
 
+    private static let forwardedRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: "^> Forwarded from @([A-Za-z0-9-]+)\\n\\n")
+    }()
+
+    private static let linkDetector: NSDataDetector? = {
+        try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+    }()
+
+    private static let mentionRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: "@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", options: [])
+    }()
+
+    private static let attributedCache: NSCache<NSString, NSAttributedString> = {
+        let c = NSCache<NSString, NSAttributedString>()
+        c.countLimit = 500
+        return c
+    }()
+
     static func parseForwarded(_ raw: String) -> (forwardedFrom: String?, body: String) {
-        let pattern = "^> Forwarded from @([A-Za-z0-9-]+)\\n\\n"
-        guard let regex = try? NSRegularExpression(pattern: pattern),
+        guard let regex = forwardedRegex,
               let match = regex.firstMatch(in: raw, range: NSRange(location: 0, length: raw.utf16.count)),
               match.numberOfRanges >= 2,
               let nameRange = Range(match.range(at: 1), in: raw),
@@ -180,9 +229,12 @@ struct MessageBubble: View {
     }
 
     static func attributed(_ raw: String, isMe: Bool) -> AttributedString {
+        let key = "\(isMe ? 1 : 0)|\(raw)" as NSString
+        if let cached = attributedCache.object(forKey: key) {
+            return AttributedString(cached)
+        }
         var attr = AttributedString(raw)
-        // URLs via NSDataDetector
-        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+        if let detector = linkDetector {
             let ns = raw as NSString
             let matches = detector.matches(in: raw, options: [], range: NSRange(location: 0, length: ns.length))
             for m in matches {
@@ -194,8 +246,7 @@ struct MessageBubble: View {
                 attr[aRange].underlineStyle = .single
             }
         }
-        // @mentions
-        if let regex = try? NSRegularExpression(pattern: "@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", options: []) {
+        if let regex = mentionRegex {
             let ns = raw as NSString
             let matches = regex.matches(in: raw, options: [], range: NSRange(location: 0, length: ns.length))
             for m in matches {
@@ -208,6 +259,7 @@ struct MessageBubble: View {
                 }
             }
         }
+        attributedCache.setObject(NSAttributedString(attr), forKey: key)
         return attr
     }
 
@@ -249,6 +301,13 @@ struct MessageBubble: View {
             Task { await ImageDownloader.saveToPhotos(url: url) }
         } label: {
             Label("Save to Photos", systemImage: "arrow.down.to.line")
+        }
+        // Re-attach the parent bubble's actions so an image long-press
+        // still gives the user the normal message options (Reply, Pin,
+        // Forward, Delete, etc.) on top of Share / Save.
+        if let menu = bubbleContextMenu {
+            Divider()
+            menu()
         }
     }
 }
