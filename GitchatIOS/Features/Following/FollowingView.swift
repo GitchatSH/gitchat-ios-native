@@ -28,14 +28,27 @@ final class FollowingViewModel: ObservableObject {
 struct FollowingView: View {
     @StateObject private var vm = FollowingViewModel()
     @State private var filter = ""
+    @ObservedObject private var presence = PresenceStore.shared
 
     private var filtered: [FriendUser] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return vm.users }
-        return vm.users.filter { u in
-            u.login.lowercased().contains(q)
-                || (u.name ?? "").lowercased().contains(q)
+        let base: [FriendUser]
+        if q.isEmpty {
+            base = vm.users
+        } else {
+            base = vm.users.filter { u in
+                u.login.lowercased().contains(q)
+                    || (u.name ?? "").lowercased().contains(q)
+            }
         }
+        // Online-first, each group alphabetical by login.
+        let online = base
+            .filter { presence.isOnline($0.login) }
+            .sorted { $0.login.lowercased() < $1.login.lowercased() }
+        let offline = base
+            .filter { !presence.isOnline($0.login) }
+            .sorted { $0.login.lowercased() < $1.login.lowercased() }
+        return online + offline
     }
 
     var body: some View {
@@ -73,9 +86,6 @@ struct FollowingView: View {
                                     Text("@\(u.login)").font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                if u.online == true {
-                                    Circle().fill(.green).frame(width: 8, height: 8)
-                                }
                             }
                         }
                         .listRowSeparator(.hidden)
@@ -102,7 +112,13 @@ struct FollowingView: View {
                     .accessibilityLabel("Sync GitHub follows")
                 }
             }
-            .task { if vm.users.isEmpty { await vm.load() } }
+            .task {
+                if vm.users.isEmpty { await vm.load() }
+                presence.ensure(vm.users.map(\.login))
+            }
+            .onChange(of: vm.users.count) { _ in
+                presence.ensure(vm.users.map(\.login))
+            }
         }
     }
 }

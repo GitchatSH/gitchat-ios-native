@@ -506,6 +506,19 @@ struct MeView: View {
             ProfileView()
                 .navigationTitle("Me")
                 .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        if let login = auth.login,
+                           let url = URL(string: "https://github.com/\(login)") {
+                            ShareLink(
+                                item: url,
+                                subject: Text("@\(login) on Gitchat"),
+                                message: Text("Chat with @\(login) on Gitchat")
+                            ) {
+                                Image(systemName: "square.and.arrow.up")
+                            }
+                            .accessibilityLabel("Share profile")
+                        }
+                    }
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button {
                             showSettings = true

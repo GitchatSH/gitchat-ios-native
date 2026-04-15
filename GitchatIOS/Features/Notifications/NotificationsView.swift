@@ -3,7 +3,16 @@ import SwiftUI
 @MainActor
 final class NotificationsViewModel: ObservableObject {
     @Published var items: [Notification] = []
+    @Published var locallyRead: Set<String> = []
     @Published var isLoading = false
+
+    func isRead(_ n: Notification) -> Bool {
+        n.is_read || locallyRead.contains(n.id)
+    }
+
+    func markReadLocally(_ id: String) {
+        locallyRead.insert(id)
+    }
 
     func load() async {
         isLoading = true; defer { isLoading = false }
@@ -35,8 +44,9 @@ struct NotificationsView: View {
                 } else {
                     List(vm.items) { n in
                         Button {
-                            // Fire-and-forget mark-as-read so the badge
-                            // clears without waiting on the route.
+                            // Hide the orange dot immediately.
+                            vm.markReadLocally(n.id)
+                            // Fire-and-forget backend mark.
                             Task { try? await APIClient.shared.markNotificationsRead(ids: [n.id]) }
                             route(for: n)
                         } label: {
@@ -56,7 +66,7 @@ struct NotificationsView: View {
                                         .foregroundStyle(.tertiary)
                                 }
                                 Spacer()
-                                if !n.is_read {
+                                if !vm.isRead(n) {
                                     Circle().fill(Color.accentColor).frame(width: 8, height: 8)
                                 }
                             }
