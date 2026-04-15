@@ -579,8 +579,7 @@ struct ChatDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .environment(\.colorScheme, .dark)
-                .tint(.white)
+                .tint(.primary)
             }
         }
         .navigationDestination(for: ProfileLoginRoute.self) { route in
@@ -849,7 +848,7 @@ struct ChatDetailView: View {
             PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
                 Image(systemName: "paperclip")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .modifier(GlassPill())
             }

@@ -148,11 +148,11 @@ struct ProfileView: View {
                             } label: {
                                 Image(systemName: "ellipsis")
                                     .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.primary)
                                     .frame(width: 44, height: 40)
                                     .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
                             }
-                            .environment(\.colorScheme, .dark)
-                            .tint(.white)
+                            .tint(.primary)
                         }
                         .padding(.horizontal)
                     }
