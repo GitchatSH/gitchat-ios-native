@@ -6,6 +6,14 @@ final class ConversationsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var isSyncing = false
     @Published var error: String?
+    /// Conversation ids that the user has tapped/opened locally —
+    /// rendered as zero unread immediately, before the server-side
+    /// markRead call comes back.
+    @Published var locallyRead: Set<String> = []
+
+    func markLocallyRead(_ id: String) {
+        locallyRead.insert(id)
+    }
 
     init() {
         if let cached = ConversationsCache.shared.get() {
@@ -134,6 +142,9 @@ struct ConversationsListView: View {
     }
 
     private func openConversation(_ convo: Conversation) {
+        // Hide the unread badge immediately. ChatViewModel.load fires
+        // markRead on the server side; this is just the optimistic UI.
+        vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
         selectedConvo = convo
         #else
@@ -228,7 +239,10 @@ struct ConversationsListView: View {
                         Button {
                             openConversation(convo)
                         } label: {
-                            ConversationRow(conversation: convo)
+                            ConversationRow(
+                                conversation: convo,
+                                isLocallyRead: vm.locallyRead.contains(convo.id)
+                            )
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -381,6 +395,11 @@ struct SyncingIndicator: View {
 
 struct ConversationRow: View {
     let conversation: Conversation
+    var isLocallyRead: Bool = false
+
+    private var displayedUnread: Int {
+        isLocallyRead ? 0 : conversation.unreadCount
+    }
 
     /// Pull the most recent attachment URL out of the message cache so
     /// "📷 Photo" preview rows can show an actual thumbnail instead of
@@ -454,8 +473,8 @@ struct ConversationRow: View {
                 Text(RelativeTime.chatListStamp(conversation.last_message_at))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                if conversation.unreadCount > 0 {
-                    Text("\(conversation.unreadCount)")
+                if displayedUnread > 0 {
+                    Text("\(displayedUnread)")
                         .font(.caption2.bold())
                         .padding(.horizontal, 8).padding(.vertical, 2)
                         .background(Color.accentColor, in: .capsule)

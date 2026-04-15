@@ -253,9 +253,14 @@ struct CachedAsyncImage: View {
                 Color(.secondarySystemBackground)
                     .frame(width: h, height: h)
                     .overlay(ProgressView().tint(.secondary))
+            } else if let maxW = fitMaxWidth, let maxH = fitMaxHeight {
+                let side = min(maxW, maxH)
+                Color(.secondarySystemBackground)
+                    .frame(width: side, height: side)
+                    .overlay(ProgressView().tint(.secondary))
             } else {
                 Color(.secondarySystemBackground)
-                    .aspectRatio(1, contentMode: .fit)
+                    .frame(width: 200, height: 200)
                     .overlay(ProgressView().tint(.secondary))
             }
         case .transparent:

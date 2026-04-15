@@ -60,11 +60,11 @@ struct ChatDetailView: View {
         guard vm.conversation.isGroup else { return [] }
         guard let token = currentMentionToken() else { return [] }
         let all = vm.conversation.participantsOrEmpty.filter { $0.login != auth.login }
-        if token.isEmpty { return Array(all.prefix(8)) }
+        if token.isEmpty { return all }
         let t = token.lowercased()
         return all.filter {
             $0.login.lowercased().hasPrefix(t) || ($0.name ?? "").lowercased().contains(t)
-        }.prefix(8).map { $0 }
+        }
     }
 
     private func currentMentionToken() -> String? {
@@ -386,13 +386,18 @@ struct ChatDetailView: View {
             .padding(.top, showHeader ? 6 : 0)
             .onTapGesture(count: 2) {
                 Haptics.impact(.light)
-                // Mutate state synchronously so the heart renders
-                // immediately, then fire the API in the background.
                 vm.applyOptimisticReaction(messageId: msg.id, emoji: "❤️", myLogin: auth.login)
                 Task { try? await APIClient.shared.react(messageId: msg.id, emoji: "❤️", add: true) }
             }
         }
     }
+
+    private func quickReact(_ msg: Message, _ emoji: String) {
+        Haptics.impact(.light)
+        vm.applyOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
+        Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: true) }
+    }
+
 
     private func jumpToReply(from msg: Message) {
         guard let targetId = msg.reply?.id else { return }
@@ -472,13 +477,65 @@ struct ChatDetailView: View {
 
     @ViewBuilder
     private func messageActions(for msg: Message) -> some View {
+        // iOS context menu inline ControlGroup caps at 4 items per row.
+        // Two stacked rows: row 1 = 4 emoji, row 2 = 3 emoji + chevron
+        // that opens the full reaction picker.
+        #if targetEnvironment(macCatalyst)
+        if #available(iOS 16.4, *) {
+            ControlGroup {
+                Button { quickReact(msg, "❤️") } label: { Text("❤️") }
+                Button { quickReact(msg, "👍") } label: { Text("👍") }
+                Button { quickReact(msg, "😂") } label: { Text("😂") }
+                Button { quickReact(msg, "🔥") } label: { Text("🔥") }
+            }
+            .controlGroupStyle(.compactMenu)
+            ControlGroup {
+                Button { quickReact(msg, "🎉") } label: { Text("🎉") }
+                Button { quickReact(msg, "👀") } label: { Text("👀") }
+                Button { quickReact(msg, "🙏") } label: { Text("🙏") }
+                Button { quickReact(msg, "😢") } label: { Text("😢") }
+            }
+            .controlGroupStyle(.compactMenu)
+        }
         Button {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 reactingFor = msg
             }
         } label: {
-            Label("React", systemImage: "face.smiling")
+            Label("More reactions…", systemImage: "face.smiling")
         }
+        #else
+        if #available(iOS 16.4, *) {
+            ControlGroup {
+                Button { quickReact(msg, "❤️") } label: { Text("❤️") }
+                Button { quickReact(msg, "👍") } label: { Text("👍") }
+                Button { quickReact(msg, "😂") } label: { Text("😂") }
+                Button { quickReact(msg, "🔥") } label: { Text("🔥") }
+            }
+            .controlGroupStyle(.compactMenu)
+            ControlGroup {
+                Button { quickReact(msg, "🎉") } label: { Text("🎉") }
+                Button { quickReact(msg, "👀") } label: { Text("👀") }
+                Button { quickReact(msg, "🙏") } label: { Text("🙏") }
+                Button {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        reactingFor = msg
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+            }
+            .controlGroupStyle(.compactMenu)
+        } else {
+            Button {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    reactingFor = msg
+                }
+            } label: {
+                Label("React", systemImage: "face.smiling")
+            }
+        }
+        #endif
         Button {
             vm.replyingTo = msg
             vm.editingMessage = nil

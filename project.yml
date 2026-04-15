@@ -46,13 +46,16 @@ targets:
         com.apple.developer.usernotifications.communication: true
         com.apple.security.application-groups:
           - group.chat.git.onesignal
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
     info:
       path: GitchatIOS/Info.plist
       properties:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "44"
+        CFBundleVersion: "45"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -71,6 +74,7 @@ targets:
         NSPhotoLibraryAddUsageDescription: Gitchat needs permission to save images from chats to your Photos library.
         NSMicrophoneUsageDescription: Gitchat needs microphone access for voice messages.
         ITSAppUsesNonExemptEncryption: false
+        LSApplicationCategoryType: public.app-category.social-networking
         UIAppFonts:
           - Geist-Regular.ttf
           - Geist-SemiBold.ttf
@@ -79,6 +83,8 @@ targets:
         LSApplicationQueriesSchemes:
           - https
           - github
+        NSUserActivityTypes:
+          - INSendMessageIntent
     settings:
       base:
         PRODUCT_NAME: Gitchat
@@ -108,7 +114,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "44"
+        CFBundleVersion: "45"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
