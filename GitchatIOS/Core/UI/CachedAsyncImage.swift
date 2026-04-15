@@ -18,11 +18,11 @@ final class ImageCache {
         cache.totalCostLimit = 64 * 1024 * 1024 // 64 MB
     }
 
-    func image(for url: URL) -> UIImage? {
+    nonisolated func image(for url: URL) -> UIImage? {
         cache.object(forKey: url as NSURL)
     }
 
-    func store(_ image: UIImage, for url: URL) {
+    nonisolated func store(_ image: UIImage, for url: URL) {
         let cost = Int(image.size.width * image.size.height * 4)
         cache.setObject(image, forKey: url as NSURL, cost: cost)
     }
@@ -49,29 +49,88 @@ final class ImageCache {
 /// Drop-in replacement for `AsyncImage` that uses `ImageCache` to avoid
 /// re-downloading on lazy-stack recycling. Supports local `file://`
 /// URLs synchronously via `UIImage(contentsOfFile:)`.
+///
+/// When `fixedHeight` is set, the image is locked to that height and
+/// the width varies to preserve the intrinsic aspect ratio. This
+/// prevents chat layout reflow when async images finish loading — only
+/// the bubble width changes, the vertical position of everything else
+/// stays put.
 struct CachedAsyncImage: View {
     let url: URL?
     let contentMode: ContentMode
+    let placeholderStyle: PlaceholderStyle
+    let fixedHeight: CGFloat?
+
+    enum PlaceholderStyle {
+        /// Filled rectangle placeholder — good for chat bubbles where
+        /// the bubble needs a visible loading surface.
+        case filled
+        /// Transparent background with only a spinner — good for the
+        /// full-screen image viewer over a black backdrop.
+        case transparent
+    }
 
     @State private var image: UIImage?
 
-    init(url: URL?, contentMode: ContentMode = .fit) {
+    init(
+        url: URL?,
+        contentMode: ContentMode = .fit,
+        placeholder: PlaceholderStyle = .filled,
+        fixedHeight: CGFloat? = nil
+    ) {
         self.url = url
         self.contentMode = contentMode
+        self.placeholderStyle = placeholder
+        self.fixedHeight = fixedHeight
+        // Prime the state synchronously from the in-memory cache so
+        // rows recycled by LazyVStack don't flash a placeholder on
+        // reappearance — the image is already there on first render.
+        if let url {
+            if url.isFileURL {
+                _image = State(initialValue: UIImage(contentsOfFile: url.path))
+            } else {
+                _image = State(initialValue: ImageCache.shared.image(for: url))
+            }
+        }
     }
 
     var body: some View {
         Group {
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
+                if let h = fixedHeight {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(height: h)
+                } else {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: contentMode)
+                }
             } else {
-                Color(.secondarySystemBackground)
-                    .overlay(ProgressView().tint(.secondary))
+                placeholder
             }
         }
         .task(id: url) { await load() }
+    }
+
+    @ViewBuilder
+    private var placeholder: some View {
+        switch placeholderStyle {
+        case .filled:
+            if let h = fixedHeight {
+                Color(.secondarySystemBackground)
+                    .frame(width: h, height: h)
+                    .overlay(ProgressView().tint(.secondary))
+            } else {
+                Color(.secondarySystemBackground)
+                    .aspectRatio(1, contentMode: .fit)
+                    .overlay(ProgressView().tint(.secondary))
+            }
+        case .transparent:
+            Color.clear
+                .overlay(ProgressView().tint(.white))
+        }
     }
 
     private func load() async {

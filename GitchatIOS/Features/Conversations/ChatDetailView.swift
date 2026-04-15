@@ -66,6 +66,9 @@ final class ChatViewModel: ObservableObject {
             messages.insert(contentsOf: deduped, at: 0)
             nextCursor = resp.nextCursor
         } catch { }
+        // Refresh pinned set so older messages that are pinned get
+        // their indicator painted as soon as they show up.
+        await loadPinned()
     }
 
     func loadPinned() async {
@@ -363,6 +366,7 @@ struct ChatDetailView: View {
     @State private var profileRoute: ProfileLoginRoute?
     @State private var confirmDelete: Message?
     @State private var confirmUnsend: Message?
+    @State private var pendingJumpId: String?
     @StateObject private var keyboard = KeyboardObserver()
     @State private var reportingMessage: Message?
     @State private var reportReason: String = "Spam"
@@ -457,14 +461,8 @@ struct ChatDetailView: View {
         }
         .padding()
 
-        if #available(iOS 17.0, *) {
-            ScrollView { content }
-                .defaultScrollAnchor(.bottom)
-                .scrollIndicators(.hidden)
-        } else {
-            ScrollView { content }
-                .scrollIndicators(.hidden)
-        }
+        ScrollView { content }
+            .scrollIndicators(.hidden)
     }
 
     @ViewBuilder
@@ -489,7 +487,16 @@ struct ChatDetailView: View {
     @ViewBuilder
     private func messageRow(for msg: Message, at idx: Int, proxy: ScrollViewProxy) -> some View {
         if let t = msg.type, t != "user" {
-            SystemMessageRow(message: msg).id(msg.id)
+            SystemMessageRow(message: msg) {
+                if let target = msg.reply_to_id {
+                    pendingJumpId = target
+                } else if let target = vm.pinnedIds.first {
+                    pendingJumpId = target
+                } else {
+                    showPinned = true
+                }
+            }
+            .id(msg.id)
         } else {
             let prev = idx > 0 ? visibleMessages[idx - 1] : nil
             let showHeader = prev?.sender != msg.sender || (prev?.type ?? "user") != "user"
@@ -515,6 +522,28 @@ struct ChatDetailView: View {
             .onTapGesture(count: 2) {
                 Haptics.impact(.light)
                 Task { await vm.react(messageId: msg.id, emoji: "❤️", myLogin: auth.login) }
+            }
+        }
+    }
+
+    private func jumpTo(id: String, proxy: ScrollViewProxy) {
+        Task {
+            // Page older messages until the target is in the list
+            // (bounded so we don't run forever).
+            var attempts = 0
+            while !vm.messages.contains(where: { $0.id == id }),
+                  vm.nextCursor != nil, attempts < 5 {
+                await vm.loadMoreIfNeeded()
+                attempts += 1
+            }
+            await MainActor.run {
+                withAnimation { proxy.scrollTo(id, anchor: .center) }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    withAnimation(.easeInOut(duration: 0.25)) { pulsingId = id }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        withAnimation(.easeInOut(duration: 0.3)) { pulsingId = nil }
+                    }
+                }
             }
         }
     }
@@ -580,6 +609,11 @@ struct ChatDetailView: View {
                         }
                     }
                 }
+                .onChange(of: pendingJumpId) { id in
+                    guard let id else { return }
+                    jumpTo(id: id, proxy: proxy)
+                    pendingJumpId = nil
+                }
             }
             if composerVisible {
                 if vm.replyingTo != nil || vm.editingMessage != nil {
@@ -642,9 +676,13 @@ struct ChatDetailView: View {
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $showPinned) {
-            NavigationStack { PinnedMessagesSheet(conversation: vm.conversation) }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            NavigationStack {
+                PinnedMessagesSheet(conversation: vm.conversation) { id in
+                    pendingJumpId = id
+                }
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $showForward) { msg in
             NavigationStack { ForwardSheet(message: msg) }
@@ -746,6 +784,14 @@ struct ChatDetailView: View {
             socket.onConversationRead = { convId, login in
                 guard convId == vm.conversation.id, login != auth.login else { return }
                 vm.otherReadAt = ISO8601DateFormatter().string(from: Date())
+            }
+            socket.onMessagePinned = { convId, msgId in
+                guard convId == vm.conversation.id else { return }
+                vm.pinnedIds.insert(msgId)
+            }
+            socket.onMessageUnpinned = { convId, msgId in
+                guard convId == vm.conversation.id else { return }
+                vm.pinnedIds.remove(msgId)
             }
         }
         .onDisappear {
@@ -1020,35 +1066,77 @@ struct TypingIndicatorRow: View {
 
 struct SystemMessageRow: View {
     let message: Message
-
-    private var text: String {
-        let body = message.content.isEmpty ? prettyType : message.content
-        return "@\(message.sender) \(body)"
-    }
+    var onTap: (() -> Void)? = nil
 
     private var prettyType: String {
         switch message.type {
-        case "pin": return "pinned a message"
-        case "unpin": return "unpinned a message"
-        case "join": return "joined"
-        case "leave": return "left"
-        case "invite": return "was invited"
-        case "group_created": return "created the group"
-        case "rename": return "renamed the group"
+        case "pin": return "\(message.sender) pinned a message"
+        case "unpin": return "\(message.sender) unpinned a message"
+        case "join": return "\(message.sender) joined"
+        case "leave": return "\(message.sender) left"
+        case "invite": return "\(message.sender) was invited"
+        case "group_created": return "\(message.sender) created the group"
+        case "rename": return "\(message.sender) renamed the group"
         default: return message.type ?? ""
         }
     }
 
+    /// Build an attributed string where the leading user login (which
+    /// backend always emits bare, e.g. "alice pinned a message") is bold
+    /// and clickable via the gitchat://user/ scheme.
+    private var attributed: AttributedString {
+        let body = message.content.isEmpty ? prettyType : message.content
+        var attr = AttributedString(body)
+
+        // Bold + link the first word if it looks like a GitHub handle.
+        if let space = body.firstIndex(of: " ") {
+            let login = String(body[..<space])
+            if login.range(of: "^[A-Za-z0-9][A-Za-z0-9-]*$", options: .regularExpression) != nil,
+               let aRange = attr.range(of: login) {
+                attr[aRange].font = .caption.bold()
+                attr[aRange].foregroundColor = .secondary
+                attr[aRange].link = URL(string: "gitchat://user/\(login)")
+            }
+        }
+        return attr
+    }
+
+    /// Backend types system events as `type: "system"` and encodes the
+    /// kind in the body ("alice pinned a message", "alice renamed …").
+    /// These helpers recognise the kind from either.
+    private var isPinEvent: Bool {
+        message.type == "pin" || message.type == "unpin" ||
+        message.content.localizedCaseInsensitiveContains("pinned a message")
+    }
+    private var isRenameEvent: Bool {
+        message.type == "rename" ||
+        message.content.localizedCaseInsensitiveContains("renamed")
+    }
+
     var body: some View {
         HStack {
-            Spacer()
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(Color(.secondarySystemBackground), in: Capsule())
-            Spacer()
+            Spacer(minLength: 0)
+            HStack(spacing: 4) {
+                if isPinEvent {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(45))
+                } else if isRenameEvent {
+                    Image(systemName: "pencil").font(.system(size: 9)).foregroundStyle(.secondary)
+                }
+                Text(attributed)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Color(.secondarySystemBackground), in: Capsule())
+            .contentShape(Capsule())
+            .onTapGesture {
+                if isPinEvent { onTap?() }
+            }
+            Spacer(minLength: 0)
         }
         .padding(.vertical, 4)
     }
@@ -1180,7 +1268,7 @@ private struct ZoomableImage: View {
     }
 
     private var imageView: some View {
-        CachedAsyncImage(url: URL(string: url), contentMode: .fit)
+        CachedAsyncImage(url: URL(string: url), contentMode: .fit, placeholder: .transparent)
     }
 }
 
@@ -1365,6 +1453,7 @@ struct MessageSearchSheet: View {
 
 struct PinnedMessagesSheet: View {
     let conversation: Conversation
+    var onSelect: ((String) -> Void)? = nil
     @State private var messages: [Message] = []
     @State private var isLoading = true
     @Environment(\.dismiss) private var dismiss
@@ -1381,12 +1470,20 @@ struct PinnedMessagesSheet: View {
                 )
             } else {
                 List(messages) { m in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("@\(m.sender)").font(.caption.bold()).foregroundStyle(.secondary)
-                        Text(m.content).font(.subheadline)
-                        Text(RelativeTime.format(m.created_at))
-                            .font(.caption2).foregroundStyle(.tertiary)
+                    Button {
+                        onSelect?(m.id)
+                        dismiss()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("@\(m.sender)").font(.caption.bold()).foregroundStyle(.secondary)
+                            Text(m.content).font(.subheadline).foregroundStyle(Color(.label))
+                            Text(RelativeTime.format(m.created_at))
+                                .font(.caption2).foregroundStyle(.tertiary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                     .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
@@ -1504,17 +1601,7 @@ struct MessageBubble: View {
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
                 if !isMe && showHeader {
-                    HStack(spacing: 4) {
-                        Text(message.sender).font(.caption2).foregroundStyle(.secondary)
-                        if isPinned {
-                            Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
-                        }
-                    }
-                } else if isMe && isPinned {
-                    HStack(spacing: 4) {
-                        Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary)
-                        Text("Pinned").font(.caption2).foregroundStyle(.secondary)
-                    }
+                    Text(message.sender).font(.caption2).foregroundStyle(.secondary)
                 }
                 if let reply = message.reply {
                     replyPreview(reply)
@@ -1526,6 +1613,18 @@ struct MessageBubble: View {
                         bubbleContent.contextMenu { menuBuilder() }.tint(.primary)
                     } else {
                         bubbleContent
+                    }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .rotationEffect(.degrees(45))
+                            .padding(5)
+                            .background(Color.accentColor, in: Circle())
+                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                            .offset(x: 10, y: -10)
                     }
                 }
                 .scaleEffect(isPulsing ? 1.05 : 1)
@@ -1554,7 +1653,7 @@ struct MessageBubble: View {
     }
 
     private func attachmentImage(for url: URL) -> some View {
-        CachedAsyncImage(url: url, contentMode: .fit)
+        CachedAsyncImage(url: url, contentMode: .fit, fixedHeight: 220)
     }
 
     private func replyPreview(_ reply: ReplyPreview) -> some View {
@@ -1687,7 +1786,6 @@ struct MessageBubble: View {
     private func attachmentGrid(_ atts: [MessageAttachment]) -> some View {
         if atts.count == 1, let a = atts.first, let url = URL(string: a.url) {
             attachmentImage(for: url)
-                .frame(maxWidth: 240)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
                 .contentShape(Rectangle())
                 .onTapGesture { onAttachmentTap?(a.url) }

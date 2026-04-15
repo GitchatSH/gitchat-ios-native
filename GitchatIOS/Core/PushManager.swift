@@ -47,11 +47,16 @@ final class PushManager: ObservableObject {
 
     func identify(login: String) {
         guard initialized else { return }
+        // Set OneSignal external id for typed targeting, AND an explicit
+        // github_login tag so backend can target by tag filter (the
+        // existing sendPush() helper uses tag-based filters).
         OneSignal.login(login)
+        OneSignal.User.addTag(key: "github_login", value: login)
     }
 
     func forgetIdentity() {
         guard initialized else { return }
+        OneSignal.User.removeTag("github_login")
         OneSignal.logout()
     }
 
@@ -60,7 +65,7 @@ final class PushManager: ObservableObject {
         guard let type = additional["type"] as? String else { return }
 
         switch type {
-        case "chat_message", "group_add", "reply":
+        case "chat_message", "group_add", "reply", "pin_message":
             if let id = additional["conversation_id"] as? String, !id.isEmpty {
                 AppRouter.shared.openConversation(id: id)
             }

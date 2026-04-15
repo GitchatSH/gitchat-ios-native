@@ -4,12 +4,24 @@ import SwiftUI
 final class FollowingViewModel: ObservableObject {
     @Published var users: [FriendUser] = []
     @Published var isLoading = false
+    @Published var isSyncing = false
     @Published var error: String?
 
     func load() async {
         isLoading = true; defer { isLoading = false }
         do { users = try await APIClient.shared.followingList() }
         catch { self.error = error.localizedDescription }
+    }
+
+    func syncGitHubFollows() async {
+        isSyncing = true; defer { isSyncing = false }
+        do {
+            try await APIClient.shared.syncGitHubFollows()
+            await load()
+            ToastCenter.shared.show(.success, "Synced", "Pulled your latest GitHub follows.")
+        } catch {
+            ToastCenter.shared.show(.error, "Sync failed", error.localizedDescription)
+        }
     }
 }
 
@@ -75,6 +87,21 @@ struct FollowingView: View {
             }
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search friends")
             .navigationTitle("Friends")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        Task { await vm.syncGitHubFollows() }
+                    } label: {
+                        if vm.isSyncing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .disabled(vm.isSyncing)
+                    .accessibilityLabel("Sync GitHub follows")
+                }
+            }
             .task { if vm.users.isEmpty { await vm.load() } }
         }
     }

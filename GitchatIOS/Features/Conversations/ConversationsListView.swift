@@ -281,17 +281,39 @@ struct AvatarView: View {
     let size: CGFloat
 
     var body: some View {
-        AsyncImage(url: url.flatMap(URL.init(string:))) { phase in
-            switch phase {
-            case .success(let img):
-                img.resizable().scaledToFill()
-            default:
+        CachedAvatarImage(url: url.flatMap(URL.init(string:)))
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+    }
+}
+
+private struct CachedAvatarImage: View {
+    let url: URL?
+    @State private var image: UIImage?
+
+    init(url: URL?) {
+        self.url = url
+        if let url {
+            _image = State(initialValue: ImageCache.shared.image(for: url))
+        }
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
                 Color.accentColor.opacity(0.2)
                     .overlay(Image(systemName: "person.fill").foregroundStyle(.white))
             }
         }
-        .frame(width: size, height: size)
-        .clipShape(Circle())
+        .task(id: url) {
+            guard image == nil, let url else { return }
+            let loaded = await ImageCache.shared.load(url)
+            await MainActor.run { self.image = loaded }
+        }
     }
 }
 

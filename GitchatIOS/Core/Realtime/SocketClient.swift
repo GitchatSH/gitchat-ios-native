@@ -24,6 +24,8 @@ final class SocketClient: ObservableObject {
     var onNotificationNew: (() -> Void)?
     var onTyping: ((String, String, Bool) -> Void)? // conversationId, login, isTyping
     var onConversationRead: ((String, String) -> Void)? // conversationId, login
+    var onMessagePinned: ((String, String) -> Void)? // conversationId, messageId
+    var onMessageUnpinned: ((String, String) -> Void)? // conversationId, messageId
 
     private init() {}
 
@@ -101,6 +103,18 @@ final class SocketClient: ObservableObject {
                   let convId = dict["conversationId"] as? String,
                   let login = dict["login"] as? String else { return }
             Task { @MainActor in self?.onConversationRead?(convId, login) }
+        }
+        socket.on("message:pinned") { [weak self] data, _ in
+            guard let dict = (data.first as? [String: Any])?["data"] as? [String: Any] ?? (data.first as? [String: Any]),
+                  let convId = dict["conversationId"] as? String,
+                  let msgId = dict["messageId"] as? String else { return }
+            Task { @MainActor in self?.onMessagePinned?(convId, msgId) }
+        }
+        socket.on("message:unpinned") { [weak self] data, _ in
+            guard let dict = (data.first as? [String: Any])?["data"] as? [String: Any] ?? (data.first as? [String: Any]),
+                  let convId = dict["conversationId"] as? String,
+                  let msgId = dict["messageId"] as? String else { return }
+            Task { @MainActor in self?.onMessageUnpinned?(convId, msgId) }
         }
 
         socket.connect()

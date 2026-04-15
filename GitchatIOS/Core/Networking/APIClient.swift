@@ -315,9 +315,18 @@ struct APIClient {
     }
 
     func pinnedMessages(conversationId: String) async throws -> [Message] {
-        struct Wrap: Decodable { let messages: [Message]?; let pinned_messages: [Message]? }
-        let w: Wrap = try await request("messages/conversations/\(conversationId)/pinned-messages")
-        return w.messages ?? w.pinned_messages ?? []
+        // Backend returns a raw array of pin wrappers:
+        // [{ id, conversation_id, message_id, pinned_by, pinned_at, message: Message }, ...]
+        struct PinWrapper: Decodable {
+            let message_id: String
+            let pinned_at: String?
+            let pinned_by: String?
+            let message: Message
+        }
+        let wrappers: [PinWrapper] = try await request(
+            "messages/conversations/\(conversationId)/pinned-messages"
+        )
+        return wrappers.map(\.message)
     }
 
     // Channel feeds
@@ -436,6 +445,9 @@ struct APIClient {
             method: "POST",
             body: Body(reason: reason, detail: detail)
         )
+    }
+    func syncGitHubFollows() async throws {
+        let _: EmptyResponse = try await request("following/sync", method: "POST")
     }
     func followingList() async throws -> [FriendUser] {
         struct Wrap: Decodable { let users: [FriendUser] }
