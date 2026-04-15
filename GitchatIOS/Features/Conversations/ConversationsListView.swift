@@ -209,7 +209,7 @@ struct ConversationsListView: View {
                 }
             }
             .task {
-                if vm.conversations.isEmpty { await vm.load() }
+                await vm.load()
                 socket.onConversationUpdated = { Task { await vm.load() } }
             }
             .onAppear {
