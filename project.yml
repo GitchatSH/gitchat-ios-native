@@ -18,6 +18,9 @@ packages:
   OneSignalXCFramework:
     url: https://github.com/OneSignal/OneSignal-XCFramework
     from: "5.2.0"
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    from: "11.0.0"
 targets:
   GitchatIOS:
     type: application
@@ -33,6 +36,10 @@ targets:
         product: SocketIO
       - package: OneSignalXCFramework
         product: OneSignalFramework
+      - package: Firebase
+        product: FirebaseAnalytics
+      - package: Firebase
+        product: FirebaseCrashlytics
       - target: OneSignalNotificationServiceExtension
         embed: true
         codeSign: true
@@ -55,7 +62,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.2"
-        CFBundleVersion: "54"
+        CFBundleVersion: "55"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -114,7 +121,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.2"
-        CFBundleVersion: "54"
+        CFBundleVersion: "55"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

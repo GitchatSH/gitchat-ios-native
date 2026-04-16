@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import FirebaseCore
 
 @main
 struct GitchatApp: App {
@@ -9,6 +10,7 @@ struct GitchatApp: App {
     @AppStorage("gitchat.pref.appearance") private var appearance: String = "system"
 
     init() {
+        FirebaseApp.configure()
         UIScrollView.appearance().showsVerticalScrollIndicator = false
         UIScrollView.appearance().showsHorizontalScrollIndicator = false
         Task { @MainActor in

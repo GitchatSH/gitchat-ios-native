@@ -26,6 +26,7 @@
 		345DAB43FC963AC5DC04D6F6 /* ConversationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16BA9650859D21117E8FF1B /* ConversationsListView.swift */; };
 		373D74BE3BC0816A5C64EE10 /* MacEscapeToHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F09F948E748AEF5080DB1B /* MacEscapeToHome.swift */; };
 		38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D5340BD447D966282E2E67D /* Haptics.swift */; };
+		3BA9299D99680C847870AF56 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 94DB191CAB3D64BF34D900B3 /* FirebaseCrashlytics */; };
 		42CD53F46D0C85A66271982E /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 37D9D440E2615CB0D8C2247A /* OneSignalFramework */; };
 		42ECF6E4F91ED322D0B563F0 /* FollowingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC0F97726C2E12C5EF27207 /* FollowingView.swift */; };
 		493EC828CF5A4FC4D3D185BD /* EmojiPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED56669CED0DEE797EABF78 /* EmojiPickerSheet.swift */; };
@@ -42,6 +43,7 @@
 		6A83C80ACE6BC89DBF0D3C81 /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2F21B2C49829CF682C71EB /* MessageBubble.swift */; };
 		6C48CFFBB6D004E3EF124CE3 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = E40E297012AF55791D27B93E /* SocketIO */; };
 		6E8E6B2E139735239E900101 /* Geist-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C300A84467231D3D6475F5E0 /* Geist-Bold.ttf */; };
+		72904A9C6CF0DFE0FB701B4A /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 0D901FD3DEDEAE2E93D384DD /* FirebaseAnalytics */; };
 		72F26E42CF9099BA1A6CEC36 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F7E0D975F7A5F9F05AE4C937 /* Assets.xcassets */; };
 		759EC50B1952C367FC53F63A /* SystemMessageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52A3C804970611E07FF79D0 /* SystemMessageRow.swift */; };
 		76A2320B8D73680FE87405B3 /* SocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA25F2BA4BC86A0256C4C1DD /* SocketClient.swift */; };
@@ -79,6 +81,7 @@
 		F468BB4EB9F2D15D17EFA9A1 /* ChatCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA68A0F7BDA1DAF3632082F /* ChatCollectionView.swift */; };
 		F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E94D622A0735683786E43FF /* SafariSheet.swift */; };
 		FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99301F77409640F810FB1F0D /* UpgradeView.swift */; };
+		FE6B859A2C4C03A1997BE21A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = C572C41B826EC03433688B86 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -162,6 +165,7 @@
 		C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedMessagesSheet.swift; sourceTree = "<group>"; };
 		C3B4E0D7FC5BEBE8BD771C03 /* DesktopReturnToSend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopReturnToSend.swift; sourceTree = "<group>"; };
 		C52A3C804970611E07FF79D0 /* SystemMessageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMessageRow.swift; sourceTree = "<group>"; };
+		C572C41B826EC03433688B86 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		CA25F2BA4BC86A0256C4C1DD /* SocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClient.swift; sourceTree = "<group>"; };
 		CE9078C15E5B9CC4441DCE26 /* GitHubWebOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubWebOAuth.swift; sourceTree = "<group>"; };
 		D0108E6ED2C630F572A0C5F9 /* LinkGithubBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkGithubBanner.swift; sourceTree = "<group>"; };
@@ -189,6 +193,8 @@
 			files = (
 				6C48CFFBB6D004E3EF124CE3 /* SocketIO in Frameworks */,
 				42CD53F46D0C85A66271982E /* OneSignalFramework in Frameworks */,
+				72904A9C6CF0DFE0FB701B4A /* FirebaseAnalytics in Frameworks */,
+				3BA9299D99680C847870AF56 /* FirebaseCrashlytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -217,6 +223,7 @@
 			isa = PBXGroup;
 			children = (
 				B558F48CABBE00017756E5FA /* GitchatIOS.entitlements */,
+				C572C41B826EC03433688B86 /* GoogleService-Info.plist */,
 				3240F18DF11804D759392EA5 /* Info.plist */,
 				04BB8D24F80DAEB8CB0C5EFA /* App */,
 				75FD909FFC59E1A265FFE9D2 /* Core */,
@@ -481,6 +488,8 @@
 			packageProductDependencies = (
 				E40E297012AF55791D27B93E /* SocketIO */,
 				37D9D440E2615CB0D8C2247A /* OneSignalFramework */,
+				0D901FD3DEDEAE2E93D384DD /* FirebaseAnalytics */,
+				94DB191CAB3D64BF34D900B3 /* FirebaseCrashlytics */,
 			);
 			productName = GitchatIOS;
 			productReference = 653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */;
@@ -534,6 +543,7 @@
 			mainGroup = 2A42B2EB9D6FDB50D91854F8;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				5402EFEAFC2FC1686CA09CF7 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */,
 				E1782BB53418C29B1B40C23D /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
 			);
@@ -558,6 +568,7 @@
 				6E8E6B2E139735239E900101 /* Geist-Bold.ttf in Resources */,
 				301A8A5BBE220BDAD5E67750 /* Geist-Regular.ttf in Resources */,
 				EAD68B38CE7B44B3B0C1D31E /* Geist-SemiBold.ttf in Resources */,
+				FE6B859A2C4C03A1997BE21A /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -902,6 +913,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5402EFEAFC2FC1686CA09CF7 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.0.0;
+			};
+		};
 		54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/OneSignal/OneSignal-XCFramework";
@@ -921,10 +940,20 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0D901FD3DEDEAE2E93D384DD /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5402EFEAFC2FC1686CA09CF7 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
 		37D9D440E2615CB0D8C2247A /* OneSignalFramework */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
 			productName = OneSignalFramework;
+		};
+		94DB191CAB3D64BF34D900B3 /* FirebaseCrashlytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5402EFEAFC2FC1686CA09CF7 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCrashlytics;
 		};
 		A804AE540868411FDE202E67 /* OneSignalExtension */ = {
 			isa = XCSwiftPackageProductDependency;
