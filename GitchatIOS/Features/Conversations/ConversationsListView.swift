@@ -132,6 +132,7 @@ struct ConversationsListView: View {
     @State private var path = NavigationPath()
     @State private var confirmDelete: Conversation?
     @State private var selectedConvo: Conversation? = nil
+    @State private var tappedConvoId: String?
 
     private var isMac: Bool {
         #if targetEnvironment(macCatalyst)
@@ -142,8 +143,10 @@ struct ConversationsListView: View {
     }
 
     private func openConversation(_ convo: Conversation) {
-        // Hide the unread badge immediately. ChatViewModel.load fires
-        // markRead on the server side; this is just the optimistic UI.
+        withAnimation(.none) { tappedConvoId = convo.id }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            tappedConvoId = nil
+        }
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
         selectedConvo = convo
@@ -249,6 +252,7 @@ struct ConversationsListView: View {
                         .macHover()
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .opacity(tappedConvoId == convo.id ? 0.5 : 1)
                         .listRowBackground(
                             convo.isPinned
                                 ? Color.accentColor.opacity(0.08)
