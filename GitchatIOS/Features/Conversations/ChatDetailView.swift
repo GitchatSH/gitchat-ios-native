@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct ChatDetailView: View {
     @StateObject private var vm: ChatViewModel
@@ -35,6 +36,12 @@ struct ChatDetailView: View {
     @State private var showMembers = false
     @State private var showAddMember = false
     @FocusState private var composerFocused: Bool
+    #if targetEnvironment(macCatalyst)
+    @State private var isDragOver = false
+    @State private var pendingDropImages: [UIImage] = []
+    @State private var showDropConfirm = false
+    @State private var dropCaption = ""
+    #endif
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -137,6 +144,7 @@ struct ChatDetailView: View {
             typingUsers: Array(vm.typingUsers),
             showSeen: shouldShowSeen && !vm.conversation.isGroup,
             pinnedIds: vm.pinnedIds,
+            readCursors: vm.readCursors,
             pulsingId: pulsingId,
             scrollToId: pendingJumpId,
             isLoadingMore: vm.isLoadingMore,
@@ -179,6 +187,15 @@ struct ChatDetailView: View {
             }
             }
         }
+        #if targetEnvironment(macCatalyst)
+        .overlay { dragOverlay }
+        .animation(.easeInOut(duration: 0.15), value: isDragOver)
+        .onDrop(of: [UTType.image.identifier, UTType.fileURL.identifier], isTargeted: $isDragOver) { providers in
+            handleDrop(providers)
+            return true
+        }
+        .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
+        #endif
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -442,6 +459,131 @@ struct ChatDetailView: View {
             }
         }
     }
+
+    #if targetEnvironment(macCatalyst)
+    @ViewBuilder
+    private var dragOverlay: some View {
+        if isDragOver {
+            ZStack {
+                Color.black.opacity(0.001)
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
+                    .foregroundStyle(Color.accentColor)
+                    .background(Color.accentColor.opacity(0.08).clipShape(RoundedRectangle(cornerRadius: 16)))
+                    .padding(12)
+                    .overlay {
+                        VStack(spacing: 8) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 32))
+                                .foregroundStyle(Color.accentColor)
+                            Text("Drop images here")
+                                .font(.headline)
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+            }
+            .allowsHitTesting(false)
+            .transition(.opacity)
+        }
+    }
+
+    private var dropPreviewSheet: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
+                        ForEach(Array(pendingDropImages.enumerated()), id: \.offset) { _, img in
+                            Image(uiImage: img)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 150)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                    .padding()
+                }
+                HStack(spacing: 8) {
+                    TextField("Add a message…", text: $dropCaption)
+                        .textFieldStyle(.roundedBorder)
+                    Button {
+                        showDropConfirm = false
+                        sendDroppedImages()
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
+                .background(Color(.secondarySystemBackground))
+            }
+            .navigationTitle("Send \(pendingDropImages.count) image\(pendingDropImages.count == 1 ? "" : "s")")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        pendingDropImages = []
+                        dropCaption = ""
+                        showDropConfirm = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func handleDrop(_ providers: [NSItemProvider]) {
+        let lock = NSLock()
+        var collected: [UIImage] = []
+        let group = DispatchGroup()
+        for provider in providers {
+            if provider.canLoadObject(ofClass: UIImage.self) {
+                group.enter()
+                provider.loadObject(ofClass: UIImage.self) { obj, _ in
+                    if let img = obj as? UIImage { lock.lock(); collected.append(img); lock.unlock() }
+                    group.leave()
+                }
+            } else if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                group.enter()
+                provider.loadItem(forTypeIdentifier: "public.file-url") { item, _ in
+                    var url: URL?
+                    if let u = item as? URL { url = u }
+                    else if let data = item as? Data { url = URL(dataRepresentation: data, relativeTo: nil) }
+                    if let url, let img = UIImage(contentsOfFile: url.path) {
+                        lock.lock(); collected.append(img); lock.unlock()
+                    }
+                    group.leave()
+                }
+            }
+        }
+        group.notify(queue: .main) {
+            guard !collected.isEmpty else { return }
+            pendingDropImages = collected
+            showDropConfirm = true
+        }
+    }
+
+    private func sendDroppedImages() {
+        let images = pendingDropImages
+        let caption = dropCaption.trimmingCharacters(in: .whitespacesAndNewlines)
+        pendingDropImages = []
+        dropCaption = ""
+        if !caption.isEmpty {
+            vm.draft = caption
+            Task { await vm.send() }
+        }
+        let items: [(Data, String, String)] = images.enumerated().compactMap { i, img in
+            guard let d = img.jpegData(compressionQuality: 0.9) else { return nil }
+            return (d, "image-\(i).jpg", "image/jpeg")
+        }
+        guard !items.isEmpty else { return }
+        Task { await vm.uploadAndSendMany(items: items, senderLogin: auth.login) }
+    }
+    #endif
 
     private func quickReact(_ msg: Message, _ emoji: String) {
         Haptics.impact(.light)

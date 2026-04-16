@@ -20,6 +20,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
     let typingUsers: [String]
     let showSeen: Bool
     let pinnedIds: Set<String>
+    let readCursors: [String: String]
     let pulsingId: String?
     let scrollToId: String?
     let isLoadingMore: Bool
@@ -126,6 +127,16 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
                     snap.reconfigureItems(Array(affected))
                     coord.applySnapshot(snap, animated: false)
                 }
+            }
+        }
+
+        if coord.lastReadCursors != readCursors {
+            coord.lastReadCursors = readCursors
+            var snap = coord.currentSnapshot()
+            let all = snap.itemIdentifiers.filter { $0 != ChatTypingRowID && $0 != ChatSeenRowID }
+            if !all.isEmpty {
+                snap.reconfigureItems(all)
+                coord.applySnapshot(snap, animated: false)
             }
         }
 
@@ -264,6 +275,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         var lastShowSeen: Bool = false
         var initialScrollAt: Date? = nil
         var lastPinnedIds: Set<String> = []
+        var lastReadCursors: [String: String] = [:]
         var lastPulsingId: String?
         var lastLoadingMore = false
         var lastBottomInset: CGFloat = 0
