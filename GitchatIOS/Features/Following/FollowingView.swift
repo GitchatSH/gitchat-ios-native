@@ -47,6 +47,7 @@ final class FollowingViewModel: ObservableObject {
 struct FollowingView: View {
     @StateObject private var vm = FollowingViewModel()
     @State private var filter = ""
+    @State private var showExplore = false
     @ObservedObject private var presence = PresenceStore.shared
 
     private var filtered: [FriendUser] {
@@ -93,6 +94,12 @@ struct FollowingView: View {
                         systemImage: "person.2",
                         description: "People you follow on GitHub show up here."
                     )
+                } else if filtered.isEmpty {
+                    ContentUnavailableCompat(
+                        title: "No results",
+                        systemImage: "magnifyingglass",
+                        description: "Try a different search."
+                    )
                 } else {
                     List(filtered) { u in
                         NavigationLink {
@@ -123,6 +130,16 @@ struct FollowingView: View {
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        showExplore = true
+                    } label: {
+                        Image(systemName: "person.badge.plus")
+                    }
+                }
+            }
+            .sheet(isPresented: $showExplore) {
+                ExploreSheet()
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.75), value: vm.isSyncing)
             .task {

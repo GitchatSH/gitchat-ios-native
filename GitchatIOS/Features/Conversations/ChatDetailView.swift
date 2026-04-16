@@ -291,7 +291,10 @@ struct ChatDetailView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showAddMember) {
-            AddMemberSheet(conversationId: vm.conversation.id) {
+            AddMemberSheet(
+                conversationId: vm.conversation.id,
+                existingLogins: Set(vm.conversation.participantsOrEmpty.map(\.login))
+            ) {
                 Task { await vm.load() }
             }
         }

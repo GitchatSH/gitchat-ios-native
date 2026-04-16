@@ -88,7 +88,7 @@ struct MainTabView: View {
             }
         )) {
             ConversationsListView()
-                .tabItem { Label("Chats", systemImage: "bubble.left.and.bubble.right.fill") }
+                .tabItem { Label("Chats", image: "ChatTabIcon") }
                 .tag(0)
             ChannelsView()
                 .macReadableWidth()

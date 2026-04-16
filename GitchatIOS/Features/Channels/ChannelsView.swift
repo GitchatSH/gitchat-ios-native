@@ -60,6 +60,12 @@ struct ChannelsView: View {
                         systemImage: "number",
                         description: "Repo channels you subscribe to show up here."
                     )
+                } else if filtered.isEmpty {
+                    ContentUnavailableCompat(
+                        title: "No results",
+                        systemImage: "magnifyingglass",
+                        description: "Try a different search."
+                    )
                 } else {
                     List(filtered) { c in
                         NavigationLink(value: c) {

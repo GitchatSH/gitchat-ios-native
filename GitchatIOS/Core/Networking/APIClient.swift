@@ -462,6 +462,18 @@ struct APIClient {
     func syncGitHubFollows() async throws {
         let _: EmptyResponse = try await request("following/sync", method: "POST")
     }
+
+    struct YouMightKnowUser: Decodable, Identifiable {
+        let login: String
+        let name: String?
+        let avatar_url: String?
+        let bio: String?
+        let mutual_count: Int
+        var id: String { login }
+    }
+    func youMightKnow() async throws -> [YouMightKnowUser] {
+        try await request("following/you-might-know")
+    }
     func followingList() async throws -> [FriendUser] {
         struct Wrap: Decodable { let users: [FriendUser] }
         let w: Wrap = try await request("following", query: [URLQueryItem(name: "per_page", value: "100")])

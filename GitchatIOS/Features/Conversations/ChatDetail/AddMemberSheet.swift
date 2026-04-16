@@ -3,6 +3,7 @@ import SwiftUI
 /// Lightweight modal to add a GitHub user to a group conversation.
 struct AddMemberSheet: View {
     let conversationId: String
+    var existingLogins: Set<String> = []
     var onAdded: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var login: String = ""
@@ -26,8 +27,9 @@ struct AddMemberSheet: View {
         let q = login.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "@"))
             .lowercased()
-        if q.isEmpty { return friends }
-        return friends.filter { f in
+        let base = friends.filter { !existingLogins.contains($0.login) }
+        if q.isEmpty { return base }
+        return base.filter { f in
             f.login.lowercased().contains(q) || (f.name ?? "").lowercased().contains(q)
         }
     }
@@ -121,7 +123,12 @@ struct AddMemberSheet: View {
                 onAdded?()
                 dismiss()
             } catch {
-                self.error = error.localizedDescription
+                let msg = error.localizedDescription.lowercased()
+                if msg.contains("already") || msg.contains("member") {
+                    ToastCenter.shared.show(.warning, "@\(username) is already a member")
+                } else {
+                    self.error = error.localizedDescription
+                }
                 submitting = false
             }
         }

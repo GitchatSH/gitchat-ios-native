@@ -82,7 +82,10 @@ struct MembersSheet: View {
             }
         }
         .sheet(isPresented: $showAddMember) {
-            AddMemberSheet(conversationId: conversationId) {
+            AddMemberSheet(
+                conversationId: conversationId,
+                existingLogins: Set(participants.map(\.login))
+            ) {
                 dismiss()
             }
         }

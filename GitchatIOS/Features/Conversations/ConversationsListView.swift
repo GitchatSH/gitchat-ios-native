@@ -237,6 +237,12 @@ struct ConversationsListView: View {
                         systemImage: "bubble.left.and.bubble.right",
                         description: "Tap the pencil icon to start one."
                     )
+                } else if filtered.isEmpty {
+                    ContentUnavailableCompat(
+                        title: "No results",
+                        systemImage: "magnifyingglass",
+                        description: "Try a different search."
+                    )
                 } else {
                     List(filtered) { convo in
                         Button {
@@ -252,7 +258,8 @@ struct ConversationsListView: View {
                         .macHover()
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .opacity(tappedConvoId == convo.id ? 0.5 : 1)
+                        .scaleEffect(tappedConvoId == convo.id ? 0.97 : 1)
+                        .opacity(tappedConvoId == convo.id ? 0.7 : 1)
                         .listRowBackground(
                             convo.isPinned
                                 ? Color.accentColor.opacity(0.08)
@@ -420,6 +427,15 @@ struct ConversationRow: View {
         return nil
     }
 
+    private var lastSenderLogin: String? {
+        guard conversation.isGroup else { return nil }
+        if let cached = MessageCache.shared.get(conversation.id)?.messages,
+           let last = cached.last, last.type == nil || last.type == "user" {
+            return last.sender
+        }
+        return conversation.last_message?.sender
+    }
+
     private var previewWithoutPhotoEmoji: String {
         let text = conversation.previewText ?? ""
         guard lastPhotoURL != nil else { return text }
@@ -455,6 +471,12 @@ struct ConversationRow: View {
                     if conversation.isPinned {
                         Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
                     }
+                }
+                if let sender = lastSenderLogin {
+                    Text(sender)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 HStack(alignment: .top, spacing: 6) {
                     if let thumbURL = lastPhotoURL {
