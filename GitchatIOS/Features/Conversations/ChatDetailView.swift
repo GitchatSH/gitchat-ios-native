@@ -787,6 +787,7 @@ struct ChatDetailView: View {
 
     private func onAppearTask() async {
         socket.currentConversationId = vm.conversation.id
+        ActiveConversationTracker.shared.id = vm.conversation.id
         await vm.load()
         socket.subscribe(conversation: vm.conversation.id)
         socket.onMessageSent = { msg in
@@ -834,6 +835,7 @@ struct ChatDetailView: View {
         socket.emitTyping(conversationId: vm.conversation.id, isTyping: false)
         if socket.currentConversationId == vm.conversation.id {
             socket.currentConversationId = nil
+            ActiveConversationTracker.shared.id = nil
         }
     }
 }

@@ -297,7 +297,8 @@ struct APIClient {
     }
 
     func muteConversation(id: String) async throws {
-        let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "POST")
+        struct Empty: Encodable {}
+        let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "POST", body: Empty())
     }
 
     func addMember(conversationId: String, login: String) async throws {

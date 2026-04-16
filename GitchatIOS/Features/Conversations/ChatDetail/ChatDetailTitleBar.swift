@@ -12,8 +12,15 @@ struct ChatDetailTitleBar: View {
 
     var body: some View {
         VStack(spacing: 1) {
-            Text(conversation.displayTitle)
-                .font(.headline)
+            HStack(spacing: 4) {
+                Text(conversation.displayTitle)
+                    .font(.headline)
+                if conversation.is_muted == true {
+                    Image(systemName: "bell.slash.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
             if vm.isSyncing {
                 SyncingDotsLabel()
                     .transition(.opacity)

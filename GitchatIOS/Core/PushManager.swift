@@ -33,6 +33,7 @@ final class PushManager: ObservableObject {
         OneSignal.Notifications.addClickListener(ClickListener { [weak self] event in
             Task { @MainActor in self?.handle(clickedNotification: event) }
         })
+        OneSignal.Notifications.addForegroundLifecycleListener(ForegroundListener())
         initialized = true
     }
 
@@ -95,5 +96,26 @@ private final class ClickListener: NSObject, OSNotificationClickListener {
 
     func onClick(event: OSNotificationClickEvent) {
         onClick(event)
+    }
+}
+
+final class ActiveConversationTracker: @unchecked Sendable {
+    static let shared = ActiveConversationTracker()
+    private let lock = NSLock()
+    private var _id: String?
+
+    var id: String? {
+        get { lock.lock(); defer { lock.unlock() }; return _id }
+        set { lock.lock(); _id = newValue; lock.unlock() }
+    }
+}
+
+private final class ForegroundListener: NSObject, OSNotificationLifecycleListener {
+    func onWillDisplay(event: OSNotificationWillDisplayEvent) {
+        let data = event.notification.additionalData as? [String: Any] ?? [:]
+        guard let convoId = data["conversation_id"] as? String, !convoId.isEmpty else { return }
+        if ActiveConversationTracker.shared.id == convoId {
+            event.preventDefault()
+        }
     }
 }

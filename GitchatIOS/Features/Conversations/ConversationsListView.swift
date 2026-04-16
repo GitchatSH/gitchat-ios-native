@@ -471,10 +471,13 @@ struct ConversationRow: View {
                     if conversation.isPinned {
                         Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
                     }
+                    if conversation.is_muted == true {
+                        Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
                 if let sender = lastSenderLogin {
                     Text(sender)
-                        .font(.caption.weight(.semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -500,11 +503,12 @@ struct ConversationRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 if displayedUnread > 0 {
+                    let isMuted = conversation.is_muted == true
                     Text("\(displayedUnread)")
                         .font(.caption2.bold())
                         .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(Color.accentColor, in: .capsule)
-                        .foregroundStyle(.white)
+                        .background(isMuted ? Color(.systemGray3) : Color.accentColor, in: .capsule)
+                        .foregroundStyle(isMuted ? Color(.label) : .white)
                 } else {
                     Color.clear.frame(width: 1, height: 18)
                 }

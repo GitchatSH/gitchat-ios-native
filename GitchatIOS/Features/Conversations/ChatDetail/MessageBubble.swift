@@ -99,8 +99,8 @@ struct MessageBubble: View {
             }
             if !isMe { Spacer(minLength: 40) }
         }
-        .scaleEffect(appeared ? 1 : 0.7, anchor: isMe ? .bottomTrailing : .bottomLeading)
-        .opacity(appeared ? 1 : 0)
+        .scaleEffect(Self.seenIds.contains(message.id) || appeared ? 1 : 0.7, anchor: isMe ? .bottomTrailing : .bottomLeading)
+        .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
         .onAppear {
             if Self.seenIds.contains(message.id) {
                 appeared = true
@@ -236,7 +236,7 @@ struct MessageBubble: View {
                 }
                 if !message.content.isEmpty {
                     let parsed = Self.parseForwarded(message.content)
-                    VStack(alignment: isMe ? .trailing : .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
                         if let from = parsed.forwardedFrom {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrowshape.turn.up.right.fill")
@@ -255,7 +255,15 @@ struct MessageBubble: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, parsed.forwardedFrom == nil ? 8 : 6)
                             .padding(.bottom, parsed.forwardedFrom == nil ? 0 : 2)
+                        if let linkURL = Self.firstURL(in: parsed.body) {
+                            LinkPreviewCard(url: linkURL, isMe: isMe)
+                                .padding(.horizontal, 6)
+                                .padding(.bottom, 6)
+                        }
                     }
+                    #if targetEnvironment(macCatalyst)
+                    .modifier(MacLinkBubbleWidth(hasLink: Self.firstURL(in: parsed.body) != nil))
+                    #endif
                     .background(
                         isMe ? Color.accentColor : Color(.secondarySystemBackground)
                     )
@@ -280,6 +288,13 @@ struct MessageBubble: View {
     private static let linkDetector: NSDataDetector? = {
         try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
     }()
+
+    private static func firstURL(in text: String) -> URL? {
+        guard let detector = linkDetector else { return nil }
+        let ns = text as NSString
+        let match = detector.firstMatch(in: text, range: NSRange(location: 0, length: ns.length))
+        return match?.url
+    }
 
     private static let mentionRegex: NSRegularExpression? = {
         try? NSRegularExpression(pattern: "@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", options: [])
@@ -388,3 +403,17 @@ struct MessageBubble: View {
         }
     }
 }
+
+#if targetEnvironment(macCatalyst)
+private struct MacLinkBubbleWidth: ViewModifier {
+    let hasLink: Bool
+    func body(content: Content) -> some View {
+        if hasLink {
+            content.frame(maxWidth: 312, alignment: .leading)
+        } else {
+            content
+        }
+    }
+}
+#endif
+
