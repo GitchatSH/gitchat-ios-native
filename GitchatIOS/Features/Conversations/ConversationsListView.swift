@@ -10,9 +10,47 @@ final class ConversationsViewModel: ObservableObject {
     /// rendered as zero unread immediately, before the server-side
     /// markRead call comes back.
     @Published var locallyRead: Set<String> = []
+    @Published var locallyMuted: Set<String> = []
+    @Published var locallyUnmuted: Set<String> = []
 
     func markLocallyRead(_ id: String) {
         locallyRead.insert(id)
+    }
+
+    func isLocallyMuted(_ convo: Conversation) -> Bool {
+        if locallyMuted.contains(convo.id) { return true }
+        if locallyUnmuted.contains(convo.id) { return false }
+        return convo.is_muted == true
+    }
+
+    func toggleMute(_ convo: Conversation) async {
+        let wasMuted = isLocallyMuted(convo)
+        if wasMuted {
+            locallyMuted.remove(convo.id)
+            locallyUnmuted.insert(convo.id)
+        } else {
+            locallyUnmuted.remove(convo.id)
+            locallyMuted.insert(convo.id)
+        }
+        do {
+            if wasMuted {
+                try await APIClient.shared.unmuteConversation(id: convo.id)
+                ToastCenter.shared.show(.info, "Unmuted")
+            } else {
+                try await APIClient.shared.muteConversation(id: convo.id)
+                ToastCenter.shared.show(.success, "Muted")
+            }
+            await load()
+        } catch {
+            if wasMuted {
+                locallyUnmuted.remove(convo.id)
+                locallyMuted.insert(convo.id)
+            } else {
+                locallyMuted.remove(convo.id)
+                locallyUnmuted.insert(convo.id)
+            }
+            ToastCenter.shared.show(.error, "Mute failed", error.localizedDescription)
+        }
     }
 
     init() {
@@ -250,7 +288,8 @@ struct ConversationsListView: View {
                         } label: {
                             ConversationRow(
                                 conversation: convo,
-                                isLocallyRead: vm.locallyRead.contains(convo.id)
+                                isLocallyRead: vm.locallyRead.contains(convo.id),
+                                isMuted: vm.isLocallyMuted(convo)
                             )
                                 .contentShape(Rectangle())
                         }
@@ -288,22 +327,9 @@ struct ConversationsListView: View {
                                 Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash" : "pin")
                             }
                             Button {
-                                Task {
-                                    do {
-                                        if convo.is_muted == true {
-                                            try await APIClient.shared.unmuteConversation(id: convo.id)
-                                            ToastCenter.shared.show(.info, "Unmuted")
-                                        } else {
-                                            try await APIClient.shared.muteConversation(id: convo.id)
-                                            ToastCenter.shared.show(.success, "Muted")
-                                        }
-                                        await vm.load()
-                                    } catch {
-                                        ToastCenter.shared.show(.error, "Mute failed", error.localizedDescription)
-                                    }
-                                }
+                                Task { await vm.toggleMute(convo) }
                             } label: {
-                                Label(convo.is_muted == true ? "Unmute" : "Mute", systemImage: convo.is_muted == true ? "bell" : "bell.slash")
+                                Label(vm.isLocallyMuted(convo) ? "Unmute" : "Mute", systemImage: vm.isLocallyMuted(convo) ? "bell" : "bell.slash")
                             }
                             Button(role: .destructive) {
                                 confirmDelete = convo
@@ -407,6 +433,7 @@ struct SyncingIndicator: View {
 struct ConversationRow: View {
     let conversation: Conversation
     var isLocallyRead: Bool = false
+    var isMuted: Bool = false
 
     private var displayedUnread: Int {
         isLocallyRead ? 0 : conversation.unreadCount
@@ -471,7 +498,7 @@ struct ConversationRow: View {
                     if conversation.isPinned {
                         Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
                     }
-                    if conversation.is_muted == true {
+                    if isMuted {
                         Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary)
                     }
                 }
@@ -503,12 +530,12 @@ struct ConversationRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 if displayedUnread > 0 {
-                    let isMuted = conversation.is_muted == true
+                    let isMutedBadge = isMuted
                     Text("\(displayedUnread)")
                         .font(.caption2.bold())
                         .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(isMuted ? Color(.systemGray3) : Color.accentColor, in: .capsule)
-                        .foregroundStyle(isMuted ? Color(.label) : .white)
+                        .background(isMutedBadge ? Color(.systemGray3) : Color.accentColor, in: .capsule)
+                        .foregroundStyle(isMutedBadge ? Color(.label) : .white)
                 } else {
                     Color.clear.frame(width: 1, height: 18)
                 }

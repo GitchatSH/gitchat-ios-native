@@ -15,7 +15,7 @@ struct ChatDetailTitleBar: View {
             HStack(spacing: 4) {
                 Text(conversation.displayTitle)
                     .font(.headline)
-                if conversation.is_muted == true {
+                if vm.isMuted {
                     Image(systemName: "bell.slash.fill")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
