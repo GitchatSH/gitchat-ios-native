@@ -12,6 +12,7 @@ final class MessageCache {
         let messages: [Message]
         let nextCursor: String?
         let otherReadAt: String?
+        let readCursors: [String: String]?
         let fetchedAt: Date
     }
 
@@ -62,10 +63,14 @@ final class MessageCache {
             defer { self?.inflight[conversationId] = nil }
             do {
                 let resp = try await APIClient.shared.getConversationMessages(id: conversationId)
+                let cursors = resp.readCursors.map { dict in
+                    Dictionary(uniqueKeysWithValues: dict.map { ($0.login, $0.readAt) })
+                }
                 self?.store(conversationId, entry: Entry(
                     messages: resp.messages.reversed(),
                     nextCursor: resp.nextCursor,
                     otherReadAt: resp.otherReadAt,
+                    readCursors: cursors,
                     fetchedAt: Date()
                 ))
             } catch {

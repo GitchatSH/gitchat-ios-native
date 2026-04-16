@@ -12,6 +12,7 @@ struct ChatDetailView: View {
     @State private var showPinned = false
     @State private var showForward: Message?
     @State private var reactorsFor: Message?
+    @State private var seenByFor: Message?
     @State private var reactingFor: Message?
     @State private var imagePreview: ImagePreviewState?
     @State private var pulsingId: String?
@@ -269,6 +270,18 @@ struct ChatDetailView: View {
             .presentationDetents([.height(360)])
             .presentationDragIndicator(.visible)
         }
+        .sheet(item: $seenByFor) { msg in
+            NavigationStack {
+                SeenBySheet(
+                    message: msg,
+                    readCursors: vm.readCursors,
+                    participants: vm.conversation.participantsOrEmpty,
+                    myLogin: auth.login
+                )
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
         .sheet(item: $reactorsFor) { msg in
             NavigationStack {
                 ReactorsSheet(
@@ -391,6 +404,41 @@ struct ChatDetailView: View {
                 Haptics.impact(.light)
                 vm.applyOptimisticReaction(messageId: msg.id, emoji: "❤️", myLogin: auth.login)
                 Task { try? await APIClient.shared.react(messageId: msg.id, emoji: "❤️", add: true) }
+            }
+
+            if vm.conversation.isGroup {
+                let cursors = vm.seenCursorLogins(for: msg, at: idx)
+                if !cursors.isEmpty {
+                    let isMe = msg.sender == auth.login
+                    HStack(spacing: 0) {
+                        if isMe { Spacer() }
+                        seenByAvatars(cursors)
+                            .padding(isMe ? .trailing : .leading, isMe ? 6 : 36)
+                            .onTapGesture { seenByFor = msg }
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        if !isMe { Spacer() }
+                    }
+                    .animation(.spring(response: 0.35, dampingFraction: 0.7), value: cursors)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func seenByAvatars(_ logins: [String]) -> some View {
+        let shown = Array(logins.prefix(10))
+        let extra = logins.count - shown.count
+        HStack(spacing: -4) {
+            ForEach(shown, id: \.self) { login in
+                let p = vm.conversation.participantsOrEmpty.first { $0.login == login }
+                AvatarView(url: p?.avatar_url, size: 16, login: login)
+                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1))
+            }
+            if extra > 0 {
+                Text("+\(extra)")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 6)
             }
         }
     }
@@ -559,6 +607,19 @@ struct ChatDetailView: View {
         Button {
             showForward = msg
         } label: { Label("Forward", systemImage: "arrowshape.turn.up.right") }
+        if vm.conversation.isGroup {
+            let seenBy = vm.seenByLogins(for: msg)
+            Button {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    seenByFor = msg
+                }
+            } label: {
+                Label(
+                    seenBy.isEmpty ? "Seen by" : "Seen by \(seenBy.count)",
+                    systemImage: "eye"
+                )
+            }
+        }
         if msg.sender == auth.login {
             Button { vm.startEdit(msg) } label: { Label("Edit", systemImage: "pencil") }
             Button {
@@ -816,9 +877,11 @@ struct ChatDetailView: View {
             if typing { vm.typingUsers.insert(login) }
             else { vm.typingUsers.remove(login) }
         }
-        socket.onConversationRead = { convId, login in
+        socket.onConversationRead = { convId, login, readAt in
             guard convId == vm.conversation.id, login != auth.login else { return }
-            vm.otherReadAt = ISO8601DateFormatter().string(from: Date())
+            let ts = readAt ?? ISO8601DateFormatter().string(from: Date())
+            vm.otherReadAt = ts
+            vm.readCursors[login] = ts
         }
         socket.onMessagePinned = { convId, msgId in
             guard convId == vm.conversation.id else { return }

@@ -324,12 +324,18 @@ struct RawReactionRow: Codable, Hashable {
     }
 }
 
+struct ReadCursor: Decodable {
+    let login: String
+    let readAt: String
+}
+
 struct MessagesResponse: Decodable {
     let messages: [Message]
     let cursor: String?
     let nextCursor: String?
     let previousCursor: String?
     let otherReadAt: String?
+    let readCursors: [ReadCursor]?
 }
 
 struct CreateConversationRequest: Encodable {

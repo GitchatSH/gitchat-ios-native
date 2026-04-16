@@ -7,6 +7,7 @@ final class ChatViewModel: ObservableObject {
     @Published var pinnedIds: Set<String> = []
     @Published var typingUsers: Set<String> = []
     @Published var otherReadAt: String?
+    @Published var readCursors: [String: String] = [:]
     @Published var isLoading = false
     @Published var isSyncing = false
     @Published var isMuted: Bool = false
@@ -33,6 +34,9 @@ final class ChatViewModel: ObservableObject {
             self.messages = cached.messages
             self.nextCursor = cached.nextCursor
             self.otherReadAt = cached.otherReadAt
+            if let cursors = cached.readCursors {
+                self.readCursors = cursors
+            }
             MessageBubble.markSeen(cached.messages.map(\.id))
         }
     }
@@ -102,6 +106,9 @@ final class ChatViewModel: ObservableObject {
                 // pages from the previous session.
             }
             self.otherReadAt = resp.otherReadAt
+            if let cursors = resp.readCursors {
+                for c in cursors { readCursors[c.login] = c.readAt }
+            }
             persistCache()
             try? await APIClient.shared.markRead(conversationId: conversation.id)
         } catch { self.error = error.localizedDescription }
@@ -133,8 +140,28 @@ final class ChatViewModel: ObservableObject {
             messages: self.messages,
             nextCursor: self.nextCursor,
             otherReadAt: self.otherReadAt,
+            readCursors: self.readCursors.isEmpty ? nil : self.readCursors,
             fetchedAt: Date()
         ))
+    }
+
+    func seenByLogins(for message: Message) -> [String] {
+        guard conversation.isGroup else { return [] }
+        let msgDate = message.created_at ?? ""
+        return readCursors.compactMap { login, readAt in
+            readAt >= msgDate ? login : nil
+        }.sorted()
+    }
+
+    func seenCursorLogins(for message: Message, at idx: Int) -> [String] {
+        guard conversation.isGroup, !readCursors.isEmpty else { return [] }
+        let msgDate = message.created_at ?? ""
+        let nextDate: String? = (idx + 1 < messages.count) ? (messages[idx + 1].created_at ?? "") : nil
+        return readCursors.compactMap { login, readAt in
+            guard readAt >= msgDate else { return nil }
+            if let nextDate, readAt >= nextDate { return nil }
+            return login
+        }.sorted()
     }
 
     func loadPinned() async {

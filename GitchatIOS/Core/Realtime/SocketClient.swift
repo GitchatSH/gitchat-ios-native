@@ -23,7 +23,7 @@ final class SocketClient: ObservableObject {
     var onReactionUpdated: ((String) -> Void)?
     var onNotificationNew: (() -> Void)?
     var onTyping: ((String, String, Bool) -> Void)? // conversationId, login, isTyping
-    var onConversationRead: ((String, String) -> Void)? // conversationId, login
+    var onConversationRead: ((String, String, String?) -> Void)? // conversationId, login, readAt
     var onMessagePinned: ((String, String) -> Void)? // conversationId, messageId
     var onMessageUnpinned: ((String, String) -> Void)? // conversationId, messageId
 
@@ -109,7 +109,8 @@ final class SocketClient: ObservableObject {
             guard let dict = (data.first as? [String: Any])?["data"] as? [String: Any] ?? (data.first as? [String: Any]),
                   let convId = dict["conversationId"] as? String,
                   let login = dict["login"] as? String else { return }
-            Task { @MainActor in self?.onConversationRead?(convId, login) }
+            let readAt = dict["readAt"] as? String
+            Task { @MainActor in self?.onConversationRead?(convId, login, readAt) }
         }
         socket.on("message:pinned") { [weak self] data, _ in
             guard let dict = (data.first as? [String: Any])?["data"] as? [String: Any] ?? (data.first as? [String: Any]),

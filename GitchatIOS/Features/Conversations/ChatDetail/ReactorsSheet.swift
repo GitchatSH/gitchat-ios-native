@@ -32,16 +32,16 @@ struct ReactorsSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    tabChip("all", title: "All \(allReactors.count)")
-                    ForEach(grouped, id: \.0) { emoji, count in
-                        tabChip(emoji, title: "\(emoji) \(count)")
-                    }
+            Picker("", selection: $selectedTab) {
+                Text("All \(allReactors.count)").tag("all")
+                ForEach(grouped, id: \.0) { emoji, count in
+                    Text("\(emoji) \(count)").tag(emoji)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
             }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+
             List(filtered, id: \.self) { r in
                 NavigationLink {
                     ProfileView(login: r.login)
@@ -55,10 +55,8 @@ struct ReactorsSheet: View {
                     }
                 }
                 .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear)
             }
             .listStyle(.plain)
-            .scrollContentBackground(.hidden)
             .scrollIndicators(.hidden)
             .overlay {
                 if allReactors.isEmpty {
@@ -73,22 +71,5 @@ struct ReactorsSheet: View {
         .navigationTitle("Reactions")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .navigationBarTrailing) { Button("Done") { dismiss() } } }
-    }
-
-    private func tabChip(_ key: String, title: String) -> some View {
-        Button {
-            selectedTab = key
-        } label: {
-            Text(title)
-                .font(.geist(13, weight: .semibold))
-                .foregroundStyle(selectedTab == key ? Color.white : Color(.label))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    selectedTab == key ? Color.accentColor : Color(.secondarySystemBackground),
-                    in: Capsule()
-                )
-        }
-        .buttonStyle(.plain)
     }
 }
