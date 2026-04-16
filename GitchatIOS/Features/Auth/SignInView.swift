@@ -107,31 +107,6 @@ struct SignInView: View {
                 Spacer()
 
                 VStack(spacing: 12) {
-                    // Sign in with GitHub
-                    Button {
-                        Task { await vm.startGithub() }
-                    } label: {
-                        HStack(spacing: 8) {
-                            if vm.isLoading {
-                                ProgressView().tint(Color(.systemBackground))
-                            } else {
-                                Image("GitHubMark")
-                                    .resizable()
-                                    .renderingMode(.template)
-                                    .scaledToFit()
-                                    .frame(width: 17, height: 17)
-                            }
-                            Text("Sign in with GitHub")
-                                .font(.system(size: 17, weight: .semibold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
-                        .background(Color(.label))
-                        .clipShape(Capsule())
-                        .foregroundStyle(Color(.systemBackground))
-                    }
-                    .disabled(vm.isLoading)
-
                     // Sign in with Apple
                     SignInWithAppleButton(
                         .signIn,
