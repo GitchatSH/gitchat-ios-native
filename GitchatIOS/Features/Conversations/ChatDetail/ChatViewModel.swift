@@ -233,6 +233,7 @@ final class ChatViewModel: ObservableObject {
                     // between the optimistic append and this response —
                     // the diffable data source crashes on duplicate ids.
                     messages.removeAll { $0.id == msg.id && $0.id != localID }
+                    MessageBubble.seenIds.insert(msg.id)
                     if let idx = messages.firstIndex(where: { $0.id == localID }) {
                         messages[idx] = msg
                     } else {
@@ -447,6 +448,7 @@ final class ChatViewModel: ObservableObject {
                 body: "",
                 attachmentURLs: urls
             )
+            MessageBubble.seenIds.insert(msg.id)
             if let idx = messages.firstIndex(where: { $0.id == localID }) {
                 messages[idx] = msg
             }
@@ -493,6 +495,7 @@ final class ChatViewModel: ObservableObject {
                 body: "",
                 attachmentURL: url
             )
+            MessageBubble.seenIds.insert(msg.id)
             if let idx = messages.firstIndex(where: { $0.id == localID }) {
                 messages[idx] = msg
             } else {

@@ -8,6 +8,7 @@ struct GitchatApp: App {
     @StateObject private var socket = SocketClient.shared
     @StateObject private var store = StoreManager.shared
     @AppStorage("gitchat.pref.appearance") private var appearance: String = "system"
+    @AppStorage("gitchat.pref.fontScale") private var fontScale: Double = 1.0
 
     init() {
         FirebaseApp.configure()
@@ -35,6 +36,7 @@ struct GitchatApp: App {
             .environmentObject(socket)
             .tint(.accentColor)
             .preferredColorScheme(colorScheme)
+            .dynamicTypeSize(Self.dynamicType(for: fontScale))
             .toastHost()
         #if targetEnvironment(macCatalyst)
         // Mac windows need an explicit minimum size; iPhone should
@@ -43,6 +45,19 @@ struct GitchatApp: App {
         #else
         base
         #endif
+    }
+
+    private static func dynamicType(for scale: Double) -> DynamicTypeSize {
+        switch scale {
+        case ..<0.85: return .xSmall
+        case ..<0.9:  return .small
+        case ..<0.95: return .medium
+        case ..<1.05: return .large
+        case ..<1.15: return .xLarge
+        case ..<1.25: return .xxLarge
+        case ..<1.35: return .xxxLarge
+        default:      return .accessibility1
+        }
     }
 
     private var colorScheme: ColorScheme? {

@@ -99,7 +99,6 @@ struct MessageBubble: View {
             }
             if !isMe { Spacer(minLength: 40) }
         }
-        .scaleEffect(Self.seenIds.contains(message.id) || appeared ? 1 : 0.7, anchor: isMe ? .bottomTrailing : .bottomLeading)
         .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
         .onAppear {
             if Self.seenIds.contains(message.id) {

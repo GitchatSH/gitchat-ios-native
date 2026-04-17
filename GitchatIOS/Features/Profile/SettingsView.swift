@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("gitchat.pref.autoplayGifs") private var autoplayGifs: Bool = true
     @AppStorage("gitchat.pref.compactMode") private var compactMode: Bool = false
     @AppStorage("gitchat.pref.appearance") private var appearance: String = "system"
+    @AppStorage("gitchat.pref.fontScale") private var fontScale: Double = 1.0
     @State private var showingSignOutConfirm = false
     @State private var showingDeleteConfirm = false
     @State private var deletingAccount = false
@@ -39,6 +40,15 @@ struct SettingsView: View {
                     Text("Dark").tag("dark")
                 }
                 Toggle("Compact chat rows", isOn: $compactMode)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Font size")
+                        Spacer()
+                        Text("\(Int(fontScale * 100))%")
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: $fontScale, in: 0.8...1.4, step: 0.05)
+                }
             }
 
             Section("Notifications") {

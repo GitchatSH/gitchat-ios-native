@@ -19,6 +19,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
     let items: [Message]
     let typingUsers: [String]
     let showSeen: Bool
+    let seenAvatarURL: String?
     let pinnedIds: Set<String>
     let readCursors: [String: String]
     let pulsingId: String?
@@ -301,14 +302,14 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
                     return
                 }
                 if id == ChatSeenRowID {
+                    let avatarURL = self.parent.seenAvatarURL
                     cell.contentConfiguration = UIHostingConfiguration {
                         HStack {
                             Spacer()
-                            Text("Seen")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            AvatarView(url: avatarURL, size: 16)
+                                .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1))
                         }
-                        .padding(.trailing, 4)
+                        .padding(.trailing, 6)
                         .padding(.top, 2)
                     }
                     .margins(.all, 0)

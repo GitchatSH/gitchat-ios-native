@@ -143,6 +143,7 @@ struct ChatDetailView: View {
             items: visibleMessages,
             typingUsers: Array(vm.typingUsers),
             showSeen: shouldShowSeen && !vm.conversation.isGroup,
+            seenAvatarURL: vm.conversation.other_user?.avatar_url ?? vm.conversation.other_user.map { "https://github.com/\($0.login).png" },
             pinnedIds: vm.pinnedIds,
             readCursors: vm.readCursors,
             pulsingId: pulsingId,
@@ -448,7 +449,7 @@ struct ChatDetailView: View {
         HStack(spacing: -4) {
             ForEach(shown, id: \.self) { login in
                 let p = vm.conversation.participantsOrEmpty.first { $0.login == login }
-                AvatarView(url: p?.avatar_url, size: 16, login: login)
+                AvatarView(url: p?.avatar_url, size: 16)
                     .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1))
             }
             if extra > 0 {
@@ -1000,6 +1001,7 @@ struct ChatDetailView: View {
             // (same sender + body, local- prefixed id), swap it rather
             // than appending — otherwise we'd end up with both a local
             // and a server version in the list.
+            MessageBubble.seenIds.insert(msg.id)
             if let idx = vm.messages.firstIndex(where: {
                 $0.id.hasPrefix("local-") && $0.sender == msg.sender && $0.content == msg.content
             }) {
