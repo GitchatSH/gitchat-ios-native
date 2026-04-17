@@ -236,6 +236,7 @@ struct ChatDetailView: View {
         }
         .fullScreenCover(item: $imagePreview) { state in
             ImageViewerSheet(urls: state.urls, startIndex: state.index)
+                .transition(.scale(scale: 0.8).combined(with: .opacity))
         }
         .alert("Delete message?", isPresented: Binding(
             get: { confirmDelete != nil },
@@ -451,6 +452,7 @@ struct ChatDetailView: View {
                 let p = vm.conversation.participantsOrEmpty.first { $0.login == login }
                 AvatarView(url: p?.avatar_url, size: 16)
                     .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1))
+                    .help(p?.name ?? login)
             }
             if extra > 0 {
                 Text("+\(extra)")
@@ -882,10 +884,8 @@ struct ChatDetailView: View {
             .onSubmit {
                 Task {
                     await vm.send()
-                    // SwiftUI removes focus from a TextField after
-                    // .onSubmit fires — re-focus on the next runloop
-                    // so the user can keep typing the next message.
                     DispatchQueue.main.async { composerFocused = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { composerFocused = true }
                 }
             }
             .submitLabel(.send)

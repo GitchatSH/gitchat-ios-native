@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import FirebaseCore
+import FirebaseAnalytics
 
 @main
 struct GitchatApp: App {
@@ -12,6 +13,7 @@ struct GitchatApp: App {
 
     init() {
         FirebaseApp.configure()
+        Analytics.setAnalyticsCollectionEnabled(true)
         UIScrollView.appearance().showsVerticalScrollIndicator = false
         UIScrollView.appearance().showsHorizontalScrollIndicator = false
         Task { @MainActor in
