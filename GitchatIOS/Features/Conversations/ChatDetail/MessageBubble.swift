@@ -42,6 +42,7 @@ struct MessageBubble: View {
                     )
                     .contentShape(Circle())
                     .onTapGesture { onAvatarTap?() }
+                    .instantTooltip("@\(message.sender)")
                 } else {
                     Color.clear.frame(width: 28, height: 28)
                 }
@@ -90,8 +91,10 @@ struct MessageBubble: View {
                 .onTapGesture {
                     withAnimation(.easeInOut(duration: 0.2)) { showTime.toggle() }
                 }
+                .instantTooltip(Self.fullTimestamp(message.created_at))
                 if message.edited_at != nil {
                     Text("edited").font(.system(size: 9)).foregroundStyle(.secondary)
+                        .instantTooltip("Edited \(Self.fullTimestamp(message.edited_at))")
                 }
                 if let reactions = message.reactions, !reactions.isEmpty {
                     reactionsRow(reactions)
@@ -191,6 +194,7 @@ struct MessageBubble: View {
                     lineWidth: 1
                 )
             )
+            .instantTooltip(mine ? "You reacted \(r.emoji)" : "\(r.count) reaction\(r.count == 1 ? "" : "s")")
     }
 
     private func replyPreview(_ reply: ReplyPreview) -> some View {
@@ -251,6 +255,7 @@ struct MessageBubble: View {
                         Text(Self.attributed(parsed.body, isMe: isMe))
                             .tint(isMe ? .white : Color.accentColor)
                             .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
                             .padding(.horizontal, 12)
                             .padding(.vertical, parsed.forwardedFrom == nil ? 8 : 6)
                             .padding(.bottom, parsed.forwardedFrom == nil ? 0 : 2)
@@ -287,6 +292,18 @@ struct MessageBubble: View {
     private static let linkDetector: NSDataDetector? = {
         try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
     }()
+
+    private static let fullDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+
+    static func fullTimestamp(_ iso: String?) -> String {
+        guard let iso, let date = ISO8601DateFormatter().date(from: iso) else { return "" }
+        return fullDateFormatter.string(from: date)
+    }
 
     private static func firstURL(in text: String) -> URL? {
         guard let detector = linkDetector else { return nil }

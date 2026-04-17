@@ -277,7 +277,11 @@ struct ChatDetailView: View {
                 }
                 return .handled
             }
+            #if targetEnvironment(macCatalyst)
+            UIApplication.shared.open(url)
+            #else
             webURL = url
+            #endif
             return .handled
         })
         .sheet(item: $reactingFor) { msg in
@@ -450,9 +454,7 @@ struct ChatDetailView: View {
         HStack(spacing: -4) {
             ForEach(shown, id: \.self) { login in
                 let p = vm.conversation.participantsOrEmpty.first { $0.login == login }
-                AvatarView(url: p?.avatar_url, size: 16)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1))
-                    .help(p?.name ?? login)
+                SeenAvatarWithTooltip(avatarURL: p?.avatar_url, name: p?.name ?? login)
             }
             if extra > 0 {
                 Text("+\(extra)")
@@ -537,6 +539,22 @@ struct ChatDetailView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+
+    private func macPasteImages() {
+        let pb = UIPasteboard.general
+        var images: [UIImage] = []
+        if let imgs = pb.images, !imgs.isEmpty {
+            images = imgs
+        } else if let img = pb.image {
+            images = [img]
+        }
+        guard !images.isEmpty else {
+            ToastCenter.shared.show(.info, "No images on clipboard")
+            return
+        }
+        pendingDropImages = images
+        showDropConfirm = true
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
@@ -833,6 +851,7 @@ struct ChatDetailView: View {
                     .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
             }
             .buttonStyle(.plain)
+            .instantTooltip("Jump to latest")
         }
     }
 
@@ -911,6 +930,17 @@ struct ChatDetailView: View {
                     .modifier(GlassPill())
             }
             .disabled(vm.uploading)
+
+            #if targetEnvironment(macCatalyst)
+            Button { macPasteImages() } label: {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .modifier(GlassPill())
+            }
+            .disabled(vm.uploading)
+            #endif
 
             composerTextField
 

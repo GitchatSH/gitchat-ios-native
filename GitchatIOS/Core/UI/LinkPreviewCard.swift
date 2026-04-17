@@ -170,6 +170,7 @@ struct LinkPreviewCard: View {
                     .background(isMe ? Color.white.opacity(0.12) : Color(.tertiarySystemBackground))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
+                .instantTooltip(url.absoluteString)
             }
         }
         .onAppear {
