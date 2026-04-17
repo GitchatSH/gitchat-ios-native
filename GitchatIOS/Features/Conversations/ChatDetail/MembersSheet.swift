@@ -55,8 +55,12 @@ struct MembersSheet: View {
                     .listRowBackground(Color.clear)
                 }
                 .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .scrollIndicators(.hidden)
+                #if !targetEnvironment(macCatalyst)
+            .scrollContentBackground(.hidden)
+            #endif
+                #if !targetEnvironment(macCatalyst)
+            .scrollIndicators(.hidden)
+            #endif
             }
         }
         .navigationTitle("\(participants.count) Member\(participants.count == 1 ? "" : "s")")

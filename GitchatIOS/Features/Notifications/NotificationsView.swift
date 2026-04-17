@@ -106,7 +106,9 @@ struct NotificationsView: View {
                         )
                     }
                     .listStyle(.plain)
-                    .scrollIndicators(.hidden)
+                    #if !targetEnvironment(macCatalyst)
+            .scrollIndicators(.hidden)
+            #endif
                     .refreshable { await vm.load() }
                 }
             }

@@ -87,8 +87,12 @@ struct AddMemberSheet: View {
                     .listRowBackground(Color.clear)
                 }
             }
+            #if !targetEnvironment(macCatalyst)
             .scrollContentBackground(.hidden)
+            #endif
+            #if !targetEnvironment(macCatalyst)
             .scrollIndicators(.hidden)
+            #endif
             .task { await loadFriends() }
             .navigationTitle("Add member")
             .navigationBarTitleDisplayMode(.inline)

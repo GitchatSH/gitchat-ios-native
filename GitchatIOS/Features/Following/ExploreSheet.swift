@@ -38,7 +38,9 @@ struct ExploreSheet: View {
                         .listRowSeparator(.hidden)
                     }
                     .listStyle(.plain)
-                    .scrollIndicators(.hidden)
+                    #if !targetEnvironment(macCatalyst)
+            .scrollIndicators(.hidden)
+            #endif
                 }
             }
             .navigationTitle("You might know")

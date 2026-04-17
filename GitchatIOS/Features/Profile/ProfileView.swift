@@ -187,7 +187,9 @@ struct ProfileView: View {
                 ProfileSkeleton()
             }
         }
-        .scrollIndicators(.hidden)
+        #if !targetEnvironment(macCatalyst)
+            .scrollIndicators(.hidden)
+            #endif
         .task {
             await vm.load()
             if !isSelf, let login = vm.profile?.login ?? vm.login {

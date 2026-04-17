@@ -61,8 +61,8 @@ targets:
       properties:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
-        CFBundleShortVersionString: "1.0.2"
-        CFBundleVersion: "55"
+        CFBundleShortVersionString: "1.0.3"
+        CFBundleVersion: "56"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -120,8 +120,8 @@ targets:
       path: OneSignalNotificationServiceExtension/Info.plist
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
-        CFBundleShortVersionString: "1.0.2"
-        CFBundleVersion: "55"
+        CFBundleShortVersionString: "1.0.3"
+        CFBundleVersion: "56"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

@@ -26,8 +26,12 @@ struct ForwardSheet: View {
             .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .scrollIndicators(.hidden)
+        #if !targetEnvironment(macCatalyst)
+            .scrollContentBackground(.hidden)
+            #endif
+        #if !targetEnvironment(macCatalyst)
+            .scrollIndicators(.hidden)
+            #endif
         .navigationTitle("Forward to…")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -57,7 +57,9 @@ struct ReactorsSheet: View {
                 .listRowSeparator(.hidden)
             }
             .listStyle(.plain)
+            #if !targetEnvironment(macCatalyst)
             .scrollIndicators(.hidden)
+            #endif
             .overlay {
                 if allReactors.isEmpty {
                     ContentUnavailableCompat(

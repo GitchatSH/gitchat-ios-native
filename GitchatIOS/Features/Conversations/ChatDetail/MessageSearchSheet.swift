@@ -19,8 +19,12 @@ struct MessageSearchSheet: View {
             .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .scrollIndicators(.hidden)
+        #if !targetEnvironment(macCatalyst)
+            .scrollContentBackground(.hidden)
+            #endif
+        #if !targetEnvironment(macCatalyst)
+            .scrollIndicators(.hidden)
+            #endif
         .overlay {
             if isLoading {
                 ProgressView()
