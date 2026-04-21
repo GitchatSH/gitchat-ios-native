@@ -35,6 +35,8 @@ struct ChatDetailView: View {
     @ObservedObject private var blocks = BlockStore.shared
     @State private var showMembers = false
     @State private var showAddMember = false
+    @State private var showLeaveConfirm = false
+    @Environment(\.dismiss) private var dismiss
     @FocusState private var composerFocused: Bool
     #if targetEnvironment(macCatalyst)
     @State private var isDragOver = false
@@ -249,6 +251,7 @@ struct ChatDetailView: View {
         } message: { _ in
             Text("This removes the message for you only.")
         }
+        .modifier(LeaveGroupAlert(show: $showLeaveConfirm, conversation: vm.conversation, onLeave: { dismiss() }))
         .alert("Unsend message?", isPresented: Binding(
             get: { confirmUnsend != nil },
             set: { if !$0 { confirmUnsend = nil } }
@@ -682,6 +685,14 @@ struct ChatDetailView: View {
                         systemImage: vm.isMuted ? "bell" : "bell.slash"
                     )
                 }
+                if vm.conversation.isGroup {
+                    Divider()
+                    Button(role: .destructive) {
+                        showLeaveConfirm = true
+                    } label: {
+                        Label("Leave group", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                }
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -1106,6 +1117,31 @@ struct ChatDetailView: View {
         if socket.currentConversationId == vm.conversation.id {
             socket.currentConversationId = nil
             ActiveConversationTracker.shared.id = nil
+        }
+    }
+}
+
+private struct LeaveGroupAlert: ViewModifier {
+    @Binding var show: Bool
+    let conversation: Conversation
+    let onLeave: () -> Void
+
+    func body(content: Content) -> some View {
+        content.alert("Leave group?", isPresented: $show) {
+            Button("Leave", role: .destructive) {
+                Task {
+                    do {
+                        try await APIClient.shared.leaveGroup(conversationId: conversation.id)
+                        ToastCenter.shared.show(.success, "Left group", conversation.displayTitle)
+                        onLeave()
+                    } catch {
+                        ToastCenter.shared.show(.error, "Couldn't leave", error.localizedDescription)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You'll stop receiving messages from this group.")
         }
     }
 }

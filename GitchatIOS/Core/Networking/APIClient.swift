@@ -310,6 +310,13 @@ struct APIClient {
         )
     }
 
+    func leaveGroup(conversationId: String) async throws {
+        let _: EmptyResponse = try await request(
+            "messages/conversations/\(conversationId)/members/me",
+            method: "DELETE"
+        )
+    }
+
     func unmuteConversation(id: String) async throws {
         let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "DELETE")
     }
