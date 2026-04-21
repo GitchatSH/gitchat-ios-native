@@ -192,6 +192,9 @@ struct ProfileView: View {
             #endif
         .task {
             await vm.load()
+            if let login = vm.profile?.login ?? vm.login {
+                AnalyticsTracker.trackProfileView(login: login)
+            }
             if !isSelf, let login = vm.profile?.login ?? vm.login {
                 await loadFollowStatus(login: login)
             }
@@ -309,6 +312,7 @@ struct ProfileView: View {
                 ToastCenter.shared.show(.info, "Unfollowed", "@\(login)")
             } else {
                 try await APIClient.shared.follow(login: login)
+                AnalyticsTracker.trackFollow(login: login)
                 ToastCenter.shared.show(.success, "Following", "@\(login)")
             }
             await loadFollowStatus(login: login)

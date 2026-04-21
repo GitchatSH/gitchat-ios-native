@@ -22,7 +22,8 @@ final class AuthStore: ObservableObject {
         self.needsGithubLink = read(needsGithubKey) == "1"
     }
 
-    func save(token: String, login: String, needsGithubLink: Bool = false) {
+    func save(token: String, login: String, needsGithubLink: Bool = false, method: String = "unknown") {
+        let isNewUser = read(loginKey) == nil
         write(tokenKey, value: token)
         write(loginKey, value: login)
         write(needsGithubKey, value: needsGithubLink ? "1" : "0")
@@ -31,6 +32,12 @@ final class AuthStore: ObservableObject {
         self.needsGithubLink = needsGithubLink
         self.isAuthenticated = true
         PushManager.shared.identify(login: login)
+        AnalyticsTracker.setUserID(login)
+        if isNewUser {
+            AnalyticsTracker.trackSignUp(method: method)
+        } else {
+            AnalyticsTracker.trackLogin(method: method)
+        }
         Task { await PushManager.shared.requestPermission() }
     }
 
@@ -47,6 +54,7 @@ final class AuthStore: ObservableObject {
         self.login = nil
         self.needsGithubLink = false
         self.isAuthenticated = false
+        AnalyticsTracker.clearUserID()
         PushManager.shared.forgetIdentity()
     }
 

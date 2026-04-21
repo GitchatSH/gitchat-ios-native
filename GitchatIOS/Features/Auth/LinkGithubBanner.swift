@@ -15,7 +15,7 @@ final class LinkGithubViewModel: ObservableObject {
                 code: code,
                 redirectURI: GitHubWebOAuth.redirectURI
             )
-            AuthStore.shared.save(token: link.access_token, login: link.login, needsGithubLink: false)
+            AuthStore.shared.save(token: link.access_token, login: link.login, needsGithubLink: false, method: "github_link")
         } catch GitHubWebOAuth.WebOAuthError.cancelled {
             return
         } catch {

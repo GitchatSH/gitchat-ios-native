@@ -609,6 +609,7 @@ struct ChatDetailView: View {
     private func quickReact(_ msg: Message, _ emoji: String) {
         Haptics.impact(.light)
         vm.applyOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
+        AnalyticsTracker.trackReaction(emoji: emoji)
         Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: true) }
     }
 

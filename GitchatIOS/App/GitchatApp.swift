@@ -2,6 +2,9 @@ import SwiftUI
 import UIKit
 import FirebaseCore
 import FirebaseAnalytics
+import FacebookCore
+import AppsFlyerLib
+import AppTrackingTransparency
 
 @main
 struct GitchatApp: App {
@@ -14,13 +17,37 @@ struct GitchatApp: App {
     init() {
         FirebaseApp.configure()
         Analytics.setAnalyticsCollectionEnabled(true)
+
+        // Facebook SDK
+        ApplicationDelegate.shared.application(
+            UIApplication.shared,
+            didFinishLaunchingWithOptions: nil
+        )
+
+        // AppsFlyer SDK
+        AppsFlyerLib.shared().appsFlyerDevKey = "9PnQZkZDCb8dXSaRinRZAN"
+        AppsFlyerLib.shared().appleAppID = "6762181976"
+        AppsFlyerLib.shared().waitForATTUserAuthorization(timeoutInterval: 60)
+
         UIScrollView.appearance().showsVerticalScrollIndicator = false
         UIScrollView.appearance().showsHorizontalScrollIndicator = false
         Task { @MainActor in
             StoreManager.shared.start()
             PushManager.shared.bootstrap()
             PresenceStore.shared.start()
+            AppsFlyerLib.shared().start()
         }
+        // Delay ATT prompt so it doesn't fight with OneSignal's
+        // notification permission prompt on first launch.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            Self.requestTracking()
+        }
+    }
+
+    private static func requestTracking() {
+        guard #available(iOS 14.5, *) else { return }
+        ATTrackingManager.requestTrackingAuthorization { _ in }
     }
 
     var body: some Scene {
@@ -28,6 +55,14 @@ struct GitchatApp: App {
             rootContent
                 .onAppear { applyInterfaceStyle() }
                 .onChange(of: appearance) { _ in applyInterfaceStyle() }
+                .onOpenURL { url in
+                    ApplicationDelegate.shared.application(
+                        UIApplication.shared,
+                        open: url,
+                        sourceApplication: nil,
+                        annotation: [UIApplication.OpenURLOptionsKey.annotation]
+                    )
+                }
         }
     }
 

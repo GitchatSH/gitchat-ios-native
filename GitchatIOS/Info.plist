@@ -17,9 +17,28 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.3</string>
+	<string>1.0.4</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fb1492200602416732</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
-	<string>59</string>
+	<string>60</string>
+	<key>FacebookAdvertiserIDCollectionEnabled</key>
+	<true/>
+	<key>FacebookAppID</key>
+	<string>1492200602416732</string>
+	<key>FacebookAutoLogAppEventsEnabled</key>
+	<true/>
+	<key>FacebookClientToken</key>
+	<string>07adfc78a5e324b84a05e8a2553e105d</string>
+	<key>FacebookDisplayName</key>
+	<string>Gitchat</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationCategoryType</key>
@@ -28,6 +47,10 @@
 	<array>
 		<string>https</string>
 		<string>github</string>
+		<string>fbapi</string>
+		<string>fb-messenger-share-api</string>
+		<string>fbauth2</string>
+		<string>fbshareextension</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Gitchat needs camera access to attach photos to messages.</string>
@@ -41,6 +64,8 @@
 	<array>
 		<string>INSendMessageIntent</string>
 	</array>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>This helps Gitchat personalise your experience and measure ad performance.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Geist-Regular.ttf</string>

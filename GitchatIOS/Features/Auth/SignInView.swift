@@ -17,7 +17,7 @@ final class SignInViewModel: ObservableObject {
                 code: code,
                 redirectURI: GitHubWebOAuth.redirectURI
             )
-            AuthStore.shared.save(token: link.access_token, login: link.login)
+            AuthStore.shared.save(token: link.access_token, login: link.login, method: "github")
         } catch GitHubWebOAuth.WebOAuthError.cancelled {
             return
         } catch {
@@ -48,7 +48,8 @@ final class SignInViewModel: ObservableObject {
                         AuthStore.shared.save(
                             token: resp.access_token,
                             login: resp.login,
-                            needsGithubLink: resp.needs_github_link
+                            needsGithubLink: resp.needs_github_link,
+                            method: "apple"
                         )
                     }
                 } catch {

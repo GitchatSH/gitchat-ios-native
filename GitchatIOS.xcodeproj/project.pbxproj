@@ -33,7 +33,10 @@
 		42ECF6E4F91ED322D0B563F0 /* FollowingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC0F97726C2E12C5EF27207 /* FollowingView.swift */; };
 		493EC828CF5A4FC4D3D185BD /* EmojiPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED56669CED0DEE797EABF78 /* EmojiPickerSheet.swift */; };
 		494D3D00F4249ABA940FC7E0 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A64D83F5578E057CF2F6A03 /* RootView.swift */; };
+		4BC3E5401B7248FA52B0CB26 /* AppsFlyerLib in Frameworks */ = {isa = PBXBuildFile; productRef = BC2B90ECA96F101778114ECA /* AppsFlyerLib */; };
+		4F15046CCB7A9CA0952031AB /* AnalyticsTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9946C8E877CD39F30375750D /* AnalyticsTracker.swift */; };
 		4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */; };
+		531DEE508D58C8A62DB94393 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = 47DE335175F71C2369260202 /* FacebookCore */; };
 		54503540CFF2CBDF6CCAE91C /* LinkPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD43FE561D7FEFCB9BF2702C /* LinkPreviewCard.swift */; };
 		58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */; };
 		60D610D3E81196FD29EADE83 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F911D72B3577520347C7A25 /* AppRouter.swift */; };
@@ -156,6 +159,7 @@
 		9685947BA9F7F47948D0D9FD /* ChannelDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelDetailView.swift; sourceTree = "<group>"; };
 		96C7DB031D380DE22F80C960 /* BlockStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockStore.swift; sourceTree = "<group>"; };
 		99301F77409640F810FB1F0D /* UpgradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpgradeView.swift; sourceTree = "<group>"; };
+		9946C8E877CD39F30375750D /* AnalyticsTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsTracker.swift; sourceTree = "<group>"; };
 		9BD8099D1B297E089FD9BEDE /* SeenAvatarWithTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeenAvatarWithTooltip.swift; sourceTree = "<group>"; };
 		9E6C6D62D2207B8EF522F851 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A066E307A07B247124125B04 /* Routes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Routes.swift; sourceTree = "<group>"; };
@@ -199,6 +203,8 @@
 				42CD53F46D0C85A66271982E /* OneSignalFramework in Frameworks */,
 				72904A9C6CF0DFE0FB701B4A /* FirebaseAnalytics in Frameworks */,
 				3BA9299D99680C847870AF56 /* FirebaseCrashlytics in Frameworks */,
+				531DEE508D58C8A62DB94393 /* FacebookCore in Frameworks */,
+				4BC3E5401B7248FA52B0CB26 /* AppsFlyerLib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -379,6 +385,7 @@
 				D1AC72B0B806B50EB64E82E8 /* Config.swift */,
 				D1257724417C399DFA806F4A /* PresenceStore.swift */,
 				808AF0F70444427011FF450A /* PushManager.swift */,
+				B2EE5CBC6E98EC1E0991565A /* Analytics */,
 				9F15F5366DF09B87DCD6B465 /* Models */,
 				62AB9BB7FB15FBD0242CDC62 /* Networking */,
 				2984B6A01475141D53A662FB /* Realtime */,
@@ -413,6 +420,14 @@
 				FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */,
 			);
 			path = Auth;
+			sourceTree = "<group>";
+		};
+		B2EE5CBC6E98EC1E0991565A /* Analytics */ = {
+			isa = PBXGroup;
+			children = (
+				9946C8E877CD39F30375750D /* AnalyticsTracker.swift */,
+			);
+			path = Analytics;
 			sourceTree = "<group>";
 		};
 		BA7A14953E341B5C937325EA /* Frameworks */ = {
@@ -496,6 +511,8 @@
 				37D9D440E2615CB0D8C2247A /* OneSignalFramework */,
 				0D901FD3DEDEAE2E93D384DD /* FirebaseAnalytics */,
 				94DB191CAB3D64BF34D900B3 /* FirebaseCrashlytics */,
+				47DE335175F71C2369260202 /* FacebookCore */,
+				BC2B90ECA96F101778114ECA /* AppsFlyerLib */,
 			);
 			productName = GitchatIOS;
 			productReference = 653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */;
@@ -549,6 +566,8 @@
 			mainGroup = 2A42B2EB9D6FDB50D91854F8;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				8644107DEFC53DF2AD857D3B /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */,
+				AD3CEFF4C60CD44C8EC2AC43 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */,
 				5402EFEAFC2FC1686CA09CF7 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */,
 				E1782BB53418C29B1B40C23D /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
@@ -595,6 +614,7 @@
 			files = (
 				B089CE1EDCE2E0EB3376D18E /* APIClient.swift in Sources */,
 				AB75B64F86D9214FFC78C723 /* AddMemberSheet.swift in Sources */,
+				4F15046CCB7A9CA0952031AB /* AnalyticsTracker.swift in Sources */,
 				60D610D3E81196FD29EADE83 /* AppRouter.swift in Sources */,
 				B7312742825A6973BA9FE86B /* AuthStore.swift in Sources */,
 				23DA5097E24D54E366575F0C /* BlockStore.swift in Sources */,
@@ -937,6 +957,22 @@
 				minimumVersion = 5.2.0;
 			};
 		};
+		8644107DEFC53DF2AD857D3B /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AppsFlyerSDK/AppsFlyerFramework";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.14.0;
+			};
+		};
+		AD3CEFF4C60CD44C8EC2AC43 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/facebook-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 17.0.0;
+			};
+		};
 		E1782BB53418C29B1B40C23D /* XCRemoteSwiftPackageReference "socket.io-client-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
@@ -958,6 +994,11 @@
 			package = 54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
 			productName = OneSignalFramework;
 		};
+		47DE335175F71C2369260202 /* FacebookCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AD3CEFF4C60CD44C8EC2AC43 /* XCRemoteSwiftPackageReference "facebook-ios-sdk" */;
+			productName = FacebookCore;
+		};
 		94DB191CAB3D64BF34D900B3 /* FirebaseCrashlytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 5402EFEAFC2FC1686CA09CF7 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
@@ -967,6 +1008,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
 			productName = OneSignalExtension;
+		};
+		BC2B90ECA96F101778114ECA /* AppsFlyerLib */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8644107DEFC53DF2AD857D3B /* XCRemoteSwiftPackageReference "AppsFlyerFramework" */;
+			productName = AppsFlyerLib;
 		};
 		E40E297012AF55791D27B93E /* SocketIO */ = {
 			isa = XCSwiftPackageProductDependency;

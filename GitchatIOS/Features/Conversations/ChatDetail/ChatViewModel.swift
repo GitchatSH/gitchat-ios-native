@@ -180,6 +180,11 @@ final class ChatViewModel: ObservableObject {
         UserDefaults.standard.removeObject(forKey: draftKey)
         let replyId = replyingTo?.id
         replyingTo = nil
+        AnalyticsTracker.trackMessageSent(
+            conversationId: conversation.id,
+            isGroup: conversation.isGroup,
+            hasAttachment: false
+        )
         do {
             if let editing = editingMessage {
                 try await APIClient.shared.editMessage(
@@ -394,6 +399,11 @@ final class ChatViewModel: ObservableObject {
 
     func uploadAndSendMany(items: [(Data, String, String)], senderLogin: String?) async {
         guard !items.isEmpty else { return }
+        AnalyticsTracker.trackMessageSent(
+            conversationId: conversation.id,
+            isGroup: conversation.isGroup,
+            hasAttachment: true
+        )
         let compressed = items.map { Self.compressIfImage(data: $0.0, filename: $0.1, mimeType: $0.2) }
         var localURLs: [URL] = []
         var localAttachments: [MessageAttachment] = []

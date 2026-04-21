@@ -21,6 +21,12 @@ packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk
     from: "11.0.0"
+  FacebookSDK:
+    url: https://github.com/facebook/facebook-ios-sdk
+    from: "17.0.0"
+  AppsFlyerFramework:
+    url: https://github.com/AppsFlyerSDK/AppsFlyerFramework
+    from: "6.14.0"
 targets:
   GitchatIOS:
     type: application
@@ -40,6 +46,10 @@ targets:
         product: FirebaseAnalytics
       - package: Firebase
         product: FirebaseCrashlytics
+      - package: FacebookSDK
+        product: FacebookCore
+      - package: AppsFlyerFramework
+        product: AppsFlyerLib
       - target: OneSignalNotificationServiceExtension
         embed: true
         codeSign: true
@@ -61,8 +71,8 @@ targets:
       properties:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
-        CFBundleShortVersionString: "1.0.3"
-        CFBundleVersion: "59"
+        CFBundleShortVersionString: "1.0.4"
+        CFBundleVersion: "60"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -80,7 +90,13 @@ targets:
         NSPhotoLibraryUsageDescription: Gitchat needs photo library access to attach images to messages.
         NSPhotoLibraryAddUsageDescription: Gitchat needs permission to save images from chats to your Photos library.
         NSMicrophoneUsageDescription: Gitchat needs microphone access for voice messages.
+        NSUserTrackingUsageDescription: This helps Gitchat personalise your experience and measure ad performance.
         ITSAppUsesNonExemptEncryption: false
+        FacebookAppID: "1492200602416732"
+        FacebookClientToken: "07adfc78a5e324b84a05e8a2553e105d"
+        FacebookDisplayName: Gitchat
+        FacebookAutoLogAppEventsEnabled: true
+        FacebookAdvertiserIDCollectionEnabled: true
         LSApplicationCategoryType: public.app-category.social-networking
         UIAppFonts:
           - Geist-Regular.ttf
@@ -90,6 +106,13 @@ targets:
         LSApplicationQueriesSchemes:
           - https
           - github
+          - fbapi
+          - fb-messenger-share-api
+          - fbauth2
+          - fbshareextension
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - fb1492200602416732
         NSUserActivityTypes:
           - INSendMessageIntent
     settings:
@@ -120,8 +143,8 @@ targets:
       path: OneSignalNotificationServiceExtension/Info.plist
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
-        CFBundleShortVersionString: "1.0.3"
-        CFBundleVersion: "59"
+        CFBundleShortVersionString: "1.0.4"
+        CFBundleVersion: "60"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService

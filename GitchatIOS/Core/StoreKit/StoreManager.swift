@@ -53,11 +53,17 @@ final class StoreManager: ObservableObject {
 
     @discardableResult
     func purchase(_ product: Product) async throws -> Bool {
+        AnalyticsTracker.trackInitiatedCheckout(productId: product.id)
         let result = try await product.purchase()
         switch result {
         case .success(let verification):
             if case .verified(let tx) = verification {
                 entitlements.insert(tx.productID)
+                AnalyticsTracker.trackPurchase(
+                    productId: product.id,
+                    price: NSDecimalNumber(decimal: product.price).doubleValue,
+                    currency: product.priceFormatStyle.currencyCode
+                )
                 await tx.finish()
                 return true
             }

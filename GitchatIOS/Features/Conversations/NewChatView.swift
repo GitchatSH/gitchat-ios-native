@@ -35,6 +35,7 @@ final class NewChatViewModel: ObservableObject {
     private func search(_ q: String) async {
         isLoading = true; error = nil
         defer { isLoading = false }
+        AnalyticsTracker.trackSearch(query: q)
         do {
             results = try await APIClient.shared.searchUsersForDM(query: q)
         } catch {
@@ -56,7 +57,11 @@ final class NewChatViewModel: ObservableObject {
 
     func startDM(with login: String) async -> Conversation? {
         creating = true; defer { creating = false }
-        do { return try await APIClient.shared.createConversation(recipient: login) }
+        do {
+            let convo = try await APIClient.shared.createConversation(recipient: login)
+            AnalyticsTracker.trackConversationStarted(isGroup: false)
+            return convo
+        }
         catch { self.error = error.localizedDescription; return nil }
     }
 
@@ -65,10 +70,12 @@ final class NewChatViewModel: ObservableObject {
         creating = true; defer { creating = false }
         do {
             let name = groupName.trimmingCharacters(in: .whitespacesAndNewlines)
-            return try await APIClient.shared.createGroup(
+            let convo = try await APIClient.shared.createGroup(
                 recipients: selected.map(\.login),
                 name: name.isEmpty ? nil : name
             )
+            AnalyticsTracker.trackConversationStarted(isGroup: true)
+            return convo
         } catch { self.error = error.localizedDescription; return nil }
     }
 
