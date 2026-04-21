@@ -71,7 +71,7 @@ struct GitchatApp: App {
         let base = RootView()
             .environmentObject(auth)
             .environmentObject(socket)
-            .tint(.accentColor)
+            .tint(Color("AccentColor"))
             .preferredColorScheme(colorScheme)
             .dynamicTypeSize(Self.dynamicType(for: fontScale))
             .toastHost()

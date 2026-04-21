@@ -606,6 +606,31 @@ struct ChatDetailView: View {
     }
     #endif
 
+    private static func imageAttachmentURLs(_ msg: Message) -> [String]? {
+        if let atts = msg.attachments, !atts.isEmpty {
+            let imgs = atts
+                .filter { ($0.type == "image") || ($0.mime_type?.hasPrefix("image/") == true) }
+                .map(\.url)
+            return imgs.isEmpty ? nil : imgs
+        }
+        if let url = msg.attachment_url, !url.isEmpty {
+            return [url]
+        }
+        return nil
+    }
+
+    private func copyImageToClipboard(urls: [String]) {
+        guard let first = urls.first, let url = URL(string: first) else { return }
+        Task {
+            if let img = await ImageCache.shared.load(url) {
+                UIPasteboard.general.image = img
+                ToastCenter.shared.show(.success, "Image copied")
+            } else {
+                ToastCenter.shared.show(.error, "Couldn't copy image")
+            }
+        }
+    }
+
     private func quickReact(_ msg: Message, _ emoji: String) {
         Haptics.impact(.light)
         vm.applyOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
@@ -756,10 +781,17 @@ struct ChatDetailView: View {
             vm.editingMessage = nil
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { composerFocused = true }
         } label: { Label("Reply", systemImage: "arrowshape.turn.up.left") }
-        Button {
-            UIPasteboard.general.string = msg.content
-            ToastCenter.shared.show(.success, "Copied")
-        } label: { Label("Copy", systemImage: "doc.on.doc") }
+        if !msg.content.isEmpty {
+            Button {
+                UIPasteboard.general.string = msg.content
+                ToastCenter.shared.show(.success, "Copied")
+            } label: { Label("Copy", systemImage: "doc.on.doc") }
+        }
+        if let imageURLs = Self.imageAttachmentURLs(msg), !imageURLs.isEmpty {
+            Button {
+                copyImageToClipboard(urls: imageURLs)
+            } label: { Label("Copy Image", systemImage: "photo.on.rectangle") }
+        }
         Button {
             Task { await vm.togglePin(msg) }
         } label: {

@@ -60,10 +60,20 @@ struct RootView: View {
                active == msg.conversation_id {
                 return
             }
+            // Digest rule: rate-limit identical sender bursts to one
+            // toast per 5 seconds per sender so rapid chat doesn't spam.
+            let now = Date()
+            let key = msg.sender
+            if let last = Self.lastToastTimes[key], now.timeIntervalSince(last) < 5 {
+                return
+            }
+            Self.lastToastTimes[key] = now
             let preview = msg.content.isEmpty ? "sent you a photo" : msg.content
             ToastCenter.shared.show(.info, "@\(msg.sender)", preview)
         }
     }
+
+    nonisolated(unsafe) private static var lastToastTimes: [String: Date] = [:]
 
     private func startHeartbeat() {
         heartbeatTask?.cancel()
@@ -90,9 +100,9 @@ struct MainTabView: View {
             ConversationsListView()
                 .tabItem { Label("Chats", image: "ChatTabIcon") }
                 .tag(0)
-            ChannelsView()
+            TeamsView()
                 .macReadableWidth()
-                .tabItem { Label("Channels", systemImage: "number") }
+                .tabItem { Label("Teams", systemImage: "person.3.fill") }
                 .tag(1)
             NotificationsView()
                 .macReadableWidth()

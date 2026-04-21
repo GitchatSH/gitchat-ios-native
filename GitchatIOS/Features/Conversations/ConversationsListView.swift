@@ -394,7 +394,19 @@ struct ConversationsListView: View {
                 // Re-bind hook in case chat detail cleared it, and refresh
                 // so the list reflects anything sent from inside a chat.
                 socket.onConversationUpdated = { Task { await vm.load() } }
-                Task { await vm.load() }
+                Task {
+                    await vm.load()
+                    // Cold start from a push tap: the OneSignal click
+                    // handler may have set pendingConversationId before
+                    // this view attached its .onChange, so consume it
+                    // here after the initial load.
+                    if let pendingId = router.pendingConversationId {
+                        if let convo = vm.conversations.first(where: { $0.id == pendingId }) {
+                            openConversation(convo)
+                        }
+                        router.pendingConversationId = nil
+                    }
+                }
             }
             .onChange(of: router.pendingConversationId) { id in
                 guard let id else { return }
@@ -612,10 +624,29 @@ private struct CachedAvatarImage: View {
     private let maxPixelSize: CGFloat = 96
     @State private var image: UIImage?
 
+    /// GitHub avatars (github.com/<login>.png) are served from the same
+    /// URL but the underlying image changes when the user updates their
+    /// avatar. To keep avatars reasonably fresh we append a daily
+    /// cache-buster query param so each day produces a new cache key.
+    private static func dailyBustedURL(_ url: URL?) -> URL? {
+        guard let url else { return nil }
+        let host = url.host?.lowercased() ?? ""
+        guard host == "github.com" || host.hasSuffix(".githubusercontent.com") else {
+            return url
+        }
+        let day = Calendar(identifier: .gregorian).ordinality(of: .day, in: .era, for: Date()) ?? 0
+        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        var items = comps?.queryItems ?? []
+        items.append(URLQueryItem(name: "d", value: "\(day)"))
+        comps?.queryItems = items
+        return comps?.url ?? url
+    }
+
     init(url: URL?) {
-        self.url = url
-        if let url {
-            _image = State(initialValue: ImageCache.shared.image(for: url, maxPixelSize: maxPixelSize))
+        let busted = Self.dailyBustedURL(url)
+        self.url = busted
+        if let busted {
+            _image = State(initialValue: ImageCache.shared.image(for: busted, maxPixelSize: maxPixelSize))
         }
     }
 

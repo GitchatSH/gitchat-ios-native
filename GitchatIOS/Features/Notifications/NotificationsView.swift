@@ -1,5 +1,32 @@
 import SwiftUI
 
+enum NotificationFilter: String, CaseIterable, Identifiable {
+    case all
+    case messages
+    case mentions
+    case follows
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .messages: return "Messages"
+        case .mentions: return "Mentions"
+        case .follows: return "Follows"
+        }
+    }
+
+    func matches(_ n: Notification) -> Bool {
+        switch self {
+        case .all: return true
+        case .messages: return n.type == "new_message" || n.type == "chat_message" || n.type == "reply"
+        case .mentions: return n.type == "mention"
+        case .follows: return n.type == "follow" || n.type == "wave"
+        }
+    }
+}
+
 @MainActor
 final class NotificationsViewModel: ObservableObject {
     @Published var items: [Notification] = []
@@ -12,6 +39,10 @@ final class NotificationsViewModel: ObservableObject {
 
     func markReadLocally(_ id: String) {
         locallyRead.insert(id)
+    }
+
+    func unreadCount(filter: NotificationFilter) -> Int {
+        items.filter { filter.matches($0) && !isRead($0) }.count
     }
 
     func load() async {
@@ -28,8 +59,14 @@ final class NotificationsViewModel: ObservableObject {
         isSyncing = false
     }
 
-    func markAllRead() async {
-        try? await APIClient.shared.markNotificationsRead(all: true)
+    func markAllRead(filter: NotificationFilter = .all) async {
+        let targetIds = items.filter { filter.matches($0) && !isRead($0) }.map(\.id)
+        for id in targetIds { locallyRead.insert(id) }
+        if filter == .all {
+            try? await APIClient.shared.markNotificationsRead(all: true)
+        } else if !targetIds.isEmpty {
+            try? await APIClient.shared.markNotificationsRead(ids: targetIds)
+        }
         await load()
     }
 }
@@ -40,76 +77,86 @@ struct NotificationsView: View {
     @EnvironmentObject var auth: AuthStore
     @State private var sheetProfile: String?
     @State private var sheetConversation: Conversation?
+    @State private var filter: NotificationFilter = .all
 
     private var visible: [Notification] {
         vm.items.filter { n in
-            // Hide self-notifications and rows with no renderable
-            // action text — those are usually backend bugs and just
-            // confuse the user.
             guard n.actor_login != auth.login else { return false }
+            guard filter.matches(n) else { return false }
             return !notifText(n).trimmingCharacters(in: .whitespaces).isEmpty
         }
     }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if visible.isEmpty && !vm.isSyncing {
-                    ContentUnavailableCompat(
-                        title: "No notifications",
-                        systemImage: "bell",
-                        description: "Follows, mentions, and messages land here."
-                    )
-                } else {
-                    List(visible) { n in
-                        Button {
-                            // Hide the orange dot immediately.
-                            vm.markReadLocally(n.id)
-                            // Fire-and-forget backend mark.
-                            Task { try? await APIClient.shared.markNotificationsRead(ids: [n.id]) }
-                            route(for: n)
-                        } label: {
-                            HStack(spacing: 12) {
-                                AvatarView(
-                                    // Always use github.com/<login>.png
-                                    // — the backend has been seen to
-                                    // store the wrong actor_avatar_url
-                                    // for some notifications, which
-                                    // resulted in arthurbijan showing
-                                    // leeknowsai's face.
-                                    url: "https://github.com/\(n.actor_login).png",
-                                    size: 40,
-                                    login: n.actor_login
-                                )
-                                VStack(alignment: .leading, spacing: 4) {
-                                    notifLabel(n).font(.subheadline)
-                                    if let preview = n.metadata?.preview {
-                                        Text(preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                    }
-                                    Text(RelativeTime.format(n.created_at))
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
-                                Spacer()
-                                if !vm.isRead(n) {
-                                    Circle().fill(Color.accentColor).frame(width: 8, height: 8)
-                                }
+            VStack(spacing: 0) {
+                Picker("", selection: $filter) {
+                    ForEach(NotificationFilter.allCases) { f in
+                        HStack(spacing: 4) {
+                            Text(f.title)
+                            let count = vm.unreadCount(filter: f)
+                            if count > 0 {
+                                Text("\(count)")
+                                    .font(.caption2.bold())
                             }
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(
-                            vm.isRead(n)
-                                ? Color.clear
-                                : Color.accentColor.opacity(0.06)
-                        )
+                        .tag(f)
                     }
-                    .listStyle(.plain)
-                    #if !targetEnvironment(macCatalyst)
-            .scrollIndicators(.hidden)
-            #endif
-                    .refreshable { await vm.load() }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+
+                Group {
+                    if visible.isEmpty && !vm.isSyncing {
+                        ContentUnavailableCompat(
+                            title: emptyTitle,
+                            systemImage: emptyIcon,
+                            description: "Follows, mentions, and messages land here."
+                        )
+                    } else {
+                        List(visible) { n in
+                            Button {
+                                vm.markReadLocally(n.id)
+                                Task { try? await APIClient.shared.markNotificationsRead(ids: [n.id]) }
+                                route(for: n)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    AvatarView(
+                                        url: "https://github.com/\(n.actor_login).png",
+                                        size: 40,
+                                        login: n.actor_login
+                                    )
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        notifLabel(n).font(.subheadline)
+                                        if let preview = n.metadata?.preview {
+                                            Text(preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                        }
+                                        Text(RelativeTime.format(n.created_at))
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                    Spacer()
+                                    if !vm.isRead(n) {
+                                        Circle().fill(Color.accentColor).frame(width: 8, height: 8)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(
+                                vm.isRead(n)
+                                    ? Color.clear
+                                    : Color.accentColor.opacity(0.06)
+                            )
+                        }
+                        .listStyle(.plain)
+                        #if !targetEnvironment(macCatalyst)
+                        .scrollIndicators(.hidden)
+                        #endif
+                        .refreshable { await vm.load() }
+                    }
                 }
             }
             .navigationTitle("Activity")
@@ -121,10 +168,10 @@ struct NotificationsView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Read all") {
+                    Button(filter == .all ? "Read all" : "Mark seen") {
                         Task {
-                            await vm.markAllRead()
-                            ToastCenter.shared.show(.success, "All marked as seen")
+                            await vm.markAllRead(filter: filter)
+                            ToastCenter.shared.show(.success, filter == .all ? "All marked as seen" : "\(filter.title) marked as seen")
                         }
                     }
                 }
@@ -156,10 +203,28 @@ struct NotificationsView: View {
         }
     }
 
+    private var emptyTitle: String {
+        switch filter {
+        case .all: return "No notifications"
+        case .messages: return "No messages"
+        case .mentions: return "No mentions"
+        case .follows: return "No follows"
+        }
+    }
+
+    private var emptyIcon: String {
+        switch filter {
+        case .all: return "bell"
+        case .messages: return "bubble.left"
+        case .mentions: return "at"
+        case .follows: return "person.2"
+        }
+    }
+
     private func route(for n: Notification) {
         Haptics.selection()
         switch n.type {
-        case "new_message", "chat_message", "mention":
+        case "new_message", "chat_message", "mention", "reply":
             if let id = n.metadata?.conversationId, !id.isEmpty {
                 Task {
                     let resp = try? await APIClient.shared.listConversations(limit: 100)
@@ -179,7 +244,8 @@ struct NotificationsView: View {
 
     private func notifText(_ n: Notification) -> String {
         switch n.type {
-        case "new_message": return "\(n.actor_login) sent you a message"
+        case "new_message", "chat_message": return "\(n.actor_login) sent you a message"
+        case "reply": return "\(n.actor_login) replied to your message"
         case "mention": return "\(n.actor_login) mentioned you"
         case "follow": return "\(n.actor_login) followed you"
         case "repo_activity": return "\(n.actor_login) in \(n.metadata?.repoFullName ?? "a repo")"
@@ -191,8 +257,10 @@ struct NotificationsView: View {
     private func notifLabel(_ n: Notification) -> Text {
         let login = Text(n.actor_login).bold().foregroundColor(Color(.label))
         switch n.type {
-        case "new_message":
+        case "new_message", "chat_message":
             return login + Text(" sent you a message").foregroundColor(Color(.label))
+        case "reply":
+            return login + Text(" replied to your message").foregroundColor(Color(.label))
         case "mention":
             return login + Text(" mentioned you").foregroundColor(Color(.label))
         case "follow":

@@ -59,6 +59,7 @@
 		87F1CB4EFE6D24FE348C379A /* ConversationsCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CB898980AE4010FDBE8070 /* ConversationsCache.swift */; };
 		8AD5EE1720D14E153C09F5BA /* StoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07857501623E25CD298B606 /* StoreManager.swift */; };
 		8EC49E171B11904ED31ED2C4 /* ChatSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DA6355A70C27DBE9EA3F912 /* ChatSkeleton.swift */; };
+		9791D54113091049E987F845 /* TeamsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26A8CA3FAE6FECDD21D16265 /* TeamsView.swift */; };
 		97BEFA46F74B25582C9B5E6A /* ExploreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1171C3E5B7CAEFCD3F9C388C /* ExploreSheet.swift */; };
 		9911E286944B2E5A0B5817D6 /* ChatBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC444597FF8A45EB8294EC /* ChatBackground.swift */; };
 		999E1B7961171663AD703952 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */; };
@@ -127,6 +128,7 @@
 		1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MembersSheet.swift; sourceTree = "<group>"; };
 		24DA1766BE87B16368E73F58 /* GlassPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPill.swift; sourceTree = "<group>"; };
 		2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		26A8CA3FAE6FECDD21D16265 /* TeamsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamsView.swift; sourceTree = "<group>"; };
 		2AFC776F8EAF46612FBA12D7 /* InstantTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantTooltip.swift; sourceTree = "<group>"; };
 		2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactorsSheet.swift; sourceTree = "<group>"; };
 		2D5340BD447D966282E2E67D /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
@@ -290,6 +292,7 @@
 				2BDB1DDBCE30F01E50C93399 /* Notifications */,
 				56B988BC4A490DF85D6A3DEE /* Pro */,
 				672BB95E9BFAF431639BC1FB /* Profile */,
+				DE7E20654738CE7009B237F1 /* Teams */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -474,6 +477,14 @@
 				71BF468C5E19762E01C9A603 /* TypingIndicatorRow.swift */,
 			);
 			path = ChatDetail;
+			sourceTree = "<group>";
+		};
+		DE7E20654738CE7009B237F1 /* Teams */ = {
+			isa = PBXGroup;
+			children = (
+				26A8CA3FAE6FECDD21D16265 /* TeamsView.swift */,
+			);
+			path = Teams;
 			sourceTree = "<group>";
 		};
 		E32543862BA3EBB46378A148 /* Conversations */ = {
@@ -673,6 +684,7 @@
 				8AD5EE1720D14E153C09F5BA /* StoreManager.swift in Sources */,
 				D217FFA3516672466F57300D /* SyncingDotsLabel.swift in Sources */,
 				759EC50B1952C367FC53F63A /* SystemMessageRow.swift in Sources */,
+				9791D54113091049E987F845 /* TeamsView.swift in Sources */,
 				DEA9CCB7625D47EC3D8A9A78 /* Toast.swift in Sources */,
 				AB9FCA5C4BD98C40D7E5CC9C /* TypingIndicatorRow.swift in Sources */,
 				FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */,
