@@ -197,6 +197,9 @@ struct ChatDetailView: View {
             handleDrop(providers)
             return true
         }
+        .onPasteCommand(of: [UTType.image.identifier]) { providers in
+            handleDrop(providers)
+        }
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
         #endif
         .navigationTitle("")
@@ -542,22 +545,6 @@ struct ChatDetailView: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-    }
-
-    private func macPasteImages() {
-        let pb = UIPasteboard.general
-        var images: [UIImage] = []
-        if let imgs = pb.images, !imgs.isEmpty {
-            images = imgs
-        } else if let img = pb.image {
-            images = [img]
-        }
-        guard !images.isEmpty else {
-            ToastCenter.shared.show(.info, "No images on clipboard")
-            return
-        }
-        pendingDropImages = images
-        showDropConfirm = true
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
@@ -974,17 +961,6 @@ struct ChatDetailView: View {
                     .modifier(GlassPill())
             }
             .disabled(vm.uploading)
-
-            #if targetEnvironment(macCatalyst)
-            Button { macPasteImages() } label: {
-                Image(systemName: "doc.on.clipboard")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 44, height: 44)
-                    .modifier(GlassPill())
-            }
-            .disabled(vm.uploading)
-            #endif
 
             composerTextField
 

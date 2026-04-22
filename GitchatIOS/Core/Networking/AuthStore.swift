@@ -15,11 +15,18 @@ final class AuthStore: ObservableObject {
     private let loginKey = "login"
     private let needsGithubKey = "needs_github_link"
 
+    // Share extension reads from this App Group so tapping
+    // "Share → Gitchat" can call the API with the user's token.
+    private let sharedGroup = "group.chat.git.share"
+    private let sharedTokenKey = "shared_access_token"
+    private let sharedLoginKey = "shared_login"
+
     private init() {
         self.accessToken = read(tokenKey)
         self.login = read(loginKey)
         self.isAuthenticated = accessToken != nil
         self.needsGithubLink = read(needsGithubKey) == "1"
+        mirrorToSharedGroup()
     }
 
     func save(token: String, login: String, needsGithubLink: Bool = false, method: String = "unknown") {
@@ -31,6 +38,7 @@ final class AuthStore: ObservableObject {
         self.login = login
         self.needsGithubLink = needsGithubLink
         self.isAuthenticated = true
+        mirrorToSharedGroup()
         PushManager.shared.identify(login: login)
         AnalyticsTracker.setUserID(login)
         if isNewUser {
@@ -54,8 +62,21 @@ final class AuthStore: ObservableObject {
         self.login = nil
         self.needsGithubLink = false
         self.isAuthenticated = false
+        clearSharedGroup()
         AnalyticsTracker.clearUserID()
         PushManager.shared.forgetIdentity()
+    }
+
+    private func mirrorToSharedGroup() {
+        guard let shared = UserDefaults(suiteName: sharedGroup) else { return }
+        shared.set(accessToken, forKey: sharedTokenKey)
+        shared.set(login, forKey: sharedLoginKey)
+    }
+
+    private func clearSharedGroup() {
+        guard let shared = UserDefaults(suiteName: sharedGroup) else { return }
+        shared.removeObject(forKey: sharedTokenKey)
+        shared.removeObject(forKey: sharedLoginKey)
     }
 
     // MARK: - Keychain
