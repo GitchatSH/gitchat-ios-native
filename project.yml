@@ -77,7 +77,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.4"
-        CFBundleVersion: "65"
+        CFBundleVersion: "66"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -95,7 +95,6 @@ targets:
         NSPhotoLibraryUsageDescription: Gitchat needs photo library access to attach images to messages.
         NSPhotoLibraryAddUsageDescription: Gitchat needs permission to save images from chats to your Photos library.
         NSMicrophoneUsageDescription: Gitchat needs microphone access for voice messages.
-        NSUserTrackingUsageDescription: This helps Gitchat personalise your experience and measure ad performance.
         ITSAppUsesNonExemptEncryption: false
         FacebookAppID: "1492200602416732"
         FacebookClientToken: "07adfc78a5e324b84a05e8a2553e105d"
@@ -149,7 +148,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.4"
-        CFBundleVersion: "65"
+        CFBundleVersion: "66"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
@@ -186,7 +185,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.4"
-        CFBundleVersion: "65"
+        CFBundleVersion: "66"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController

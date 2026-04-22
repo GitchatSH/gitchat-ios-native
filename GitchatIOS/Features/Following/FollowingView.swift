@@ -44,9 +44,21 @@ final class FollowingViewModel: ObservableObject {
     }
 }
 
+enum FriendsScope: String, CaseIterable, Identifiable {
+    case all, online
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: return "All"
+        case .online: return "Online now"
+        }
+    }
+}
+
 struct FollowingView: View {
     @StateObject private var vm = FollowingViewModel()
     @State private var filter = ""
+    @State private var scope: FriendsScope = .all
     @State private var showExplore = false
     @ObservedObject private var presence = PresenceStore.shared
 
@@ -61,6 +73,11 @@ struct FollowingView: View {
                     || (u.name ?? "").lowercased().contains(q)
             }
         }
+        if scope == .online {
+            return base
+                .filter { presence.isOnline($0.login) }
+                .sorted { $0.login.lowercased() < $1.login.lowercased() }
+        }
         // Online-first, each group alphabetical by login.
         let online = base
             .filter { presence.isOnline($0.login) }
@@ -73,55 +90,17 @@ struct FollowingView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if vm.isLoading && vm.users.isEmpty {
-                    SkeletonList(count: 10, avatarSize: 40)
-                } else if let err = vm.error, vm.users.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 40))
-                            .foregroundStyle(.secondary)
-                        Text("Couldn't load friends").font(.headline)
-                        Text(err).font(.caption).foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center).padding(.horizontal)
-                        Button("Retry") { Task { await vm.load() } }
-                            .buttonStyle(.borderedProminent)
+            VStack(spacing: 0) {
+                Picker("", selection: $scope) {
+                    ForEach(FriendsScope.allCases) { s in
+                        Text(s.title).tag(s)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if vm.users.isEmpty {
-                    ContentUnavailableCompat(
-                        title: "No friends yet",
-                        systemImage: "person.2",
-                        description: "People you follow on GitHub show up here."
-                    )
-                } else if filtered.isEmpty {
-                    ContentUnavailableCompat(
-                        title: "No results",
-                        systemImage: "magnifyingglass",
-                        description: "Try a different search."
-                    )
-                } else {
-                    List(filtered) { u in
-                        NavigationLink {
-                            ProfileView(login: u.login)
-                        } label: {
-                            HStack(spacing: 12) {
-                                AvatarView(url: u.avatar_url, size: 40, login: u.login)
-                                VStack(alignment: .leading) {
-                                    Text(u.name ?? u.login).font(.headline)
-                                    Text("@\(u.login)").font(.caption).foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                            }
-                        }
-                        .listRowSeparator(.hidden)
-                    }
-                    .listStyle(.plain)
-                    #if !targetEnvironment(macCatalyst)
-            .scrollIndicators(.hidden)
-            #endif
-                    .refreshable { await vm.load() }
                 }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+
+                scopeContent
             }
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search friends")
             .navigationTitle("Friends")
@@ -146,14 +125,68 @@ struct FollowingView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.75), value: vm.isSyncing)
             .task {
                 if vm.users.isEmpty { await vm.load() }
-                // Pull latest GitHub follows automatically so new
-                // followers show up without tapping the sync icon.
                 await vm.syncGitHubFollows(silent: true)
                 presence.ensure(vm.users.map(\.login))
             }
             .onChange(of: vm.users.count) { _ in
                 presence.ensure(vm.users.map(\.login))
             }
+        }
+    }
+
+    @ViewBuilder
+    private var scopeContent: some View {
+        Group {
+            if vm.isLoading && vm.users.isEmpty {
+                SkeletonList(count: 10, avatarSize: 40)
+            } else if let err = vm.error, vm.users.isEmpty {
+                    VStack(spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.secondary)
+                        Text("Couldn't load friends").font(.headline)
+                        Text(err).font(.caption).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center).padding(.horizontal)
+                        Button("Retry") { Task { await vm.load() } }
+                            .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if vm.users.isEmpty {
+                    ContentUnavailableCompat(
+                        title: "No friends yet",
+                        systemImage: "person.2",
+                        description: "People you follow on GitHub show up here."
+                    )
+                } else if filtered.isEmpty {
+                    ContentUnavailableCompat(
+                        title: scope == .online ? "Nobody online" : "No results",
+                        systemImage: scope == .online ? "moon.zzz" : "magnifyingglass",
+                        description: scope == .online
+                            ? "Friends appear here when they're active in Gitchat."
+                            : "Try a different search."
+                    )
+                } else {
+                    List(filtered) { u in
+                        NavigationLink {
+                            ProfileView(login: u.login)
+                        } label: {
+                            HStack(spacing: 12) {
+                                AvatarView(url: u.avatar_url, size: 40, login: u.login)
+                                VStack(alignment: .leading) {
+                                    Text(u.name ?? u.login).font(.headline)
+                                    Text("@\(u.login)").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                        }
+                        .listRowSeparator(.hidden)
+                    }
+                    .listStyle(.plain)
+                    #if !targetEnvironment(macCatalyst)
+            .scrollIndicators(.hidden)
+            #endif
+                    .refreshable { await vm.load() }
+                }
         }
     }
 }

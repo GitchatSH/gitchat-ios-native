@@ -4,7 +4,6 @@ import FirebaseCore
 import FirebaseAnalytics
 import FacebookCore
 import AppsFlyerLib
-import AppTrackingTransparency
 
 @main
 struct GitchatApp: App {
@@ -24,10 +23,10 @@ struct GitchatApp: App {
             didFinishLaunchingWithOptions: nil
         )
 
-        // AppsFlyer SDK
+        // AppsFlyer SDK — SKAdNetwork handles attribution without IDFA,
+        // so we skip the ATT prompt entirely.
         AppsFlyerLib.shared().appsFlyerDevKey = "9PnQZkZDCb8dXSaRinRZAN"
         AppsFlyerLib.shared().appleAppID = "6762181976"
-        AppsFlyerLib.shared().waitForATTUserAuthorization(timeoutInterval: 60)
 
         UIScrollView.appearance().showsVerticalScrollIndicator = false
         UIScrollView.appearance().showsHorizontalScrollIndicator = false
@@ -37,17 +36,6 @@ struct GitchatApp: App {
             PresenceStore.shared.start()
             AppsFlyerLib.shared().start()
         }
-        // Delay ATT prompt so it doesn't fight with OneSignal's
-        // notification permission prompt on first launch.
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            Self.requestTracking()
-        }
-    }
-
-    private static func requestTracking() {
-        guard #available(iOS 14.5, *) else { return }
-        ATTrackingManager.requestTrackingAuthorization { _ in }
     }
 
     var body: some Scene {

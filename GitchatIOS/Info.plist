@@ -28,7 +28,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>65</string>
+	<string>66</string>
 	<key>FacebookAdvertiserIDCollectionEnabled</key>
 	<true/>
 	<key>FacebookAppID</key>
@@ -64,8 +64,6 @@
 	<array>
 		<string>INSendMessageIntent</string>
 	</array>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>This helps Gitchat personalise your experience and measure ad performance.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Geist-Regular.ttf</string>

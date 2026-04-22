@@ -38,11 +38,12 @@ struct ChatDetailView: View {
     @State private var showLeaveConfirm = false
     @Environment(\.dismiss) private var dismiss
     @FocusState private var composerFocused: Bool
-    #if targetEnvironment(macCatalyst)
-    @State private var isDragOver = false
     @State private var pendingDropImages: [UIImage] = []
     @State private var showDropConfirm = false
     @State private var dropCaption = ""
+    @State private var cropTarget: Int?
+    #if targetEnvironment(macCatalyst)
+    @State private var isDragOver = false
     #endif
 
     init(conversation: Conversation) {
@@ -200,8 +201,18 @@ struct ChatDetailView: View {
         .onPasteCommand(of: [UTType.image.identifier]) { providers in
             handleDrop(providers)
         }
-        .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
         #endif
+        .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
+        .sheet(item: Binding<CropRoute?>(
+            get: { cropTarget.map(CropRoute.init) },
+            set: { cropTarget = $0?.index }
+        )) { route in
+            if route.index < pendingDropImages.count {
+                ImageCropSheet(image: pendingDropImages[route.index]) { cropped in
+                    pendingDropImages[route.index] = cropped
+                }
+            }
+        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -379,14 +390,20 @@ struct ChatDetailView: View {
         .onChange(of: photoItems) { newItems in
             guard !newItems.isEmpty else { return }
             Task {
-                var loaded: [(Data, String, String)] = []
-                for (i, item) in newItems.enumerated() {
-                    if let data = try? await item.loadTransferable(type: Data.self) {
-                        loaded.append((data, "image-\(i).jpg", "image/jpeg"))
+                // Route picked photos through the same preview sheet
+                // used by drag-and-drop and paste — gives users a
+                // chance to review, caption, or crop before sending.
+                var collected: [UIImage] = []
+                for item in newItems {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let img = UIImage(data: data) {
+                        collected.append(img)
                     }
                 }
-                await vm.uploadAndSendMany(items: loaded, senderLogin: auth.login)
                 photoItems = []
+                guard !collected.isEmpty else { return }
+                pendingDropImages = collected
+                showDropConfirm = true
             }
         }
     }
@@ -497,19 +514,33 @@ struct ChatDetailView: View {
             .transition(.opacity)
         }
     }
+    #endif
 
     private var dropPreviewSheet: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
-                        ForEach(Array(pendingDropImages.enumerated()), id: \.offset) { _, img in
-                            Image(uiImage: img)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(height: 150)
-                                .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        ForEach(Array(pendingDropImages.enumerated()), id: \.offset) { i, img in
+                            ZStack(alignment: .topTrailing) {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(height: 150)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                Button {
+                                    cropTarget = i
+                                } label: {
+                                    Image(systemName: "crop")
+                                        .font(.caption.bold())
+                                        .foregroundStyle(.white)
+                                        .padding(6)
+                                        .background(Color.black.opacity(0.55), in: Circle())
+                                }
+                                .padding(6)
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                     .padding()
@@ -594,7 +625,6 @@ struct ChatDetailView: View {
         guard !items.isEmpty else { return }
         Task { await vm.uploadAndSendMany(items: items, senderLogin: auth.login) }
     }
-    #endif
 
     private static func imageAttachmentURLs(_ msg: Message) -> [String]? {
         if let atts = msg.attachments, !atts.isEmpty {
