@@ -77,7 +77,7 @@ struct TeamsView: View {
                                     Text("\(team.unreadCount)")
                                         .font(.caption2.bold())
                                         .padding(.horizontal, 8).padding(.vertical, 2)
-                                        .background(Color.accentColor, in: .capsule)
+                                        .background(Color("AccentColor"), in: .capsule)
                                         .foregroundStyle(.white)
                                 }
                             }

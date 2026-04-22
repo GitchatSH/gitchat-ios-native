@@ -301,7 +301,7 @@ struct ConversationsListView: View {
                         .opacity(tappedConvoId == convo.id ? 0.7 : 1)
                         .listRowBackground(
                             convo.isPinned
-                                ? Color.accentColor.opacity(0.08)
+                                ? Color("AccentColor").opacity(0.08)
                                 : Color.clear
                         )
                         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -435,7 +435,7 @@ struct SyncingIndicator: View {
             let seconds = context.date.timeIntervalSinceReferenceDate
             Image(systemName: "arrow.triangle.2.circlepath")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color("AccentColor"))
                 .rotationEffect(.degrees(seconds.truncatingRemainder(dividingBy: 1) * 360))
         }
         .accessibilityLabel("Syncing")
@@ -549,7 +549,7 @@ struct ConversationRow: View {
                     Text("\(displayedUnread)")
                         .font(.caption2.bold())
                         .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(isMutedBadge ? Color(.systemGray3) : Color.accentColor, in: .capsule)
+                        .background(isMutedBadge ? Color(.systemGray3) : Color("AccentColor"), in: .capsule)
                         .foregroundStyle(isMutedBadge ? Color(.label) : .white)
                 } else {
                     Color.clear.frame(width: 1, height: 18)
@@ -657,7 +657,7 @@ private struct CachedAvatarImage: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Color.accentColor.opacity(0.2)
+                Color("AccentColor").opacity(0.2)
                     .overlay(Image(systemName: "person.fill").foregroundStyle(.white))
             }
         }

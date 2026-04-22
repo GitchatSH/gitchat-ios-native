@@ -84,7 +84,7 @@ struct ExploreSheet: View {
             .font(.geist(13, weight: .semibold))
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            .background(isFollowed ? Color(.tertiarySystemFill) : Color.accentColor)
+            .background(isFollowed ? Color(.tertiarySystemFill) : Color("AccentColor"))
             .foregroundStyle(isFollowed ? Color(.label) : .white)
             .clipShape(Capsule())
         }

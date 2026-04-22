@@ -23,7 +23,7 @@ struct SettingsView: View {
             Section("Account") {
                 HStack {
                     Image(systemName: "person.crop.circle")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color("AccentColor"))
                     Text("Signed in as")
                     Spacer()
                     Text("@\(auth.login ?? "unknown")")
@@ -174,7 +174,7 @@ struct SettingsView: View {
         } label: {
             HStack {
                 Image(systemName: "sparkles")
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color("AccentColor"))
                 Text("Plan")
                     .foregroundStyle(Color(.label))
                 Spacer()

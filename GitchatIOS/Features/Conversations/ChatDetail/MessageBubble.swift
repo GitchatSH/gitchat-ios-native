@@ -79,7 +79,7 @@ struct MessageBubble: View {
                                 .foregroundStyle(.white)
                                 .rotationEffect(.degrees(45))
                                 .padding(5)
-                                .background(Color.accentColor, in: Circle())
+                                .background(Color("AccentColor"), in: Circle())
                                 .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
                         }
                         .buttonStyle(.plain)
@@ -184,13 +184,13 @@ struct MessageBubble: View {
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(
                 mine
-                    ? AnyShapeStyle(Color.accentColor.opacity(0.25))
+                    ? AnyShapeStyle(Color("AccentColor").opacity(0.25))
                     : AnyShapeStyle(.ultraThinMaterial)
             )
             .clipShape(Capsule())
             .overlay(
                 Capsule().stroke(
-                    mine ? Color.accentColor.opacity(0.6) : Color.clear,
+                    mine ? Color("AccentColor").opacity(0.6) : Color.clear,
                     lineWidth: 1
                 )
             )
@@ -200,13 +200,13 @@ struct MessageBubble: View {
     private func replyPreview(_ reply: ReplyPreview) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 2)
-                .fill(isMe ? Color.accentColor : Color.secondary)
+                .fill(isMe ? Color("AccentColor") : Color.secondary)
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 1) {
                 if let login = reply.sender_login {
                     Text("@\(login)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(isMe ? Color.accentColor : Color.secondary)
+                        .foregroundStyle(isMe ? Color("AccentColor") : Color.secondary)
                 }
                 Text(reply.body ?? "…")
                     .font(.system(size: 12))
@@ -253,7 +253,7 @@ struct MessageBubble: View {
                             .padding(.bottom, 4)
                         }
                         Text(Self.attributed(parsed.body, isMe: isMe))
-                            .tint(isMe ? .white : Color.accentColor)
+                            .tint(isMe ? .white : Color("AccentColor"))
                             .fixedSize(horizontal: false, vertical: true)
                             .textSelection(.enabled)
                             .padding(.horizontal, 12)
@@ -269,7 +269,7 @@ struct MessageBubble: View {
                     .modifier(MacLinkBubbleWidth(hasLink: Self.firstURL(in: parsed.body) != nil))
                     #endif
                     .background(
-                        isMe ? Color.accentColor : Color(.secondarySystemBackground)
+                        isMe ? Color("AccentColor") : Color(.secondarySystemBackground)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: 18))
                     .foregroundStyle(isMe ? .white : .primary)

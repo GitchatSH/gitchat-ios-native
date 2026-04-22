@@ -476,17 +476,17 @@ struct ChatDetailView: View {
                 Color.black.opacity(0.001)
                 RoundedRectangle(cornerRadius: 16)
                     .strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
-                    .foregroundStyle(Color.accentColor)
-                    .background(Color.accentColor.opacity(0.08).clipShape(RoundedRectangle(cornerRadius: 16)))
+                    .foregroundStyle(Color("AccentColor"))
+                    .background(Color("AccentColor").opacity(0.08).clipShape(RoundedRectangle(cornerRadius: 16)))
                     .padding(12)
                     .overlay {
                         VStack(spacing: 8) {
                             Image(systemName: "photo.on.rectangle.angled")
                                 .font(.system(size: 32))
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(Color("AccentColor"))
                             Text("Drop images here")
                                 .font(.headline)
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(Color("AccentColor"))
                         }
                     }
             }
@@ -520,7 +520,7 @@ struct ChatDetailView: View {
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 28))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(Color("AccentColor"))
                     }
                     .buttonStyle(.plain)
                 }
@@ -847,11 +847,11 @@ struct ChatDetailView: View {
     private var replyEditBar: some View {
         HStack {
             Image(systemName: vm.editingMessage != nil ? "pencil" : "arrowshape.turn.up.left")
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color("AccentColor"))
             VStack(alignment: .leading, spacing: 2) {
                 Text(vm.editingMessage != nil ? "Editing" : "Replying to \(vm.replyingTo?.sender ?? "")")
                     .font(.caption.bold())
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color("AccentColor"))
                 Text((vm.editingMessage ?? vm.replyingTo)?.content ?? "")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -918,7 +918,7 @@ struct ChatDetailView: View {
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background(Color("AccentColor"), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .foregroundStyle(.white)
             }
             .buttonStyle(.plain)
@@ -1002,7 +1002,7 @@ struct ChatDetailView: View {
                 }
                 .frame(width: 44, height: 44)
                 .background(
-                    Circle().fill(vm.draft.isEmpty ? Color.gray.opacity(0.5) : Color.accentColor)
+                    Circle().fill(vm.draft.isEmpty ? Color.gray.opacity(0.5) : Color("AccentColor"))
                 )
             }
             .disabled(vm.draft.isEmpty || vm.uploading)

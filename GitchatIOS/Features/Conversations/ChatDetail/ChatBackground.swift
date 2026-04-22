@@ -12,7 +12,7 @@ struct ChatBackground: View {
             LinearGradient(
                 colors: [
                     Color(.systemBackground),
-                    Color.accentColor.opacity(colorScheme == .dark ? 0.06 : 0.04),
+                    Color("AccentColor").opacity(colorScheme == .dark ? 0.06 : 0.04),
                     Color(.systemBackground),
                 ],
                 startPoint: .top,
@@ -23,7 +23,7 @@ struct ChatBackground: View {
             Canvas { context, size in
                 let dot: CGFloat = 1.5
                 let spacing: CGFloat = 22
-                let color = Color.accentColor.opacity(colorScheme == .dark ? 0.05 : 0.04)
+                let color = Color("AccentColor").opacity(colorScheme == .dark ? 0.05 : 0.04)
                 let stroke = GraphicsContext.Shading.color(color)
                 var y: CGFloat = 8
                 var row = 0

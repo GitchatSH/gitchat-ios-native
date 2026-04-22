@@ -18,7 +18,7 @@ struct ForwardSheet: View {
                     Text(c.displayTitle).foregroundStyle(Color(.label))
                     Spacer()
                     Image(systemName: selected.contains(c.id) ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selected.contains(c.id) ? Color.accentColor : Color(.tertiaryLabel))
+                        .foregroundStyle(selected.contains(c.id) ? Color("AccentColor") : Color(.tertiaryLabel))
                 }
             }
             .buttonStyle(.plain)

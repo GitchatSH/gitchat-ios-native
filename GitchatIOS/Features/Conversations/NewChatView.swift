@@ -161,7 +161,7 @@ struct NewChatView: View {
         HStack {
             Text("\(vm.selected.count) selected")
                 .font(.geist(12, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color("AccentColor"))
             Spacer()
             Button("Clear") { vm.selected.removeAll() }
                 .font(.geist(12, weight: .semibold))
@@ -227,14 +227,14 @@ struct NewChatView: View {
                 if vm.groupMode {
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
-                        .foregroundStyle(selected ? Color.accentColor : Color(.tertiaryLabel))
+                        .foregroundStyle(selected ? Color("AccentColor") : Color(.tertiaryLabel))
                 } else if user.online == true {
                     Circle().fill(.green).frame(width: 8, height: 8)
                 }
             }
             .padding(10)
             .background(
-                selected ? Color.accentColor.opacity(0.08) : Color.clear
+                selected ? Color("AccentColor").opacity(0.08) : Color.clear
             )
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .contentShape(Rectangle())

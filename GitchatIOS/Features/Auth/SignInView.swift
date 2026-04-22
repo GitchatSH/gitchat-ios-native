@@ -185,7 +185,7 @@ struct SignInView: View {
                 Button("Privacy") { legalURL = Config.privacyURL }
             }
             .font(.geist(11, weight: .semibold))
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color("AccentColor"))
         }
         .padding(.horizontal, 32)
     }

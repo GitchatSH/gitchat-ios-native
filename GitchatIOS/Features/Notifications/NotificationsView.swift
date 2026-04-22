@@ -92,15 +92,7 @@ struct NotificationsView: View {
             VStack(spacing: 0) {
                 Picker("", selection: $filter) {
                     ForEach(NotificationFilter.allCases) { f in
-                        HStack(spacing: 4) {
-                            Text(f.title)
-                            let count = vm.unreadCount(filter: f)
-                            if count > 0 {
-                                Text("\(count)")
-                                    .font(.caption2.bold())
-                            }
-                        }
-                        .tag(f)
+                        Text(f.title).tag(f)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -138,7 +130,7 @@ struct NotificationsView: View {
                                     }
                                     Spacer()
                                     if !vm.isRead(n) {
-                                        Circle().fill(Color.accentColor).frame(width: 8, height: 8)
+                                        Circle().fill(Color("AccentColor")).frame(width: 8, height: 8)
                                     }
                                 }
                                 .contentShape(Rectangle())
@@ -148,7 +140,7 @@ struct NotificationsView: View {
                             .listRowBackground(
                                 vm.isRead(n)
                                     ? Color.clear
-                                    : Color.accentColor.opacity(0.06)
+                                    : Color("AccentColor").opacity(0.06)
                             )
                         }
                         .listStyle(.plain)

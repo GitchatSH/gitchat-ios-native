@@ -115,7 +115,7 @@ struct MembersSheet: View {
                         .font(.caption.bold())
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.accentColor, in: Capsule())
+                        .background(Color("AccentColor"), in: Capsule())
                         .foregroundStyle(.white)
                 }
             }

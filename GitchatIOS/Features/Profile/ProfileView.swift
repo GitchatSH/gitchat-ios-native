@@ -291,7 +291,7 @@ struct ProfileView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(
-                (following ? Color(.secondarySystemBackground) : Color.accentColor),
+                (following ? Color(.secondarySystemBackground) : Color("AccentColor")),
                 in: .rect(cornerRadius: 12)
             )
     }
@@ -356,7 +356,7 @@ struct ProfileView: View {
         .padding(.horizontal, 8).padding(.vertical, 3)
         .background(
             LinearGradient(
-                colors: [Color.accentColor, Color.accentColor.opacity(0.7)],
+                colors: [Color("AccentColor"), Color("AccentColor").opacity(0.7)],
                 startPoint: .topLeading, endPoint: .bottomTrailing
             )
         )
@@ -391,12 +391,12 @@ struct ProfileView: View {
             .frame(maxWidth: .infinity)
             .background(
                 LinearGradient(
-                    colors: [Color.accentColor, Color.accentColor.opacity(0.75)],
+                    colors: [Color("AccentColor"), Color("AccentColor").opacity(0.75)],
                     startPoint: .topLeading, endPoint: .bottomTrailing
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: Color.accentColor.opacity(0.3), radius: 10, y: 4)
+            .shadow(color: Color("AccentColor").opacity(0.3), radius: 10, y: 4)
             .padding(.horizontal)
         }
         .buttonStyle(.plain)

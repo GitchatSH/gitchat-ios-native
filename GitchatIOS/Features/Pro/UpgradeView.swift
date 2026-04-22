@@ -25,7 +25,7 @@ struct UpgradeView: View {
                         Task { try? await store.restore() }
                     }
                     .font(.geist(13, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color("AccentColor"))
                     if let error {
                         Text(error).font(.footnote).foregroundStyle(.red)
                     }
@@ -53,7 +53,7 @@ struct UpgradeView: View {
         VStack(spacing: 10) {
             Image(systemName: "sparkles")
                 .font(.system(size: 44))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color("AccentColor"))
             Text("Upgrade to Pro")
                 .font(.geist(28, weight: .black))
             Text("Support the app and unlock the good stuff.")
@@ -79,7 +79,7 @@ struct UpgradeView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 18))
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color("AccentColor"))
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.geist(15, weight: .semibold))
@@ -121,7 +121,7 @@ struct UpgradeView: View {
                             VStack(alignment: .trailing, spacing: 1) {
                                 Text(product.displayPrice)
                                     .font(.geist(16, weight: .bold))
-                                    .foregroundStyle(Color.accentColor)
+                                    .foregroundStyle(Color("AccentColor"))
                                 Text(perPeriodLabel(for: product))
                                     .font(.geist(10, weight: .regular))
                                     .foregroundStyle(.secondary)
@@ -129,7 +129,7 @@ struct UpgradeView: View {
                         }
                     }
                     .padding()
-                    .background(Color.accentColor.opacity(0.08))
+                    .background(Color("AccentColor").opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
@@ -189,7 +189,7 @@ struct UpgradeView: View {
                 Button("EULA") { legalURL = Config.eulaURL }
             }
             .font(.geist(11, weight: .semibold))
-            .foregroundStyle(Color.accentColor)
+            .foregroundStyle(Color("AccentColor"))
         }
         .padding(.top, 8)
         .padding(.horizontal, 8)

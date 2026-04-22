@@ -66,7 +66,7 @@ struct AddMemberSheet: View {
                                     }
                                     Spacer()
                                     Image(systemName: "plus.circle.fill")
-                                        .foregroundStyle(Color.accentColor)
+                                        .foregroundStyle(Color("AccentColor"))
                                 }
                             }
                             .buttonStyle(.plain)
