@@ -46,9 +46,7 @@ struct ChatDetailView: View {
     @State private var showDropConfirm = false
     @State private var dropCaption = ""
     @State private var cropTarget: Int?
-    #if targetEnvironment(macCatalyst)
     @State private var isDragOver = false
-    #endif
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -195,17 +193,7 @@ struct ChatDetailView: View {
             }
             }
         }
-        #if targetEnvironment(macCatalyst)
-        .overlay { dragOverlay }
-        .animation(.easeInOut(duration: 0.15), value: isDragOver)
-        .onDrop(of: [UTType.image.identifier, UTType.fileURL.identifier], isTargeted: $isDragOver) { providers in
-            handleDrop(providers)
-            return true
-        }
-        .onPasteCommand(of: [UTType.image.identifier]) { providers in
-            handleDrop(providers)
-        }
-        #endif
+        .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
         .sheet(item: Binding<CropRoute?>(
             get: { cropTarget.map(CropRoute.init) },
@@ -503,7 +491,6 @@ struct ChatDetailView: View {
         }
     }
 
-    #if targetEnvironment(macCatalyst)
     @ViewBuilder
     private var dragOverlay: some View {
         if isDragOver {
@@ -529,7 +516,6 @@ struct ChatDetailView: View {
             .transition(.opacity)
         }
     }
-    #endif
 
     private var dropPreviewSheet: some View {
         NavigationStack {
