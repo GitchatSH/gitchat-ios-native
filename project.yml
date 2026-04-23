@@ -20,12 +20,6 @@ schemes:
       config: Debug
     archive:
       config: Release
-      preActions:
-        - name: Bump build number
-          settingsTarget: GitchatIOS
-          script: |
-            cd "$SRCROOT"
-            ./scripts/bump-build.sh >> /tmp/gitchat-bump.log 2>&1
 settings:
   base:
     DEVELOPMENT_TEAM: 9S5F8693FB
