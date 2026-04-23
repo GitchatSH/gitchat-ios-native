@@ -78,20 +78,6 @@ struct ImageSendPreview: View {
             }
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity)
-            .overlay(alignment: .topTrailing) {
-                Button {
-                    cropTarget = safeIndex
-                } label: {
-                    Label("Edit", systemImage: "crop")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .environment(\.colorScheme, .dark)
-                }
-                .padding(12)
-            }
         }
     }
 
