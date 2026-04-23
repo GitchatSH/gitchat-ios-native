@@ -45,6 +45,7 @@
 		4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */; };
 		531DEE508D58C8A62DB94393 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = 47DE335175F71C2369260202 /* FacebookCore */; };
 		5320852E8BA5BF99A5A6C0F7 /* DiscoverSubTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EF0AE1C58D76C8FBB0F123A /* DiscoverSubTab.swift */; };
+		543A3DB17E532560FDD4F0DF /* SwipeReplyModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A516D095AACAAD50113B5D /* SwipeReplyModifier.swift */; };
 		54503540CFF2CBDF6CCAE91C /* LinkPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD43FE561D7FEFCB9BF2702C /* LinkPreviewCard.swift */; };
 		5769D859AC782AFDBB13C6B1 /* DiscoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877BDA4EA59EAE485A2E7219 /* DiscoverViewModel.swift */; };
 		58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */; };
@@ -202,6 +203,7 @@
 		6F911D72B3577520347C7A25 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		71BF468C5E19762E01C9A603 /* TypingIndicatorRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicatorRow.swift; sourceTree = "<group>"; };
 		73F09F948E748AEF5080DB1B /* MacEscapeToHome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacEscapeToHome.swift; sourceTree = "<group>"; };
+		75A516D095AACAAD50113B5D /* SwipeReplyModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeReplyModifier.swift; sourceTree = "<group>"; };
 		75F4114554AD2D6C9FA5B027 /* ImageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCache.swift; sourceTree = "<group>"; };
 		76DD186A17655C846B988019 /* DiscoverTeamsList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverTeamsList.swift; sourceTree = "<group>"; };
 		781AD42CB2F6BD7F8C084678 /* MessageSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSearchSheet.swift; sourceTree = "<group>"; };
@@ -600,6 +602,7 @@
 				C9A1AFD3020F1206E54DA77A /* ReplyEditBar.swift */,
 				A066E307A07B247124125B04 /* Routes.swift */,
 				170CC226995548D4A03863C3 /* SeenBySheet.swift */,
+				75A516D095AACAAD50113B5D /* SwipeReplyModifier.swift */,
 				17539A82EA8BDD61C6458F4F /* SyncingDotsLabel.swift */,
 				C52A3C804970611E07FF79D0 /* SystemMessageRow.swift */,
 				71BF468C5E19762E01C9A603 /* TypingIndicatorRow.swift */,
@@ -864,6 +867,7 @@
 				1F64E756A95BD31E664AAEE9 /* Skeleton.swift in Sources */,
 				76A2320B8D73680FE87405B3 /* SocketClient.swift in Sources */,
 				8AD5EE1720D14E153C09F5BA /* StoreManager.swift in Sources */,
+				543A3DB17E532560FDD4F0DF /* SwipeReplyModifier.swift in Sources */,
 				D217FFA3516672466F57300D /* SyncingDotsLabel.swift in Sources */,
 				759EC50B1952C367FC53F63A /* SystemMessageRow.swift in Sources */,
 				DEA9CCB7625D47EC3D8A9A78 /* Toast.swift in Sources */,

@@ -511,6 +511,11 @@ struct ChatDetailView: View {
                     sourceFrame: bubbleFrames[msg.id] ?? .zero
                 )
             }
+            .swipeToReply(isMe: msg.sender == auth.login) {
+                vm.replyingTo = msg
+                vm.editingMessage = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { composerFocused = true }
+            }
             .onTapGesture(count: 2) {
                 Haptics.impact(.light)
                 vm.applyOptimisticReaction(messageId: msg.id, emoji: "❤️", myLogin: auth.login)
