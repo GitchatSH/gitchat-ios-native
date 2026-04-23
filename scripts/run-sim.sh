@@ -109,6 +109,7 @@ if [[ "$CATALYST" -eq 1 ]]; then
             -path "*Debug-maccatalyst*" \
             -path "*GitchatIOS*" \
             -not -path "*/Intermediates.noindex/*" \
+            -not -path "*/Index.noindex/*" \
             -print0 2>/dev/null \
             | xargs -0 ls -td 2>/dev/null \
             | head -1
@@ -145,6 +146,7 @@ find_app() {
         -path "*Debug-iphonesimulator*" \
         -path "*GitchatIOS*" \
         -not -path "*/Intermediates.noindex/*" \
+        -not -path "*/Index.noindex/*" \
         -print0 2>/dev/null \
         | xargs -0 ls -td 2>/dev/null \
         | head -1
