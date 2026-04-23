@@ -15,13 +15,15 @@ struct GroupInviteLinkSheet: View {
     @State private var errorMessage: String?
     @State private var presentedShare: ActivityItems?
 
-    /// Always share the custom-scheme URL so the tap opens the app
-    /// directly. BE may also return an `https://dev.gitchat.sh/invite/…`
-    /// URL but that route isn't live (404s in Safari) and we haven't
-    /// set up Universal Links, so web URLs are useless for recipients
-    /// right now — tracked in docs/be-blockers.md.
+    /// Share the https Universal Link. AASA is only hosted on `gitchat.sh`
+    /// (not `dev.gitchat.sh`), so always construct the prod URL from the
+    /// code regardless of what BE returns — the domain is a dispatch hint,
+    /// not a content target. Messages/Telegram/Mail auto-linkify https URLs
+    /// (custom schemes don't get linkified), and tap routes through the
+    /// Universal Link handler when the app is installed, or to the App
+    /// Store via `/join/<code>` when it isn't.
     private var sharedURL: String? {
-        link.map { "gitchat://invite/\($0.code)" }
+        link.map { "https://gitchat.sh/join/\($0.code)" }
     }
 
     private var shareText: String? {
@@ -65,7 +67,7 @@ struct GroupInviteLinkSheet: View {
 
     @ViewBuilder
     private func linkBody(_ link: APIClient.InviteLink) -> some View {
-        let display = "gitchat://invite/\(link.code)"
+        let display = "https://gitchat.sh/join/\(link.code)"
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Anyone with this link can join the group.")
