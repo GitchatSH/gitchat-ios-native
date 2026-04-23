@@ -40,32 +40,7 @@ enum ChatAnimations {
     static let menuOverlay: AnyTransition = .opacity.combined(with: .scale(scale: 0.96))
 }
 
-/// Typing-dots indicator driven by `TimelineView` so it keeps animating
-/// while the collection view is applying snapshot diffs (a plain
-/// `.animation` modifier freezes during diffable apply).
-struct TypingDots: View {
-    let tint: Color
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 24.0)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 3) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(tint)
-                        .frame(width: 5, height: 5)
-                        .opacity(0.35 + 0.65 * phase(at: t, i: i))
-                        .scaleEffect(0.85 + 0.15 * phase(at: t, i: i))
-                }
-            }
-        }
-    }
-
-    private func phase(at t: TimeInterval, i: Int) -> Double {
-        let cycle = 1.1
-        let delay = Double(i) * 0.15
-        let x = (t.truncatingRemainder(dividingBy: cycle) - delay) / cycle
-        let clamped = max(0, min(1, x))
-        return 0.5 * (1 + sin(clamped * 2 * .pi - .pi / 2))
-    }
-}
+// Note: TypingDots lives in TypingIndicatorRow.swift. This file holds
+// animation/transition tokens only; the typing-dots view was considered
+// here but the existing implementation already uses a TimelineView and
+// needs no replacement.
