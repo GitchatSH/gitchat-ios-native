@@ -374,6 +374,33 @@ struct FriendUser: Decodable, Identifiable, Hashable {
     let name: String?
     let avatar_url: String?
     let online: Bool?
+
+    // BE inconsistently returns the avatar field as either snake-case
+    // (`avatar_url`) or camelCase (`avatarUrl`) depending on the
+    // endpoint (mutuals returned camelCase on some routes, leaving
+    // the People list with empty avatars). Decode both spellings.
+    private enum CodingKeys: String, CodingKey {
+        case login, name, online
+        case avatar_url
+        case avatarUrl
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        login = try c.decode(String.self, forKey: .login)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        online = try c.decodeIfPresent(Bool.self, forKey: .online)
+        avatar_url = (try? c.decodeIfPresent(String.self, forKey: .avatar_url))
+            ?? (try? c.decodeIfPresent(String.self, forKey: .avatarUrl))
+            ?? nil
+    }
+
+    init(login: String, name: String?, avatar_url: String?, online: Bool?) {
+        self.login = login
+        self.name = name
+        self.avatar_url = avatar_url
+        self.online = online
+    }
 }
 
 struct RepoSummary: Decodable, Hashable, Identifiable {
