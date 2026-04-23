@@ -3,14 +3,23 @@ import SwiftUI
 struct ImageViewerSheet: View {
     let urls: [String]
     let startIndex: Int
+    /// When set, takes precedence over `@Environment(\.dismiss)`.
+    /// Lets the view be hosted in a plain ZStack overlay (instead of
+    /// a .fullScreenCover) and still have a way to close.
+    let onClose: (() -> Void)?
     @State private var index: Int
     @State private var dragOffset: CGFloat = 0
     @Environment(\.dismiss) private var dismiss
 
-    init(urls: [String], startIndex: Int) {
+    init(urls: [String], startIndex: Int, onClose: (() -> Void)? = nil) {
         self.urls = urls
         self.startIndex = startIndex
+        self.onClose = onClose
         _index = State(initialValue: startIndex)
+    }
+
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
     }
 
     private var dismissProgress: CGFloat {
@@ -40,7 +49,7 @@ struct ImageViewerSheet: View {
                     }
                     .onEnded { value in
                         if abs(value.translation.height) > 120 {
-                            dismiss()
+                            close()
                         } else {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                                 dragOffset = 0
@@ -50,7 +59,7 @@ struct ImageViewerSheet: View {
             )
 
             Button {
-                dismiss()
+                close()
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .bold))

@@ -33,6 +33,13 @@ struct ChatMessageView: View {
     var onAttachmentTap: ((String) -> Void)? = nil
     var onPinTap: (() -> Void)? = nil
     var onAvatarTap: (() -> Void)? = nil
+    /// Namespace for the shared-element transition from attachment
+    /// tile → full-screen image viewer. Passed through from the host
+    /// ChatView.
+    var imageMatchedNS: Namespace.ID? = nil
+    /// URL currently shown in the viewer overlay. Used so only the
+    /// tapped tile participates in the matchedGeometryEffect.
+    var activeImagePreviewURL: String? = nil
 
     // MARK: Local state
 
@@ -194,7 +201,9 @@ struct ChatMessageView: View {
                     attachments: atts,
                     maxWidth: 260,
                     isUploading: message.id.hasPrefix("local-"),
-                    onTap: { url in onAttachmentTap?(url) }
+                    onTap: { url in onAttachmentTap?(url) },
+                    matchedNamespace: imageMatchedNS,
+                    activePreviewURL: activeImagePreviewURL
                 )
             } else if let s = message.attachment_url,
                       let url = URL(string: s) {

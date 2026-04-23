@@ -5,11 +5,6 @@ import UIKit
 /// above the preview bubble inside `MessageMenuOverlay`. Emojis the
 /// current user has already reacted with render inside a filled
 /// circle to signal "you reacted with this" (exyte-style).
-///
-/// Structurally modelled on exyte/chat's `ReactionSelectionView`
-/// (MIT) but with the EmojiTextField search path dropped — that
-/// lives in our existing `EmojiPickerSheet` which the "more" chevron
-/// opens.
 struct ReactionSelectionView: View {
     @Environment(\.chatTheme) private var theme
 
@@ -49,13 +44,7 @@ struct ReactionSelectionView: View {
     private func emojiButton(_ emoji: String) -> some View {
         let isSelected = currentReactions.contains(emoji)
         Button { onPick(emoji) } label: {
-            Text(verbatim: emoji)
-                // AppleColorEmoji explicitly so the glyph can't fall
-                // back to a custom app-level font (e.g. Geist) that
-                // has no emoji coverage and would render missing
-                // squares.
-                .font(Font(UIFont(name: "AppleColorEmoji", size: 26)
-                           ?? UIFont.systemFont(ofSize: 26)))
+            EmojiLabel(text: emoji, pointSize: 26)
                 .frame(width: bubbleDiameter, height: bubbleDiameter)
                 .background(
                     Group {
@@ -82,5 +71,31 @@ struct ReactionSelectionView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// UIKit-backed emoji label. SwiftUI's `Text(emoji).font(.system(...))`
+/// inherits whatever font the enclosing view set (our app registers a
+/// custom body font globally), and emoji fall back to question-mark
+/// squares when the inherited font has no emoji coverage. Using
+/// `UILabel` with `UIFont.systemFont(ofSize:)` always goes through
+/// UIKit's emoji cascade (AppleColorEmoji) and renders correctly.
+private struct EmojiLabel: UIViewRepresentable {
+    let text: String
+    let pointSize: CGFloat
+
+    func makeUIView(context: Context) -> UILabel {
+        let label = UILabel()
+        label.textAlignment = .center
+        label.font = UIFont.systemFont(ofSize: pointSize)
+        label.text = text
+        label.adjustsFontForContentSizeCategory = false
+        label.backgroundColor = .clear
+        return label
+    }
+
+    func updateUIView(_ label: UILabel, context: Context) {
+        label.text = text
+        label.font = UIFont.systemFont(ofSize: pointSize)
     }
 }

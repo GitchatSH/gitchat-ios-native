@@ -1,5 +1,20 @@
 import SwiftUI
 
+private extension View {
+    /// Apply `matchedGeometryEffect` only when this tile is the one
+    /// currently being previewed in the viewer overlay. Skipping the
+    /// modifier for all other tiles avoids ambiguity errors when
+    /// multiple tiles share the same namespace.
+    @ViewBuilder
+    func matchedIfActive(url: String, in ns: Namespace.ID?, active: String?) -> some View {
+        if let ns, active == url {
+            self.matchedGeometryEffect(id: "chatv2.image:\(url)", in: ns, isSource: true)
+        } else {
+            self
+        }
+    }
+}
+
 /// iMessage-style grid for image attachments. Renders 1 / 2 / 3 / 4+
 /// layouts with a "+N" overlay on the fourth tile when attachments
 /// count exceeds 4. Each tile is `CachedAsyncImage` sized to a pixel
@@ -14,6 +29,15 @@ struct ChatAttachmentsGrid: View {
     let maxWidth: CGFloat
     let isUploading: Bool
     let onTap: (String) -> Void
+    /// Namespace used to run a shared-element transition from the
+    /// tapped tile to the full-screen viewer. The receiving overlay
+    /// marks its copy `isSource: false` with the same `id`, so SwiftUI
+    /// animates the frame between the two views.
+    var matchedNamespace: Namespace.ID? = nil
+    /// URL currently shown in the viewer overlay, if any. Only the tile
+    /// matching this URL is marked as the matched transition source;
+    /// other tiles stay out of the animation.
+    var activePreviewURL: String? = nil
 
     private let spacing: CGFloat = 3
     private let corner: CGFloat = 14
@@ -62,6 +86,7 @@ struct ChatAttachmentsGrid: View {
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .contentShape(Rectangle())
+        .matchedIfActive(url: urlStr, in: matchedNamespace, active: activePreviewURL)
         .onTapGesture { onTap(urlStr) }
     }
 
@@ -83,6 +108,7 @@ struct ChatAttachmentsGrid: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
         .contentShape(Rectangle())
+        .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
         .onTapGesture { onTap(a.url) }
     }
 

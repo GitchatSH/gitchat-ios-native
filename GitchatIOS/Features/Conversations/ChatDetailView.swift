@@ -731,7 +731,6 @@ private struct ChatDetailSheets: ViewModifier {
             }
             .fullScreenCover(item: $imagePreview) { state in
                 ImageViewerSheet(urls: state.urls, startIndex: state.index)
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
             }
             .alert("Delete message?", isPresented: Binding(
                 get: { confirmDelete != nil },

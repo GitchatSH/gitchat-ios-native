@@ -28,8 +28,11 @@ struct MessageMenu<Preview: View>: View {
 
     @State private var appeared = false
     @State private var dragOffset: CGFloat = 0
+    /// Starts at conservative estimates so the first layout pass
+    /// already budgets the preview correctly. The PreferenceKey
+    /// readers refine these values on the second pass.
     @State private var reactionBarHeight: CGFloat = 52
-    @State private var actionListHeight: CGFloat = 0
+    @State private var actionListHeight: CGFloat = 320
 
     private let gap: CGFloat = 10
     private let edgeInset: CGFloat = 14
@@ -39,12 +42,17 @@ struct MessageMenu<Preview: View>: View {
     var body: some View {
         GeometryReader { geo in
             let layout = computeLayout(in: geo)
+            let stackMaxHeight = geo.size.height
+                - geo.safeAreaInsets.top
+                - geo.safeAreaInsets.bottom
+                - 2 * edgeInset
 
             ZStack(alignment: .top) {
                 backdrop
                 column(maxPreviewHeight: layout.maxPreviewHeight)
                     .frame(
                         maxWidth: geo.size.width - 2 * edgeInset,
+                        maxHeight: stackMaxHeight,
                         alignment: target.isMe ? .trailing : .leading
                     )
                     .padding(.horizontal, edgeInset)
@@ -183,20 +191,25 @@ struct MessageMenu<Preview: View>: View {
         let safeBottom = geo.safeAreaInsets.bottom + edgeInset
         let available = geo.size.height - safeTop - safeBottom
         // Reserve space for the reaction bar + action list + two gaps.
+        // With conservative initial estimates (see @State defaults),
+        // the preview never gets a runaway budget on first render, so
+        // the action list can't spill off the bottom while the
+        // PreferenceKey readers refine the measurements.
         let budget = available
             - reactionBarHeight
             - actionListHeight
             - 2 * gap
-        let maxPreviewHeight = max(120, budget)
+        let maxPreviewHeight = max(100, budget)
 
-        // Desired top — anchor the preview near where the source cell
-        // was. If the source was near the screen bottom (common — user
-        // tapped on the most recent message), that pushes too far down,
-        // so clamp to keep the top of the stack visible.
+        // Stack height we expect to render once layout settles.
+        let previewHeight = min(maxPreviewHeight, max(120, source.height))
         let stackHeightEstimate = reactionBarHeight + actionListHeight
-            + min(maxPreviewHeight, max(120, source.height)) + 2 * gap
+            + previewHeight + 2 * gap
+        // Anchor near source; clamp so the full stack fits inside
+        // safe top...bottom.
         let preferredTop = source.minY - reactionBarHeight - gap
-        let maxTop = geo.size.height - geo.safeAreaInsets.bottom - edgeInset - stackHeightEstimate
+        let maxTop = geo.size.height - geo.safeAreaInsets.bottom
+            - edgeInset - stackHeightEstimate
         let clampedTop = max(safeTop, min(preferredTop, maxTop))
 
         // During the enter animation, slide a hair down from the source

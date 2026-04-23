@@ -200,15 +200,23 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     coord.scrollToBottom(in: tv, animated: false)
                 }
             }
-        } else if newIDs != prevIDs && (
-            wasNearBottom
-            || !coord.didInitialScroll
-            || (coord.initialScrollAt.map { Date().timeIntervalSince($0) < 1.5 } ?? false)
-        ) {
-            DispatchQueue.main.async { [weak tv] in
-                guard let tv else { return }
-                tv.layoutIfNeeded()
-                coord.scrollToBottom(in: tv, animated: true)
+        } else if newIDs != prevIDs && wasNearBottom {
+            // Only follow the tail when the user was near the bottom
+            // AND isn't actively scrolling right now. The previous
+            // 1.5-second "initial scroll" grace period + the "append"
+            // trigger combined to rubber-band the list back to the
+            // latest message whenever typing indicators toggled or a
+            // reaction update landed while the user was trying to
+            // scroll up — forcing them to drag 3+ times to escape.
+            if !tv.isTracking && !tv.isDragging && !tv.isDecelerating {
+                DispatchQueue.main.async { [weak tv] in
+                    guard let tv else { return }
+                    // Re-check tracking state on the runloop tick —
+                    // the user may have started dragging in between.
+                    guard !tv.isTracking, !tv.isDragging else { return }
+                    tv.layoutIfNeeded()
+                    coord.scrollToBottom(in: tv, animated: true)
+                }
             }
         }
 
