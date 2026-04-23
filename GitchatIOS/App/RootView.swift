@@ -32,7 +32,8 @@ struct RootView: View {
         }
         .onChange(of: scenePhase) { phase in
             // Fresh heartbeat the moment the app comes back to the
-            // foreground so `last_seen_at` in the DB is up to date.
+            // foreground so the user's Redis TTL is refreshed immediately
+            // instead of waiting up to 30s for the next scheduled tick.
             if phase == .active, auth.isAuthenticated {
                 PresenceStore.shared.heartbeatNow()
             }
@@ -77,9 +78,9 @@ struct RootView: View {
 
     private func startHeartbeat() {
         heartbeatTask?.cancel()
-        heartbeatTask = Task {
+        heartbeatTask = Task { @MainActor in
             while !Task.isCancelled {
-                try? await APIClient.shared.heartbeat()
+                SocketClient.shared.emitPresenceHeartbeat()
                 try? await Task.sleep(nanoseconds: UInt64(Config.presenceHeartbeatSeconds * 1_000_000_000))
             }
         }

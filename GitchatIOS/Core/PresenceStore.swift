@@ -4,16 +4,21 @@ import Combine
 /// Tracks which GitHub logins are currently online. Drives the small
 /// green dot overlaid on avatars throughout the app.
 ///
-/// Backend surface (see `misc` module):
-/// - `GET /presence?logins=a,b,c` → `{ presence: { login: isoDate | null } }`
-/// - `PATCH /presence` → heartbeat for the authenticated user
-/// - WS `presence:updated` → `{ data: { login, status: "online" | "offline" } }`
+/// Backend contract (post 2026-04-15 presence redesign — matches the
+/// webapp `use-presence` hook and the VS Code extension realtime client):
+/// - `GET /presence?logins=a,b,c` → `{ data: { login: { status, lastSeenAt } } }`
+/// - WS emit `subscribe:user` once on connect/reconnect
+/// - WS emit `presence:heartbeat` every 30s (TTL 90s on backend)
+/// - WS emit `watch:presence` per login we care about
+/// - WS `presence:updated` → transition { login, status, lastSeenAt? }
+/// - WS `presence:snapshot` → one-shot reply to watch:presence with the
+///   current state (same payload shape as `presence:updated`)
 ///
 /// We keep a `Set<String>` of known-online logins in memory. The
 /// conversations list / chat detail / profile views call `ensure(_:)`
 /// with the logins they care about; the store emits a `watch:presence`
 /// on the socket so the backend streams updates and also fetches the
-/// current `lastSeenAt` via REST so freshly-loaded avatars can decide
+/// current status via REST so freshly-loaded avatars can decide
 /// whether to show a dot immediately.
 @MainActor
 final class PresenceStore: ObservableObject {
@@ -29,9 +34,11 @@ final class PresenceStore: ObservableObject {
     private init() {}
 
     func start() {
-        // Live updates from the socket. The actual PATCH /presence
-        // heartbeat is driven by RootView.startHeartbeat() so we don't
-        // double up on timers here.
+        // Live updates from the socket — handles both `presence:updated`
+        // (transitions) and `presence:snapshot` (initial state reply to
+        // `watch:presence`/`subscribe:user`). The heartbeat emit itself
+        // is driven by RootView.startHeartbeat() so we don't double up
+        // on timers here.
         SocketClient.shared.onPresenceUpdated = { [weak self] login, online in
             guard let self else { return }
             if online {
@@ -44,11 +51,11 @@ final class PresenceStore: ObservableObject {
         }
     }
 
-    /// Fire a PATCH /presence immediately — used on app foreground so
-    /// the DB `last_seen_at` column is fresh the moment the user
-    /// returns to the app.
+    /// Emit a WS heartbeat immediately — used on app foreground so the
+    /// user's Redis presence TTL is refreshed the moment they come back
+    /// instead of waiting up to 30s for the scheduled tick.
     func heartbeatNow() {
-        Task { try? await APIClient.shared.heartbeat() }
+        SocketClient.shared.emitPresenceHeartbeat()
     }
 
     func isOnline(_ login: String?) -> Bool {
@@ -67,7 +74,9 @@ final class PresenceStore: ObservableObject {
             watched.insert(login)
             SocketClient.shared.watchPresence(login: login)
         }
-        // REST refresh — treat users seen in the last 90s as online.
+        // REST refresh — backend is authoritative for online/offline;
+        // we just mirror the `status` field and remember `lastSeenAt`
+        // for rendering "Seen Xm ago" on offline avatars.
         Task { [weak self] in
             guard let self else { return }
             if let map = try? await APIClient.shared.getPresence(logins: cleaned) {
@@ -75,18 +84,15 @@ final class PresenceStore: ObservableObject {
                 formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
                 let fallback = ISO8601DateFormatter()
                 fallback.formatOptions = [.withInternetDateTime]
-                let now = Date()
-                for (login, iso) in map {
-                    guard let iso else {
-                        // Server says we have no last_seen_at on file
-                        // — leave any in-memory state as-is.
-                        continue
-                    }
-                    let date = formatter.date(from: iso) ?? fallback.date(from: iso)
-                    guard let date else { continue }
-                    self.lastSeen[login] = date
-                    if now.timeIntervalSince(date) < 90 {
+                for (login, entry) in map {
+                    if entry.status == "online" {
                         self.onlineLogins.insert(login)
+                    } else {
+                        self.onlineLogins.remove(login)
+                    }
+                    if let iso = entry.lastSeenAt,
+                       let date = formatter.date(from: iso) ?? fallback.date(from: iso) {
+                        self.lastSeen[login] = date
                     }
                 }
             }

@@ -14,6 +14,10 @@ final class SocketClient: ObservableObject {
     private var manager: SocketManager?
     private var socket: SocketIOClient?
     private var subscribedConversations = Set<String>()
+    /// Login of the currently authenticated user. Stored so the reconnect
+    /// handler can re-emit `subscribe:user` and rebuild the backend's
+    /// socket→login mapping. Cleared on `disconnect()`.
+    private var subscribedUserLogin: String?
 
     // Event callbacks
     var onMessageSent: ((Message) -> Void)?
@@ -50,6 +54,12 @@ final class SocketClient: ObservableObject {
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             Task { @MainActor in
                 self?.connected = true
+                // Re-emit subscribe:user so the backend rebuilds the
+                // socket→login mapping after a disconnect. Without this
+                // the user's own presence never goes online again.
+                if let login = self?.subscribedUserLogin {
+                    self?.socket?.emit("subscribe:user", ["login": login])
+                }
                 // Re-subscribe on reconnect
                 if let subs = self?.subscribedConversations {
                     for id in subs { self?.subscribe(conversation: id) }
@@ -76,8 +86,10 @@ final class SocketClient: ObservableObject {
         socket.on("conversation:updated") { [weak self] _, _ in
             Task { @MainActor in self?.onConversationUpdated?() }
         }
-        socket.on("presence:updated") { [weak self] data, _ in
-            // Backend shape: { event_name, data: { login, status: "online" | "offline" } }
+        let presenceHandler: NormalCallback = { [weak self] data, _ in
+            // Backend shape: { event_name, data: { login, status: "online" | "offline", lastSeenAt? } }
+            // Same payload is emitted on both `presence:updated` (transition) and
+            // `presence:snapshot` (one-shot reply to watch:presence / subscribe:user).
             guard let dict = data.first as? [String: Any],
                   let inner = dict["data"] as? [String: Any],
                   let login = inner["login"] as? String,
@@ -85,6 +97,8 @@ final class SocketClient: ObservableObject {
             let online = (status == "online")
             Task { @MainActor in self?.onPresenceUpdated?(login, online) }
         }
+        socket.on("presence:updated", callback: presenceHandler)
+        socket.on("presence:snapshot", callback: presenceHandler)
         socket.on("reaction:updated") { [weak self] data, _ in
             guard let dict = data.first as? [String: Any],
                   let id = dict["messageId"] as? String else { return }
@@ -134,6 +148,7 @@ final class SocketClient: ObservableObject {
         manager = nil
         connected = false
         subscribedConversations.removeAll()
+        subscribedUserLogin = nil
     }
 
     func subscribe(conversation id: String) {
@@ -151,7 +166,16 @@ final class SocketClient: ObservableObject {
     }
 
     func subscribeUser(login: String) {
+        subscribedUserLogin = login
         socket?.emit("subscribe:user", ["login": login])
+    }
+
+    /// Emit a WS-level presence heartbeat. Backend's handler runs the
+    /// `refreshHeartbeat` Lua script to extend the user's Redis TTL and
+    /// update the heartbeat ZSET score. This is the authoritative keepalive
+    /// — the legacy `PATCH /presence` endpoint was removed on 2026-04-15.
+    func emitPresenceHeartbeat() {
+        socket?.emit("presence:heartbeat")
     }
 
     func emitTyping(conversationId: String, isTyping: Bool) {

@@ -5,7 +5,9 @@ enum Config {
     static let wsURL = URL(string: "https://ws-dev.gitchat.sh")!
     static let githubClientId = "Ov23lin5OyRE9J7Rvsrv"
     static let githubScope = "read:user user:follow"
-    static let presenceHeartbeatSeconds: TimeInterval = 60
+    // 30s matches the backend's Redis TTL budget (90s online key TTL,
+    // 75s sweeper cutoff). Raising this past ~45s risks flickering offline.
+    static let presenceHeartbeatSeconds: TimeInterval = 30
     static let appVersion: String = {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     }()

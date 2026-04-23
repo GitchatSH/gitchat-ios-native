@@ -545,17 +545,26 @@ struct APIClient {
     }
 
     // Presence
-    func heartbeat() async throws {
-        let _: EmptyResponse = try await request("presence", method: "PATCH")
+    //
+    // Heartbeat is a Socket.IO event (`presence:heartbeat`), not HTTP — the
+    // legacy `PATCH /presence` endpoint was removed in the 2026-04-15 backend
+    // redesign. See `SocketClient.emitPresenceHeartbeat()`.
+    //
+    // `GET /presence` response shape (post-redesign):
+    //   { data: { <login>: { status: "online" | "offline", lastSeenAt: ISO | null } } }
+
+    struct PresenceEntry: Decodable {
+        let status: String
+        let lastSeenAt: String?
     }
 
-    func getPresence(logins: [String]) async throws -> [String: String?] {
+    func getPresence(logins: [String]) async throws -> [String: PresenceEntry] {
         guard !logins.isEmpty else { return [:] }
-        struct Resp: Decodable { let presence: [String: String?] }
+        struct Resp: Decodable { let data: [String: PresenceEntry] }
         let list = logins.joined(separator: ",")
         let encoded = list.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? list
         let resp: Resp = try await request("presence?logins=\(encoded)")
-        return resp.presence
+        return resp.data
     }
 }
 
