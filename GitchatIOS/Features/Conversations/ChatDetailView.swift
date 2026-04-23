@@ -783,65 +783,20 @@ struct ChatDetailView: View {
 
     @ViewBuilder
     private func messageActions(for msg: Message) -> some View {
-        // iOS context menu inline ControlGroup caps at 4 items per row.
-        // Two stacked rows: row 1 = 4 emoji, row 2 = 3 emoji + chevron
-        // that opens the full reaction picker.
-        #if targetEnvironment(macCatalyst)
-        if #available(iOS 16.4, *) {
-            ControlGroup {
-                Button { quickReact(msg, "❤️") } label: { Text("❤️") }
-                Button { quickReact(msg, "👍") } label: { Text("👍") }
-                Button { quickReact(msg, "😂") } label: { Text("😂") }
-                Button { quickReact(msg, "🔥") } label: { Text("🔥") }
-            }
-            .controlGroupStyle(.compactMenu)
-            ControlGroup {
-                Button { quickReact(msg, "🎉") } label: { Text("🎉") }
-                Button { quickReact(msg, "👀") } label: { Text("👀") }
-                Button { quickReact(msg, "🙏") } label: { Text("🙏") }
-                Button { quickReact(msg, "😢") } label: { Text("😢") }
-            }
-            .controlGroupStyle(.compactMenu)
-        }
+        // The old two-row emoji picker used `ControlGroup(.compactMenu)`.
+        // On iOS 26 that style treats a button's `Text(emoji)` label as
+        // an SF Symbol name and renders the `questionmark.square`
+        // fallback — 8 `?` tiles instead of reactions. Dropped the
+        // inline row; one "Add reaction" entry opens the full picker
+        // sheet. Matches the Catalyst flow, which already had a single
+        // entry.
         Button {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 reactingFor = msg
             }
         } label: {
-            Label("More reactions…", systemImage: "face.smiling")
+            Label("Add reaction", systemImage: "face.smiling")
         }
-        #else
-        if #available(iOS 16.4, *) {
-            ControlGroup {
-                Button { quickReact(msg, "❤️") } label: { Text("❤️") }
-                Button { quickReact(msg, "👍") } label: { Text("👍") }
-                Button { quickReact(msg, "😂") } label: { Text("😂") }
-                Button { quickReact(msg, "🔥") } label: { Text("🔥") }
-            }
-            .controlGroupStyle(.compactMenu)
-            ControlGroup {
-                Button { quickReact(msg, "🎉") } label: { Text("🎉") }
-                Button { quickReact(msg, "👀") } label: { Text("👀") }
-                Button { quickReact(msg, "🙏") } label: { Text("🙏") }
-                Button {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        reactingFor = msg
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                }
-            }
-            .controlGroupStyle(.compactMenu)
-        } else {
-            Button {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    reactingFor = msg
-                }
-            } label: {
-                Label("React", systemImage: "face.smiling")
-            }
-        }
-        #endif
         Button {
             vm.replyingTo = msg
             vm.editingMessage = nil
