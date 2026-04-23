@@ -24,14 +24,12 @@ struct CatalystDropModifier<Overlay: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .overlay { if showsOverlay { dragOverlay } }
-            .animation(.easeInOut(duration: 0.15), value: isDragOver)
+            // contentShape makes the whole rect hit-testable for drop
+            // — default SwiftUI hit areas cover drawn content only, so
+            // drops over empty regions (the transparent chat background
+            // between messages) wouldn't register otherwise.
+            .contentShape(Rectangle())
             .onDrop(
-                // Broadened the accepted UTI set — some drag sources
-                // (Safari image drags, Messages, Finder) expose the
-                // payload under `public.data` or `public.url` instead
-                // of `public.image`. Accept all of them; `handleDrop`
-                // filters to what it can actually decode.
                 of: [
                     UTType.image.identifier,
                     UTType.fileURL.identifier,
@@ -49,5 +47,7 @@ struct CatalystDropModifier<Overlay: View>: ViewModifier {
                 onDrop(providers)
                 return true
             }
+            .overlay { if showsOverlay { dragOverlay } }
+            .animation(.easeInOut(duration: 0.15), value: isDragOver)
     }
 }
