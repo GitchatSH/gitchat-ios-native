@@ -1,15 +1,13 @@
 import SwiftUI
 
 /// Full-screen overlay shown when the user long-presses a message.
-/// Ported structurally from exyte/chat (MIT):
-/// - The message stays at its original cell frame — we don't fly it.
-/// - Background dims + blurs behind it.
-/// - Reaction picker fades in directly above the bubble.
-/// - Action list fades in directly below the bubble.
-/// - The whole stack is clamped to the safe area: if the reaction bar
-///   would clip the top, the content slides down; if the action list
-///   would clip the bottom, it slides up.
-/// - Dismisses on background tap, drag-down past threshold, or action.
+/// Bespoke replacement for the default `.contextMenu`:
+/// - Background dims + blurs with `.ultraThinMaterial`.
+/// - The source bubble is re-rendered in the overlay, starting at its
+///   source frame and springing to a centered target position.
+/// - A `ReactionPickerBar` sits above, an action list below.
+/// - Dismisses on tap outside, on drag down past threshold, or on
+///   action selection.
 struct MessageMenuOverlay<Preview: View, Actions: View>: View {
     let target: MessageMenuTarget
     let onDismiss: () -> Void
@@ -20,52 +18,19 @@ struct MessageMenuOverlay<Preview: View, Actions: View>: View {
 
     @State private var appeared = false
     @State private var dragOffset: CGFloat = 0
-    @State private var reactionBarHeight: CGFloat = 56
-    @State private var actionListHeight: CGFloat = 0
-
-    /// Gap between the bubble and the reaction bar / action list.
-    private let gap: CGFloat = 8
-    /// Minimum padding from screen edges.
-    private let edge: CGFloat = 8
 
     var body: some View {
         GeometryReader { geo in
-            let source = target.sourceFrame
-            let safeTop = geo.safeAreaInsets.top
-            let safeBottom = geo.safeAreaInsets.bottom
-            let screenH = geo.size.height
-
-            // Desired positions before clamping:
-            // - reaction bar TOP = source.minY - gap - reactionBarHeight
-            // - action list TOP = source.maxY + gap
-            let desiredBarTop = source.minY - gap - reactionBarHeight
-            let desiredActionsTop = source.maxY + gap
-
-            // Clamp: if bar goes above safe area, push everything down by
-            // the overflow; if actions go past bottom safe area, push up.
-            let overflowTop = max(0, safeTop + edge - desiredBarTop)
-            let overflowBottom = max(
-                0,
-                (desiredActionsTop + actionListHeight)
-                    - (screenH - safeBottom - edge)
-            )
-            // Prefer bottom correction (pushes up) when both occur.
-            let shift = overflowTop - overflowBottom
-
-            ZStack(alignment: .topLeading) {
+            ZStack {
                 // Dimmed / blurred backdrop. Tap anywhere to dismiss.
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .opacity(appeared ? 1 : 0)
-                    .overlay(Color.black.opacity(appeared ? 0.18 : 0))
+                Color.black.opacity(appeared ? 0.35 : 0)
+                    .background(.ultraThinMaterial.opacity(appeared ? 1 : 0))
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture { dismiss() }
 
-                // The message bubble at its ORIGINAL cell frame.
-                preview()
-                    .frame(width: source.width, height: source.height, alignment: .topLeading)
-                    .position(x: source.midX, y: source.midY + shift + dragOffset)
+                content(in: geo)
+                    .offset(y: dragOffset)
                     .gesture(
                         DragGesture()
                             .onChanged { v in
@@ -74,99 +39,88 @@ struct MessageMenuOverlay<Preview: View, Actions: View>: View {
                             .onEnded { v in
                                 if v.translation.height > 80 { dismiss() }
                                 else {
-                                    withAnimation(.spring(response: 0.32, dampingFraction: 0.75)) {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                         dragOffset = 0
                                     }
                                 }
                             }
                     )
-                    .allowsHitTesting(true)
-
-                // Reaction picker — anchored to the bubble's top edge,
-                // aligned to the bubble's leading or trailing edge.
-                ReactionPickerBar(
-                    onPick: { emoji in
-                        onQuickReact(emoji)
-                        dismiss()
-                    },
-                    onMore: {
-                        dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                            onMoreReactions()
-                        }
-                    }
-                )
-                .heightReader($reactionBarHeight)
-                .fixedSize()
-                .scaleEffect(
-                    appeared ? 1 : 0.5,
-                    anchor: target.isMe ? .bottomTrailing : .bottomLeading
-                )
-                .opacity(appeared ? 1 : 0)
-                .position(
-                    x: target.isMe
-                        ? (source.maxX - reactionBarWidthEstimate / 2)
-                        : (source.minX + reactionBarWidthEstimate / 2),
-                    y: (desiredBarTop + reactionBarHeight / 2) + shift + dragOffset
-                )
-
-                // Action list — below the bubble, anchored to the
-                // bubble's trailing or leading edge.
-                actionListContainer
-                    .frame(maxWidth: 240, alignment: target.isMe ? .trailing : .leading)
-                    .heightReader($actionListHeight)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .scaleEffect(
-                        appeared ? 1 : 0.7,
-                        anchor: target.isMe ? .topTrailing : .topLeading
-                    )
-                    .opacity(appeared ? 1 : 0)
-                    .position(
-                        x: target.isMe
-                            ? (source.maxX - 120)
-                            : (source.minX + 120),
-                        y: (desiredActionsTop + actionListHeight / 2) + shift + dragOffset
-                    )
             }
-            .frame(width: geo.size.width, height: geo.size.height)
         }
         .onAppear {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.75)) {
                 appeared = true
             }
         }
     }
 
-    private var reactionBarWidthEstimate: CGFloat {
-        // 8 emojis (38pt each) + chevron (32pt) + padding — good enough
-        // for anchoring. The bar self-sizes; we just need a stable
-        // anchor point for position().
-        CGFloat(8 * 38 + 32 + 16)
-    }
-
     @ViewBuilder
-    private var actionListContainer: some View {
-        VStack(spacing: 0) { actions() }
+    private func content(in geo: GeometryProxy) -> some View {
+        // Lay the three elements in a vertical stack. Anchor the
+        // PREVIEW to where the cell was (source frame) and let the
+        // stack spring upward/downward to center as appeared toggles.
+        let screenW = geo.size.width
+        let source = target.sourceFrame
+        let bubbleMaxWidth = min(screenW - 40, max(source.width, 260))
+
+        VStack(spacing: 12) {
+            ReactionPickerBar(onPick: { emoji in
+                onQuickReact(emoji)
+                dismiss()
+            }, onMore: {
+                onMoreReactions()
+                dismiss()
+            })
+            .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
+            .padding(.horizontal, 20)
+            .scaleEffect(appeared ? 1 : 0.3, anchor: target.isMe ? .topTrailing : .topLeading)
+            .opacity(appeared ? 1 : 0)
+
+            HStack {
+                if target.isMe { Spacer(minLength: 0) }
+                preview()
+                    .frame(maxWidth: bubbleMaxWidth)
+                if !target.isMe { Spacer(minLength: 0) }
+            }
+            .padding(.horizontal, 20)
+
+            VStack(spacing: 0) {
+                actions()
+            }
+            .frame(maxWidth: 260)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color(.separator).opacity(0.3), lineWidth: 0.5)
             )
             .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
+            .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
+            .padding(.horizontal, 20)
+            .scaleEffect(appeared ? 1 : 0.4, anchor: target.isMe ? .topTrailing : .topLeading)
+            .opacity(appeared ? 1 : 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .position(
+            x: geo.size.width / 2,
+            y: appeared
+                ? max(geo.size.height * 0.5, min(source.midY, geo.size.height * 0.55))
+                : source.midY
+        )
     }
 
     private func dismiss() {
-        withAnimation(.spring(response: 0.26, dampingFraction: 0.85)) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
             appeared = false
             dragOffset = 0
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
             onDismiss()
         }
     }
 }
 
-/// Single row in the message menu action list.
+/// Standard button row for the overlay's action list. Supports a
+/// destructive tint and an optional leading icon.
 struct MessageMenuActionButton: View {
     let title: String
     var systemImage: String?
@@ -191,25 +145,5 @@ struct MessageMenuActionButton: View {
         }
         .buttonStyle(.plain)
         .overlay(Divider(), alignment: .bottom)
-    }
-}
-
-/// Reads the view's height into a Binding via a PreferenceKey. Scoped
-/// to this file since the menu overlay is the only consumer.
-private struct HeightPrefKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-private extension View {
-    func heightReader(_ binding: Binding<CGFloat>) -> some View {
-        background(
-            GeometryReader { proxy in
-                Color.clear.preference(key: HeightPrefKey.self, value: proxy.size.height)
-            }
-        )
-        .onPreferenceChange(HeightPrefKey.self) { binding.wrappedValue = $0 }
     }
 }
