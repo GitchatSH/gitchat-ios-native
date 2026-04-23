@@ -400,6 +400,9 @@ struct ChatDetailView: View {
                 // Route picked photos through the same preview sheet
                 // used by drag-and-drop and paste — gives users a
                 // chance to review, caption, or crop before sending.
+                // Also merges into any existing pendingDropImages so
+                // the "Add more" tile in the preview sheet appends
+                // rather than replaces.
                 var collected: [UIImage] = []
                 for item in newItems {
                     if let data = try? await item.loadTransferable(type: Data.self),
@@ -409,8 +412,12 @@ struct ChatDetailView: View {
                 }
                 photoItems = []
                 guard !collected.isEmpty else { return }
-                pendingDropImages = collected
-                showDropConfirm = true
+                if showDropConfirm {
+                    pendingDropImages.append(contentsOf: collected)
+                } else {
+                    pendingDropImages = collected
+                    showDropConfirm = true
+                }
             }
         }
     }
@@ -521,37 +528,86 @@ struct ChatDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func dropThumbnail(image: UIImage, index: Int) -> some View {
+        Button {
+            cropTarget = index
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 150)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                HStack(spacing: 4) {
+                    Image(systemName: "crop")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Edit")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(Color.black.opacity(0.55), in: Capsule())
+                .padding(8)
+                .accessibilityLabel("Edit image")
+                // Remove button, top-left.
+                Button {
+                    pendingDropImages.remove(at: index)
+                    if pendingDropImages.isEmpty {
+                        cropTarget = nil
+                        dropCaption = ""
+                        showDropConfirm = false
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Color.black.opacity(0.55), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(8)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .accessibilityLabel("Remove image")
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     private var dropPreviewSheet: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                         ForEach(Array(pendingDropImages.enumerated()), id: \.offset) { i, img in
-                            Button {
-                                cropTarget = i
-                            } label: {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(uiImage: img)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(height: 150)
-                                        .clipped()
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "crop")
-                                            .font(.system(size: 11, weight: .semibold))
-                                        Text("Edit")
-                                            .font(.system(size: 12, weight: .semibold))
-                                    }
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 5)
-                                    .background(Color.black.opacity(0.55), in: Capsule())
-                                    .padding(8)
-                                    .accessibilityLabel("Edit image")
-                                }
+                            dropThumbnail(image: img, index: i)
+                        }
+                        // Add-more tile — reuses the composer's
+                        // PhotosPicker state. Selected items merge into
+                        // pendingDropImages via .onChange below.
+                        PhotosPicker(
+                            selection: $photoItems,
+                            maxSelectionCount: max(1, 10 - pendingDropImages.count),
+                            matching: .images
+                        ) {
+                            VStack(spacing: 6) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 28, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                Text("Add more")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 150)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                                    .foregroundStyle(.secondary)
+                            )
                         }
                     }
                     .padding()

@@ -57,17 +57,31 @@ struct ImageCropSheet: View {
                         .scaleEffect(scale)
                         .offset(offset)
                         .frame(width: geo.size.width, height: geo.size.height)
+                        // Opt out of inherited implicit animations —
+                        // gesture samples arrive faster than SwiftUI's
+                        // animation engine can interpolate, producing
+                        // the "Invalid sample AnimatablePair…" warnings.
+                        .animation(nil, value: scale)
+                        .animation(nil, value: offset)
                         .gesture(
                             SimultaneousGesture(
                                 MagnificationGesture()
-                                    .onChanged { value in scale = max(0.5, lastScale * value) }
+                                    .onChanged { value in
+                                        let s = max(0.5, lastScale * value)
+                                        withTransaction(Transaction(animation: nil)) {
+                                            scale = s
+                                        }
+                                    }
                                     .onEnded { _ in lastScale = scale },
                                 DragGesture()
                                     .onChanged { value in
-                                        offset = CGSize(
+                                        let o = CGSize(
                                             width: lastOffset.width + value.translation.width,
                                             height: lastOffset.height + value.translation.height
                                         )
+                                        withTransaction(Transaction(animation: nil)) {
+                                            offset = o
+                                        }
                                     }
                                     .onEnded { _ in lastOffset = offset }
                             )
