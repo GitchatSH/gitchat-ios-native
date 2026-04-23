@@ -33,6 +33,9 @@ struct GitchatApp: App {
         Task { @MainActor in
             StoreManager.shared.start()
             PushManager.shared.bootstrap()
+            if let login = AuthStore.shared.login {
+                PushManager.shared.identify(login: login)
+            }
             PresenceStore.shared.start()
             AppsFlyerLib.shared().start()
         }
