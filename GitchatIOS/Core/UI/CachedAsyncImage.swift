@@ -81,6 +81,33 @@ final class ImageCache {
         storage.removeAll(keepingCapacity: false)
     }
 
+    /// Fire-and-forget cache warming for URLs about to scroll into
+    /// view. Routes through the inflight map so duplicate requests
+    /// share one download. Safe to call with empty / file:// URLs.
+    nonisolated func prefetch(urls: [URL], maxPixelSize: CGFloat? = nil) {
+        for url in urls {
+            guard !url.isFileURL else { continue }
+            if image(for: url, maxPixelSize: maxPixelSize) != nil { continue }
+            Task.detached(priority: .utility) { [weak self] in
+                _ = await self?.load(url, maxPixelSize: maxPixelSize)
+            }
+        }
+    }
+
+    /// Cancel any in-flight fetches for the given URLs. No-op for URLs
+    /// that have no task in flight. Hops to the MainActor because
+    /// `inflight` is actor-isolated.
+    nonisolated func cancelPrefetch(urls: [URL], maxPixelSize: CGFloat? = nil) {
+        let keys = urls.map { Self.key($0, maxPixelSize) }
+        Task { @MainActor in
+            for key in keys {
+                if let task = self.inflight.removeValue(forKey: key) {
+                    task.cancel()
+                }
+            }
+        }
+    }
+
     func load(_ url: URL, maxPixelSize: CGFloat? = nil) async -> UIImage? {
         if let cached = image(for: url, maxPixelSize: maxPixelSize) { return cached }
         let cacheKey = Self.key(url, maxPixelSize)
