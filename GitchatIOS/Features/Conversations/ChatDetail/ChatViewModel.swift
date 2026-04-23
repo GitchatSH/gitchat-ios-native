@@ -21,7 +21,7 @@ final class ChatViewModel: ObservableObject {
     @Published var nextCursor: String?
     @Published var isLoadingMore = false
 
-    let conversation: Conversation
+    @Published var conversation: Conversation
     private var draftKey: String { "gitchat.draft.\(conversation.id)" }
 
     init(conversation: Conversation) {
@@ -324,6 +324,35 @@ final class ChatViewModel: ObservableObject {
             try await APIClient.shared.deleteMessage(conversationId: conversation.id, messageId: msg.id)
             messages.removeAll { $0.id == msg.id }
         } catch { self.error = error.localizedDescription }
+    }
+
+    /// Patch the locally-held Conversation with fresh group metadata so
+    /// the header (title / avatar) updates immediately after a save. BE
+    /// will also emit `conversation:updated` so the list refresh covers
+    /// other devices; this path covers the "just edited on this device"
+    /// race where the user is still looking at the stale header.
+    func applyLocalMetadata(name: String?, avatarUrl: String?) {
+        let c = conversation
+        conversation = Conversation(
+            id: c.id,
+            type: c.type,
+            is_group: c.is_group,
+            group_name: name ?? c.group_name,
+            group_avatar_url: avatarUrl ?? c.group_avatar_url,
+            repo_full_name: c.repo_full_name,
+            participants: c.participants,
+            other_user: c.other_user,
+            last_message: c.last_message,
+            last_message_preview: c.last_message_preview,
+            last_message_text: c.last_message_text,
+            last_message_at: c.last_message_at,
+            unread_count: c.unread_count,
+            pinned: c.pinned,
+            pinned_at: c.pinned_at,
+            is_request: c.is_request,
+            updated_at: c.updated_at,
+            is_muted: c.is_muted
+        )
     }
 
     func toggleMute() async {

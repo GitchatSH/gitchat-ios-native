@@ -379,14 +379,27 @@ struct APIClient {
         )
     }
 
-    // User search (for starting conversations)
+    // User search (for starting conversations). BE shape is not in
+    // swagger — tolerate both `{ users: [...] }` and a bare array. The
+    // generic request() also handles the `{ data: ... }` envelope.
     func searchUsersForDM(query: String) async throws -> [FriendUser] {
-        struct Wrap: Decodable { let users: [FriendUser] }
-        let w: Wrap = try await request(
+        struct Flex: Decodable {
+            let items: [FriendUser]
+            init(from decoder: Decoder) throws {
+                if let arr = try? decoder.singleValueContainer().decode([FriendUser].self) {
+                    self.items = arr
+                    return
+                }
+                struct Wrap: Decodable { let users: [FriendUser]? }
+                let w = try Wrap(from: decoder)
+                self.items = w.users ?? []
+            }
+        }
+        let flex: Flex = try await request(
             "messages/search-users",
             query: [URLQueryItem(name: "q", value: query)]
         )
-        return w.users
+        return flex.items
     }
 
     // Profile

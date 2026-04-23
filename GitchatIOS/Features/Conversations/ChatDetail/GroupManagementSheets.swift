@@ -7,7 +7,7 @@ struct GroupManagementSheets: ViewModifier {
     @Binding var showInviteLink: Bool
     @Binding var showGroupSettings: Bool
     @Binding var showDeleteConfirm: Bool
-    let onSettingsSaved: () -> Void
+    let onSettingsSaved: (_ name: String?, _ avatarUrl: String?) -> Void
     let onDeleteConfirmed: () -> Void
 
     func body(content: Content) -> some View {

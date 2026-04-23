@@ -5,7 +5,7 @@ import PhotosUI
 /// BE: PATCH /messages/conversations/:id/group with partial body.
 struct GroupSettingsSheet: View {
     let conversation: Conversation
-    var onSaved: (() -> Void)? = nil
+    var onSaved: ((_ newName: String?, _ newAvatarUrl: String?) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
@@ -17,7 +17,7 @@ struct GroupSettingsSheet: View {
     @State private var saving = false
     @State private var uploadingAvatar = false
 
-    init(conversation: Conversation, onSaved: (() -> Void)? = nil) {
+    init(conversation: Conversation, onSaved: ((_ newName: String?, _ newAvatarUrl: String?) -> Void)? = nil) {
         self.conversation = conversation
         self.onSaved = onSaved
         self._name = State(initialValue: conversation.group_name ?? "")
@@ -145,13 +145,14 @@ struct GroupSettingsSheet: View {
         saving = true
         defer { saving = false }
         do {
+            let newName: String? = nameChanged ? trimmedName : nil
             try await APIClient.shared.updateGroup(
                 id: conversation.id,
-                name: nameChanged ? trimmedName : nil,
+                name: newName,
                 avatarUrl: uploadedAvatarUrl
             )
             ToastCenter.shared.show(.success, "Group updated")
-            onSaved?()
+            onSaved?(newName, uploadedAvatarUrl)
             dismiss()
         } catch {
             ToastCenter.shared.show(.error, "Save failed", error.localizedDescription)

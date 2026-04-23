@@ -348,7 +348,10 @@ struct ChatDetailView: View {
             showInviteLink: $showInviteLink,
             showGroupSettings: $showGroupSettings,
             showDeleteConfirm: $showDeleteGroupConfirm,
-            onSettingsSaved: { Task { await vm.load() } },
+            onSettingsSaved: { newName, newAvatarUrl in
+                vm.applyLocalMetadata(name: newName, avatarUrl: newAvatarUrl)
+                Task { await vm.load() }
+            },
             onDeleteConfirmed: { Task { await disbandGroup() } }
         ))
         .sheet(item: $reportingMessage) { msg in reportSheet(for: msg) }
@@ -1164,11 +1167,13 @@ struct ChatDetailView: View {
         }
     }
 
-    /// Pull the freshest `is_muted` for the open chat from the shared
+    /// Pull the freshest Conversation for the open chat from the shared
     /// conversations cache. Called when a `conversation:updated` socket
-    /// event fires so the bell-slash indicator reflects remote toggles.
+    /// event fires so the header (title / avatar / bell-slash) reflects
+    /// remote edits without requiring the user to back out and re-enter.
     private func syncMutedFromCache() {
         guard let fresh = ConversationsCache.shared.get()?.first(where: { $0.id == vm.conversation.id }) else { return }
+        vm.conversation = fresh
         vm.isMuted = fresh.is_muted == true
     }
 

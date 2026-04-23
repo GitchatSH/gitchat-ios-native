@@ -17,33 +17,53 @@ struct SystemMessageRow: View {
         }
     }
 
-    private static let nonLoginWords: Set<String> = [
-        "added", "joined", "left", "pinned", "unpinned", "invited",
-        "removed", "kicked", "created", "renamed", "changed", "the",
-        "group", "message", "name", "was", "and", "to", "a", "an",
-        "from", "this", "chat", "conversation",
-    ]
-
-    /// Build an attributed string where every token that looks like a
-    /// GitHub login (and isn't a common English verb/article used in
-    /// system messages) is bold and links to its profile.
+    /// Build an attributed string. Linkify only the known
+    /// `message.sender` login (outside of any quoted segments) and any
+    /// explicit `@login` mention. Previously this scanned every
+    /// GitHub-login-shaped token and bold-linked matches, which turned
+    /// plain English inside user-provided strings (e.g. a group name
+    /// like "hot fix") into false-positive profile links.
     private var attributed: AttributedString {
         let body = message.content.isEmpty ? prettyType : message.content
         var attr = AttributedString(body)
 
-        let pattern = "\\b[A-Za-z0-9][A-Za-z0-9-]{1,38}\\b"
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return attr }
-        let ns = body as NSString
-        let matches = regex.matches(in: body, range: NSRange(location: 0, length: ns.length))
-        for m in matches.reversed() {
-            let token = ns.substring(with: m.range)
-            if Self.nonLoginWords.contains(token.lowercased()) { continue }
-            if let aRange = attr.range(of: token) {
-                attr[aRange].font = .caption.bold()
-                attr[aRange].foregroundColor = .secondary
-                attr[aRange].link = URL(string: "gitchat://user/\(token)")
+        // Ranges of `"..."` segments — content inside user-provided
+        // quotes stays plain text so group names aren't linkified.
+        var quotedRanges: [Range<String.Index>] = []
+        var searchStart = body.startIndex
+        while let open = body.range(of: "\"", range: searchStart..<body.endIndex),
+              let close = body.range(of: "\"", range: open.upperBound..<body.endIndex) {
+            quotedRanges.append(open.lowerBound..<close.upperBound)
+            searchStart = close.upperBound
+        }
+
+        func linkify(token: String, login: String) {
+            guard !token.isEmpty else { return }
+            var cursor = body.startIndex
+            while let r = body.range(of: token, range: cursor..<body.endIndex) {
+                cursor = r.upperBound
+                if quotedRanges.contains(where: { $0.overlaps(r) }) { continue }
+                if let aRange = Range(r, in: attr) {
+                    attr[aRange].font = .caption.bold()
+                    attr[aRange].foregroundColor = .secondary
+                    attr[aRange].link = URL(string: "gitchat://user/\(login)")
+                }
             }
         }
+
+        linkify(token: message.sender, login: message.sender)
+
+        // Explicit @mentions inside the body.
+        let mentionPattern = "@([A-Za-z0-9][A-Za-z0-9-]{0,38})"
+        if let regex = try? NSRegularExpression(pattern: mentionPattern) {
+            let ns = body as NSString
+            let matches = regex.matches(in: body, range: NSRange(location: 0, length: ns.length))
+            for m in matches where m.numberOfRanges >= 2 {
+                let login = ns.substring(with: m.range(at: 1))
+                linkify(token: "@\(login)", login: login)
+            }
+        }
+
         return attr
     }
 
