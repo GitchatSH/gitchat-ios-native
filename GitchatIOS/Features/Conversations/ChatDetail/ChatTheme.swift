@@ -9,56 +9,34 @@ import SwiftUI
 /// opportunistically in follow-up commits.
 struct ChatTheme: Equatable {
     // Bubble surfaces
-    var bubbleIncoming: Color
-    var bubbleOutgoing: Color
-    var bubbleIncomingText: Color
-    var bubbleOutgoingText: Color
+    var bubbleIncoming: Color = Color(.secondarySystemBackground)
+    var bubbleOutgoing: Color = Color("AccentColor")
+    var bubbleIncomingText: Color = Color(.label)
+    var bubbleOutgoingText: Color = .white
 
     // Reply preview
-    var replyAccent: Color
-    var replyBackground: Color
+    var replyAccent: Color = Color("AccentColor")
+    var replyBackground: Color = Color(.tertiarySystemBackground)
 
     // Date section header
-    var dateHeaderBg: Color
-    var dateHeaderText: Color
+    var dateHeaderBg: Color = Color(.tertiarySystemBackground)
+    var dateHeaderText: Color = Color(.secondaryLabel)
 
     // Menu + overlay
-    var menuSurface: Color
-    var menuDivider: Color
-    var reactionPickerBg: Color
+    var menuSurface: Color = Color(.secondarySystemBackground)
+    var menuDivider: Color = Color(.separator)
+    var reactionPickerBg: Color = Color(.secondarySystemBackground)
 
     // Composer
-    var composerSurface: Color
-    var composerPlaceholder: Color
-    var sendBg: Color
-    var sendDisabledBg: Color
+    var composerSurface: Color = Color(.secondarySystemBackground)
+    var composerPlaceholder: Color = Color(.placeholderText)
+    var sendBg: Color = Color("AccentColor")
+    var sendDisabledBg: Color = Color.gray.opacity(0.5)
 
     // Banners
-    var blockedBannerBg: Color
+    var blockedBannerBg: Color = Color(.secondarySystemBackground)
 
-    static let `default` = ChatTheme(
-        bubbleIncoming: Color(.secondarySystemBackground),
-        bubbleOutgoing: Color("AccentColor"),
-        bubbleIncomingText: Color(.label),
-        bubbleOutgoingText: .white,
-
-        replyAccent: Color("AccentColor"),
-        replyBackground: Color(.tertiarySystemBackground),
-
-        dateHeaderBg: Color(.tertiarySystemBackground),
-        dateHeaderText: Color(.secondaryLabel),
-
-        menuSurface: Color(.secondarySystemBackground),
-        menuDivider: Color(.separator),
-        reactionPickerBg: Color(.secondarySystemBackground),
-
-        composerSurface: Color(.secondarySystemBackground),
-        composerPlaceholder: Color(.placeholderText),
-        sendBg: Color("AccentColor"),
-        sendDisabledBg: Color.gray.opacity(0.5),
-
-        blockedBannerBg: Color(.secondarySystemBackground)
-    )
+    static let `default` = ChatTheme()
 }
 
 private struct ChatThemeKey: EnvironmentKey {
