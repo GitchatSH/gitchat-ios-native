@@ -41,6 +41,13 @@ struct RootView: View {
         )) { route in
             InvitePreviewSheet(code: route.code)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .gitchatWaveResponded)) { note in
+            guard let cid = note.object as? String, !cid.isEmpty else { return }
+            ToastCenter.shared.show(.success, "Waved back — opening chat")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                AppRouter.shared.openConversation(id: cid)
+            }
+        }
         .onChange(of: scenePhase) { phase in
             // Fresh heartbeat the moment the app comes back to the
             // foreground so the user's Redis TTL is refreshed immediately
