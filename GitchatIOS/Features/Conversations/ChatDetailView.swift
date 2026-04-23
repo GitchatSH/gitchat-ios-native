@@ -207,31 +207,15 @@ struct ChatDetailView: View {
             }
             }
         }
-        .overlay {
-            if let t = menuTarget {
-                MessageMenuOverlay(
-                    target: t,
-                    onDismiss: { menuTarget = nil },
-                    onQuickReact: { emoji in quickReact(t.message, emoji) },
-                    onMoreReactions: { reactingFor = t.message },
-                    preview: {
-                        MessageBubble(
-                            message: t.message,
-                            isMe: t.isMe,
-                            myLogin: auth.login,
-                            resolvedAvatar: resolveAvatar(for: t.message),
-                            showHeader: true,
-                            isPinned: vm.pinnedIds.contains(t.message.id)
-                        )
-                    },
-                    actions: {
-                        menuActionRows(for: t.message)
-                    }
-                )
-                .zIndex(100)
-                .transition(.opacity)
-            }
-        }
+        .modifier(MessageMenuHostModifier(
+            target: $menuTarget,
+            auth: auth,
+            vm: vm,
+            resolvedAvatar: menuTarget.flatMap { resolveAvatar(for: $0.message) },
+            onQuickReact: { msg, emoji in quickReact(msg, emoji) },
+            onMoreReactions: { msg in reactingFor = msg },
+            actions: { msg in AnyView(menuActionRows(for: msg)) }
+        ))
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
         .navigationTitle("")
@@ -403,26 +387,14 @@ struct ChatDetailView: View {
                 router.pendingMessageId = nil
             }
         }
-        .onChange(of: scenePhase) { phase in
-            if phase == .active { Task { await vm.load() } }
-        }
-        .onChange(of: vm.messages.last?.id) { _ in
-            // Whenever the latest message is one I just sent, force the
-            // collection view to scroll to it — even if the user had
-            // scrolled up before tapping send.
-            guard let last = vm.messages.last, last.sender == auth.login else { return }
-            scrollToBottomToken &+= 1
-        }
-        .onChange(of: composerFocused) { focused in
-            // When the user focuses the composer to start typing, jump
-            // to the latest message so the keyboard doesn't cover the
-            // conversation they're replying to.
-            if focused { scrollToBottomToken &+= 1 }
-        }
+        .modifier(ChatLifecycleModifier(
+            vm: vm,
+            scrollToBottomToken: $scrollToBottomToken,
+            composerFocused: composerFocused,
+            myLogin: auth.login,
+            onConversationUpdated: syncMutedFromCache
+        ))
         .onDisappear { onDisappearCleanup() }
-        .onReceive(NotificationCenter.default.publisher(for: .gitchatConversationUpdated)) { _ in
-            syncMutedFromCache()
-        }
         .onChange(of: vm.draft) { newValue in
             socket.emitTyping(
                 conversationId: vm.conversation.id,

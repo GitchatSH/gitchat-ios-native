@@ -178,7 +178,7 @@ final class ImageCache {
         }
     }
 
-    private static func decode(_ image: UIImage) -> UIImage? {
+    private nonisolated static func decode(_ image: UIImage) -> UIImage? {
         let format = UIGraphicsImageRendererFormat.default()
         format.opaque = false
         format.scale = image.scale
@@ -188,7 +188,7 @@ final class ImageCache {
         }
     }
 
-    private static func downsample(data: Data, maxPixelSize: CGFloat) -> UIImage? {
+    private nonisolated static func downsample(data: Data, maxPixelSize: CGFloat) -> UIImage? {
         let opts: [CFString: Any] = [
             kCGImageSourceShouldCache: false,
         ]
