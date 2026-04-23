@@ -528,137 +528,24 @@ struct ChatDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private func dropThumbnail(image: UIImage, index: Int) -> some View {
-        Button {
-            cropTarget = index
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 150)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                HStack(spacing: 4) {
-                    Image(systemName: "crop")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("Edit")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(Color.black.opacity(0.55), in: Capsule())
-                .padding(8)
-                .accessibilityLabel("Edit image")
-                // Remove button, top-left.
-                Button {
-                    pendingDropImages.remove(at: index)
-                    if pendingDropImages.isEmpty {
-                        cropTarget = nil
-                        dropCaption = ""
-                        showDropConfirm = false
-                    }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 22, height: 22)
-                        .background(Color.black.opacity(0.55), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .padding(8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .accessibilityLabel("Remove image")
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
     private var dropPreviewSheet: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                        ForEach(Array(pendingDropImages.enumerated()), id: \.offset) { i, img in
-                            dropThumbnail(image: img, index: i)
-                        }
-                        // Add-more tile — reuses the composer's
-                        // PhotosPicker state. Selected items merge into
-                        // pendingDropImages via .onChange below.
-                        PhotosPicker(
-                            selection: $photoItems,
-                            maxSelectionCount: max(1, 10 - pendingDropImages.count),
-                            matching: .images
-                        ) {
-                            VStack(spacing: 6) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 28, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                                Text("Add more")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 150)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                                    .foregroundStyle(.secondary)
-                            )
-                        }
-                    }
-                    .padding()
-                }
-                HStack(spacing: 8) {
-                    TextField("Add a message…", text: $dropCaption)
-                        .textFieldStyle(.roundedBorder)
-                    Button {
-                        cropTarget = nil
-                        showDropConfirm = false
-                        sendDroppedImages()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(Color("AccentColor"))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground))
+        ImageSendPreview(
+            images: $pendingDropImages,
+            caption: $dropCaption,
+            cropTarget: $cropTarget,
+            photoItems: $photoItems,
+            onCancel: {
+                cropTarget = nil
+                pendingDropImages = []
+                dropCaption = ""
+                showDropConfirm = false
+            },
+            onSend: {
+                cropTarget = nil
+                showDropConfirm = false
+                sendDroppedImages()
             }
-            .navigationTitle("Send \(pendingDropImages.count) image\(pendingDropImages.count == 1 ? "" : "s")")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        cropTarget = nil
-                        pendingDropImages = []
-                        dropCaption = ""
-                        showDropConfirm = false
-                    }
-                }
-            }
-            // Crop sheet lives inside the preview sheet — SwiftUI can't
-            // chain two .sheets attached to the same host view, and the
-            // sheet on chatBody would refuse to present while the drop
-            // preview was already on screen (tap Edit → nothing).
-            .sheet(item: Binding<CropRoute?>(
-                get: { cropTarget.map(CropRoute.init) },
-                set: { cropTarget = $0?.index }
-            )) { route in
-                if route.index < pendingDropImages.count {
-                    ImageCropSheet(image: pendingDropImages[route.index]) { cropped in
-                        pendingDropImages[route.index] = cropped
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        )
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
