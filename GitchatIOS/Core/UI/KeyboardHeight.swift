@@ -2,35 +2,73 @@ import SwiftUI
 import Combine
 import UIKit
 
-/// Observes the keyboard height so views can reactively push content up
-/// without relying on SwiftUI's built-in keyboard avoidance (which
-/// sometimes leaves a trailing bottom inset after dismissal).
+/// Observes the keyboard height, extracting the system's animation
+/// duration and curve so views can animate in lock-step with the
+/// keyboard instead of with SwiftUI's default curve. That lock-step
+/// is the difference between "composer snaps to keyboard" and
+/// "composer lags a few frames behind".
+///
+/// SwiftUI's built-in keyboard avoidance sometimes leaves a trailing
+/// bottom inset after dismissal, and its animation curve does not
+/// match the keyboard's, so we drive it ourselves.
 @MainActor
 final class KeyboardObserver: ObservableObject {
     @Published var height: CGFloat = 0
+    @Published private(set) var lastChange: Change = .zero
+
+    struct Change {
+        var height: CGFloat
+        var duration: TimeInterval
+        /// Raw value from `UIKeyboardAnimationCurveUserInfoKey`. Keyboard
+        /// curves use private values (often `7`) that map to the private
+        /// `UIView.AnimationCurve` cases; use `animationOptions` to
+        /// bridge to `UIView.AnimationOptions`.
+        var curveRawValue: UInt
+
+        static let zero = Change(height: 0, duration: 0.25, curveRawValue: 7)
+
+        var animationOptions: UIView.AnimationOptions {
+            UIView.AnimationOptions(rawValue: curveRawValue << 16)
+        }
+
+        /// SwiftUI spring tuned to feel close to the keyboard's curve.
+        /// Use for `withAnimation` when driving `@State` rather than
+        /// CALayer. Falls back to `.linear` when duration is 0 (instant
+        /// change — e.g. hardware keyboard attach).
+        var swiftUIAnimation: Animation {
+            guard duration > 0 else { return .linear(duration: 0) }
+            return .timingCurve(0.2, 0.8, 0.2, 1.0, duration: duration)
+        }
+    }
 
     private var bag: Set<AnyCancellable> = []
 
     init() {
-        let willShow = NotificationCenter.default
+        let publisher = NotificationCenter.default
             .publisher(for: UIResponder.keyboardWillChangeFrameNotification)
-            .compactMap { note -> CGFloat? in
-                guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return nil }
-                let screenHeight = UIScreen.main.bounds.height
-                return max(0, screenHeight - frame.origin.y)
-            }
-        let willHide = NotificationCenter.default
-            .publisher(for: UIResponder.keyboardWillHideNotification)
-            .map { _ in CGFloat(0) }
-
-        willShow
-            .merge(with: willHide)
+            .merge(with: NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification))
+            .compactMap { Self.change(from: $0) }
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] h in
-                withAnimation(.easeOut(duration: 0.22)) {
-                    self?.height = h
+
+        publisher
+            .sink { [weak self] change in
+                guard let self else { return }
+                self.lastChange = change
+                withAnimation(change.swiftUIAnimation) {
+                    self.height = change.height
                 }
             }
             .store(in: &bag)
+    }
+
+    private static func change(from note: Notification) -> Change? {
+        let info = note.userInfo ?? [:]
+        let isHide = note.name == UIResponder.keyboardWillHideNotification
+        let frame = info[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect ?? .zero
+        let screenHeight = UIScreen.main.bounds.height
+        let height: CGFloat = isHide ? 0 : max(0, screenHeight - frame.origin.y)
+        let duration = info[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval ?? 0.25
+        let curve = info[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt ?? 7
+        return Change(height: height, duration: duration, curveRawValue: curve)
     }
 }
