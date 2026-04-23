@@ -42,6 +42,9 @@ packages:
   AppsFlyerFramework:
     url: https://github.com/AppsFlyerSDK/AppsFlyerFramework
     from: "6.14.0"
+  Mantis:
+    url: https://github.com/guoyingtao/Mantis
+    from: "2.20.0"
 targets:
   GitchatIOS:
     type: application
@@ -65,6 +68,8 @@ targets:
         product: FacebookCore
       - package: AppsFlyerFramework
         product: AppsFlyerLib
+      - package: Mantis
+        product: Mantis
       - target: OneSignalNotificationServiceExtension
         embed: true
         codeSign: true
@@ -95,7 +100,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.4"
-        CFBundleVersion: "70"
+        CFBundleVersion: "73"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -170,7 +175,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.4"
-        CFBundleVersion: "70"
+        CFBundleVersion: "73"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
@@ -207,7 +212,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.4"
-        CFBundleVersion: "70"
+        CFBundleVersion: "73"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController

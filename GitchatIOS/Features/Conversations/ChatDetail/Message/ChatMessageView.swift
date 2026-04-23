@@ -40,6 +40,12 @@ struct ChatMessageView: View {
     /// URL currently shown in the viewer overlay. Used so only the
     /// tapped tile participates in the matchedGeometryEffect.
     var activeImagePreviewURL: String? = nil
+    /// When true, the inline `ChatReplyPreview` is omitted from the
+    /// bubble column. Used by the long-press menu so a reply
+    /// message's lifted bubble matches the height of a normal-message
+    /// preview (the menu's actions already let the user navigate to
+    /// the quoted message via "Reply").
+    var hideReplyPreview: Bool = false
 
     // MARK: Local state
 
@@ -48,18 +54,11 @@ struct ChatMessageView: View {
 
     /// Session-wide set of message ids that have already materialized
     /// on screen — so the fade-in animation only fires the *first*
-    /// time a bubble appears, not on every scroll recycle. Shared
-    /// with the legacy `MessageBubble` type (both live in the same
-    /// module and `ChatViewModel.load` marks seen via that symbol)
-    /// so the V1 → V2 transition can swap the rendering class
-    /// without losing the "already seen this session" state.
-    static var seenIds: Set<String> {
-        get { MessageBubble.seenIds }
-        set { MessageBubble.seenIds = newValue }
-    }
+    /// time a bubble appears, not on every scroll recycle.
+    nonisolated(unsafe) static var seenIds: Set<String> = []
 
     static func markSeen(_ ids: [String]) {
-        MessageBubble.markSeen(ids)
+        for id in ids { seenIds.insert(id) }
     }
 
     // MARK: Body
@@ -74,7 +73,7 @@ struct ChatMessageView: View {
             bubbleColumn
             if !isMe { Spacer(minLength: 40) }
         }
-        .opacity(MessageBubble.seenIds.contains(message.id) || appeared ? 1 : 0)
+        .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
         .onAppear(perform: onFirstAppear)
     }
 
@@ -114,7 +113,7 @@ struct ChatMessageView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            if let reply = message.reply {
+            if let reply = message.reply, !hideReplyPreview {
                 ChatReplyPreview(reply: reply, isMe: isMe) { onReplyTap?() }
             }
             bubble
@@ -281,10 +280,10 @@ struct ChatMessageView: View {
     // MARK: Lifecycle
 
     private func onFirstAppear() {
-        if MessageBubble.seenIds.contains(message.id) {
+        if Self.seenIds.contains(message.id) {
             appeared = true
         } else {
-            MessageBubble.seenIds.insert(message.id)
+            Self.seenIds.insert(message.id)
             withAnimation(.spring(response: 0.38, dampingFraction: 0.62)) {
                 appeared = true
             }

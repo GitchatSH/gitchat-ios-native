@@ -14,6 +14,32 @@ extension APIClient {
         let has_discussions: Bool?
         var id: String { "\(owner)/\(name)" }
         var fullName: String { "\(owner)/\(name)" }
+
+        // Same BE inconsistency as FriendUser — accept either spelling
+        // for the avatar field so Communities tiles always render
+        // their owner avatar.
+        private enum CodingKeys: String, CodingKey {
+            case owner, name, description, language, stars, forks, topics
+            case avatar_url, avatarUrl
+            case has_discussions, hasDiscussions
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            owner = try c.decode(String.self, forKey: .owner)
+            name = try c.decode(String.self, forKey: .name)
+            description = try c.decodeIfPresent(String.self, forKey: .description)
+            language = try c.decodeIfPresent(String.self, forKey: .language)
+            stars = try c.decodeIfPresent(Int.self, forKey: .stars)
+            forks = try c.decodeIfPresent(Int.self, forKey: .forks)
+            topics = try c.decodeIfPresent([String].self, forKey: .topics)
+            avatar_url = (try? c.decodeIfPresent(String.self, forKey: .avatar_url))
+                ?? (try? c.decodeIfPresent(String.self, forKey: .avatarUrl))
+                ?? nil
+            has_discussions = (try? c.decodeIfPresent(Bool.self, forKey: .has_discussions))
+                ?? (try? c.decodeIfPresent(Bool.self, forKey: .hasDiscussions))
+                ?? nil
+        }
     }
 
     struct ContributedRepo: Decodable, Identifiable, Hashable {

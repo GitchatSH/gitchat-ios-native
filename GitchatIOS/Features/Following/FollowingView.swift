@@ -90,12 +90,6 @@ struct FollowingView: View {
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search friends")
             .navigationTitle("Friends")
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if vm.isSyncing {
-                        SyncingIndicator()
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showExplore = true

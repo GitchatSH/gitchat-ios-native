@@ -6,11 +6,29 @@ import UIKit
 /// Stable identifier for the typing-indicator row pinned to the end
 /// of the list. Chosen so it never collides with a server-generated
 /// message id.
-let ChatV2TypingRowID: String = "__v2_typing__"
+let ChatTypingRowID: String = "__v2_typing__"
 
 /// Stable identifier for the "seen" avatar row pinned under the last
 /// outgoing message in a DM.
-let ChatV2SeenRowID: String = "__v2_seen__"
+let ChatSeenRowID: String = "__v2_seen__"
+
+/// Prefix for synthetic date-pill rows. Using a regular row instead
+/// of a section footer avoids UITableView `.plain` style's
+/// sticky-footer behaviour, which pinned "Today" mid-screen as the
+/// user scrolled past the day's last message.
+private let ChatDateRowPrefix = "__v2_date__|"
+
+private func chatDateRowID(for sectionID: String) -> String {
+    "\(ChatDateRowPrefix)\(sectionID)"
+}
+
+private func chatIsDateRow(_ id: String) -> Bool {
+    id.hasPrefix(ChatDateRowPrefix)
+}
+
+private func chatSectionID(fromDateRow id: String) -> String {
+    String(id.dropFirst(ChatDateRowPrefix.count))
+}
 
 // MARK: - Messages list
 
@@ -48,6 +66,9 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     let onScrollToIdConsumed: () -> Void
     let onTopReached: () -> Void
     let onCellLongPressed: (Message, CGRect) -> Void
+    let isMe: (Message) -> Bool
+    let onReply: (Message) -> Void
+    let swipeState: ChatSwipeState
     let cellBuilder: (Message, Int) -> Cell
 
     // MARK: UIViewRepresentable plumbing
@@ -62,7 +83,14 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         tv.showsVerticalScrollIndicator = false
         tv.allowsSelection = false
         tv.alwaysBounceVertical = true
-        tv.contentInsetAdjustmentBehavior = .automatic
+        // `.never` — the enclosing SwiftUI VStack already controls
+        // the list's frame (composer below, nav bar above). Letting
+        // UIKit auto-adjust for safe areas causes contentOffset to
+        // shift when sibling views animate (jump-to-bottom button
+        // appearing, reply bar in/out), which on a rotated table
+        // shows up as a snap back toward the latest-message edge
+        // mid-scroll.
+        tv.contentInsetAdjustmentBehavior = .never
         tv.scrollsToTop = false
         // Self-sizing cells — UIHostingConfiguration reports its
         // intrinsic height.
@@ -71,8 +99,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         tv.sectionHeaderHeight = 0
         tv.estimatedSectionHeaderHeight = 0
         tv.sectionHeaderTopPadding = 0
-        tv.sectionFooterHeight = UITableView.automaticDimension
-        tv.estimatedSectionFooterHeight = 32
+        tv.sectionFooterHeight = 0
+        tv.estimatedSectionFooterHeight = 0
 
         // Rotation trick from exyte/chat (also how Telegram, Stream,
         // and iMessage handle it): flip the whole table 180° so data
@@ -88,7 +116,21 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // renders upright. Same for section headers.
         tv.transform = CGAffineTransform(rotationAngle: .pi)
 
-        // Long-press → menu overlay in SwiftUI.
+        // Context-menu trigger. On touch-first platforms (iOS, iPadOS)
+        // the natural gesture is a long-press. On Mac Catalyst, users
+        // expect right-click (secondary mouse button) instead of
+        // holding — holding feels distinctly non-Mac — so we attach a
+        // tap recognizer with `buttonMaskRequired = .secondary` and
+        // skip the long-press entirely.
+        #if targetEnvironment(macCatalyst)
+        let rc = UITapGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleSecondaryClick(_:))
+        )
+        rc.buttonMaskRequired = .secondary
+        rc.cancelsTouchesInView = false
+        tv.addGestureRecognizer(rc)
+        #else
         let lp = UILongPressGestureRecognizer(
             target: context.coordinator,
             action: #selector(Coordinator.handleLongPress(_:))
@@ -97,6 +139,24 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         lp.cancelsTouchesInView = false
         lp.delaysTouchesBegan = false
         tv.addGestureRecognizer(lp)
+        #endif
+
+        // Horizontal swipe-to-reply. Attached at the table level (not
+        // per-bubble) so we can coordinate with the table's own pan
+        // via UIGestureRecognizerDelegate — SwiftUI's
+        // `simultaneousGesture(DragGesture)` can't, which is why
+        // dragging on a bubble previously blocked vertical scroll.
+        //
+        // `HorizontalPanGestureRecognizer` fails the gesture early
+        // when the drag is vertical-dominant, so the table pan takes
+        // over and scroll feels native.
+        let swipePan = HorizontalPanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleSwipePan(_:))
+        )
+        swipePan.delegate = context.coordinator
+        swipePan.cancelsTouchesInView = false
+        tv.addGestureRecognizer(swipePan)
 
         tv.delegate = context.coordinator
         tv.prefetchDataSource = context.coordinator
@@ -145,9 +205,21 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // Apply the new snapshot. Animated for new-message arrivals +
         // typing toggles; static for bulk reloads (cache hydration,
         // pagination which has its own offset compensation).
+        //
+        // Skip entirely when nothing relevant changed — SwiftUI
+        // re-renders ChatView on every isAtBottom flip, keyboard
+        // tick, pulse, reply-bar toggle, etc. Rebuilding + applying
+        // an identical diffable snapshot on every tick is wasted
+        // work and can briefly disturb the scroll.
         let typingToggled = coord.lastTypingUsers != typingUsers
-        let animate = isAppend || typingToggled
-        coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: animate)
+        let seenToggled = coord.lastShowSeen != showSeen
+        let itemsChanged = coord.lastItems.map(\.id) != newIDs
+        if itemsChanged || typingToggled || seenToggled {
+            let animate = isAppend || typingToggled
+            coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: animate)
+        } else {
+            coord.lastItems = items
+        }
 
         // Pinned changes: reconfigure so the pin badge flips without
         // a full snapshot apply.
@@ -174,27 +246,20 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             coord.reconfigure(ids: affected)
         }
 
-        // Keyboard-driven scroll-to-bottom: ChatView's default SwiftUI
-        // keyboard avoidance already shrinks the list's frame when the
-        // keyboard opens, so we do NOT add a bottom contentInset here
-        // (doing so double-counts and leaves a tall empty band below
-        // the last message).
+        // Keyboard-driven scroll-to-bottom: we used to snap to the
+        // latest message every time the keyboard appeared, but that
+        // hijacked the user's reading position whenever they tapped
+        // into the composer from mid-conversation. Drop the auto-
+        // scroll entirely — the caller bumps `scrollToBottomToken`
+        // explicitly from `onSend`, which is the only time we want
+        // to force the list back to the bottom.
         //
-        // `keyboard.height` animates every frame during the
-        // interpolatingSpring so `bottomInset` changes on every tick.
-        // We only want to fire scroll-to-bottom on the hidden→shown
-        // TRANSITION, not every frame of the animation — otherwise
-        // the scheduled scrolls pile up and the list bounces like a
-        // spring. `keyboardWasOpen` is the edge detector.
+        // `keyboard.height` is still tracked here (via `bottomInset`)
+        // because other layout paths may care; `keyboardWasOpen` is
+        // still updated for parity with any future opt-in behaviour.
         let isOpen = bottomInset > 0.5
         if coord.keyboardWasOpen != isOpen {
             coord.keyboardWasOpen = isOpen
-            if isOpen {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak tv] in
-                    guard let tv else { return }
-                    coord.scrollToBottom(in: tv, animated: true)
-                }
-            }
         }
         coord.lastBottomInset = bottomInset
 
@@ -240,7 +305,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
     // MARK: - Coordinator
 
-    final class Coordinator: NSObject, UITableViewDelegate, UITableViewDataSourcePrefetching {
+    final class Coordinator: NSObject, UITableViewDelegate, UITableViewDataSourcePrefetching, UIGestureRecognizerDelegate {
         var parent: ChatMessagesList
         fileprivate weak var table: UITableView?
 
@@ -259,6 +324,17 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         var initialScrollAt: Date?
         private var loadingMore = false
 
+        // Swipe-to-reply state
+        private var swipeActiveId: String?
+        private var swipeActiveIsMe: Bool = false
+        private var swipeTriggered: Bool = false
+        private let swipeThreshold: CGFloat = 60
+        /// Captured when we engage a swipe so we can re-enable it on
+        /// end. Nav-pop is disabled for the duration of the swipe
+        /// because it otherwise hijacks any rightward drag on a
+        /// left-aligned (incoming) bubble and prevents reply-swipe.
+        private weak var suspendedNavPopGR: UIGestureRecognizer?
+
         init(parent: ChatMessagesList) {
             self.parent = parent
         }
@@ -267,14 +343,14 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // UIHostingConfiguration, so one class is enough. Instance-
         // level rather than static because Swift forbids static
         // stored properties inside a nested generic type.
-        private let cellID = "ChatV2MessageCell"
+        private let cellID = "ChatMessageCell"
 
         func attach(table: UITableView) {
             self.table = table
             table.register(UITableViewCell.self, forCellReuseIdentifier: cellID)
 
             dataSource = UITableViewDiffableDataSource<String, String>(tableView: table) { [weak self] tv, indexPath, id in
-                let cell = tv.dequeueReusableCell(withIdentifier: self?.cellID ?? "ChatV2MessageCell", for: indexPath)
+                let cell = tv.dequeueReusableCell(withIdentifier: self?.cellID ?? "ChatMessageCell", for: indexPath)
                 guard let self else { return cell }
                 self.configure(cell: cell, id: id, indexPath: indexPath)
                 return cell
@@ -290,7 +366,28 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // counter the table's own 180° transform — so text
             // reads upright while the table scrolls in the
             // chat-natural direction. See makeUIView.
-            if id == ChatV2TypingRowID {
+            if chatIsDateRow(id) {
+                let sectionID = chatSectionID(fromDateRow: id)
+                let label = ChatSectioning.label(for: sectionID)
+                cell.contentConfiguration = UIHostingConfiguration {
+                    HStack {
+                        Spacer()
+                        Text(label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+                    .rotationEffect(.degrees(180))
+                }
+                .margins(.horizontal, 12)
+                .margins(.vertical, 2)
+                return
+            }
+            if id == ChatTypingRowID {
                 let logins = lastTypingUsers
                 cell.contentConfiguration = UIHostingConfiguration {
                     TypingIndicatorRow(logins: logins)
@@ -300,7 +397,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 .margins(.vertical, 2)
                 return
             }
-            if id == ChatV2SeenRowID {
+            if id == ChatSeenRowID {
                 let avatarURL = parent.seenAvatarURL
                 cell.contentConfiguration = UIHostingConfiguration {
                     HStack {
@@ -318,12 +415,24 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             }
             guard let msg = lastItems.first(where: { $0.id == id }) else { return }
             let idx = lastItems.firstIndex(where: { $0.id == id }) ?? indexPath.row
+            let swipeState = parent.swipeState
+            // Zero cell margins AND zero min-size. UIHostingConfiguration
+            // ships with a default minimum height (~44pt for tap-target
+            // friendliness) that silently inflated short bubbles — that
+            // was the source of the "chỗ đúng chỗ sai" feeling: short
+            // messages had the row padded up to the minimum, longer
+            // ones used their natural intrinsic height. Pinning min
+            // size to 0 makes every row exactly its content size, so
+            // `.padding(.top, 2 / 14)` in ChatView.messageRow is the
+            // only spacing source.
             cell.contentConfiguration = UIHostingConfiguration {
                 parent.cellBuilder(msg, idx)
                     .rotationEffect(.degrees(180))
+                    .environmentObject(swipeState)
             }
             .margins(.horizontal, 12)
-            .margins(.vertical, 2)
+            .margins(.vertical, 0)
+            .minSize(width: 0, height: 0)
         }
 
         // MARK: Snapshot application
@@ -349,26 +458,27 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             //                              at the top
             // Pagination listens for "approached last section, last
             // row" via willDisplay below.
-            let groups = ChatV2Sectioning.groupByDay(items)
+            let groups = ChatSectioning.groupByDay(items)
             // Trailing rows (typing indicator / seen avatar row) belong
             // in data-space AFTER the latest message, so in the
             // rotated table they appear BELOW the latest bubble. In
             // rotated-snapshot space they go to section 0 as rows
             // BEFORE the latest message — i.e. prepended.
             var trailingRowsForLatestSection: [String] = []
-            if !typingUsers.isEmpty { trailingRowsForLatestSection.append(ChatV2TypingRowID) }
-            if showSeen { trailingRowsForLatestSection.append(ChatV2SeenRowID) }
+            if !typingUsers.isEmpty { trailingRowsForLatestSection.append(ChatTypingRowID) }
+            if showSeen { trailingRowsForLatestSection.append(ChatSeenRowID) }
 
             for (offset, group) in groups.reversed().enumerated() {
                 snap.appendSections([group.sectionID])
-                // `offset == 0` means this is the latest day section
-                // (rotated: visually bottom). Prepend the trailing
-                // synthetic rows here so they sit UNDER the newest
-                // bubble.
                 var rows = Array(group.messageIDs.reversed())
                 if offset == 0 {
                     rows = trailingRowsForLatestSection + rows
                 }
+                // Append the date pill at the END of the section
+                // (rotation-space bottom of section = visually TOP of
+                // the day's messages). Regular row — not a section
+                // footer — so the pill scrolls with content.
+                rows.append(chatDateRowID(for: group.sectionID))
                 snap.appendItems(rows, toSection: group.sectionID)
             }
             dataSource.apply(snap, animatingDifferences: animated)
@@ -419,50 +529,30 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             }
         }
 
-        func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
-            // Date pill as section FOOTER, not header. In the rotated
-            // table, footers render at the BOTTOM of a section in
-            // rotation space = TOP of the section visually. That's
-            // where the date separator belongs ("Today" above today's
-            // first message, not below the last).
-            let snap = dataSource.snapshot()
-            guard section < snap.sectionIdentifiers.count else { return nil }
-            let sectionID = snap.sectionIdentifiers[section]
-            let label = ChatV2Sectioning.label(for: sectionID)
-            let footer = UITableViewHeaderFooterView(reuseIdentifier: nil)
-            footer.backgroundConfiguration = .clear()
-            footer.contentConfiguration = UIHostingConfiguration {
-                HStack {
-                    Spacer()
-                    Text(label)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(.ultraThinMaterial, in: Capsule())
-                    Spacer()
-                }
-                .padding(.vertical, 6)
-                .rotationEffect(.degrees(180))
-            }
-            .margins(.all, 0)
-            return footer
-        }
-
         func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat { 0 }
 
-        func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
-            UITableView.automaticDimension
-        }
+        func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 0 }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             // Rotation-aware "at bottom" detection — visually at the
             // bottom means content-offset near 0 (section 0 row 0 is
             // just above the viewport's top edge, which is the
             // screen's bottom after rotation).
-            let atBottom = scrollView.contentOffset.y < 80
-            if parent.isAtBottom != atBottom {
-                let v = atBottom
+            //
+            // Hysteresis: we only flip to "not at bottom" past 120
+            // and back to "at bottom" under 40. A single threshold
+            // toggled on every tiny bounce, which in turn re-rendered
+            // the whole ChatView mid-scroll and felt like a jerk.
+            let offset = scrollView.contentOffset.y
+            let current = parent.isAtBottom
+            let next: Bool
+            if current {
+                next = offset < 120
+            } else {
+                next = offset < 40
+            }
+            if current != next {
+                let v = next
                 DispatchQueue.main.async { [weak self] in
                     self?.parent.isAtBottom = v
                 }
@@ -486,15 +576,196 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
         // MARK: Long-press → menu
 
+        // MARK: Swipe-to-reply
+
+        @objc fileprivate func handleSwipePan(_ gr: UIPanGestureRecognizer) {
+            guard let tv = table else { return }
+
+            switch gr.state {
+            case .began:
+                let point = gr.location(in: tv)
+                guard let indexPath = tv.indexPathForRow(at: point),
+                      let id = dataSource.itemIdentifier(for: indexPath) else {
+                    gr.state = .cancelled
+                    return
+                }
+                // Skip synthetic rows.
+                if id == ChatTypingRowID || id == ChatSeenRowID || chatIsDateRow(id) {
+                    gr.state = .cancelled
+                    return
+                }
+                guard let msg = lastItems.first(where: { $0.id == id }) else {
+                    gr.state = .cancelled
+                    return
+                }
+                // System messages don't reply.
+                if let t = msg.type, t != "user" {
+                    gr.state = .cancelled
+                    return
+                }
+                swipeActiveId = id
+                swipeActiveIsMe = parent.isMe(msg)
+                swipeTriggered = false
+                // Cancel the table's pan so it doesn't scroll while
+                // we're driving a horizontal swipe on this bubble.
+                let tablePan = tv.panGestureRecognizer
+                tablePan.isEnabled = false
+                tablePan.isEnabled = true
+                // Disable the nav controller's interactive-pop for
+                // the duration of the swipe. On incoming bubbles the
+                // reply-swipe is a rightward drag, same direction
+                // as swipe-back — without this the nav controller
+                // wins and the screen pops. User can still go back
+                // via the nav bar button.
+                if let nav = findNavPopRecognizer(), nav.isEnabled {
+                    nav.isEnabled = false
+                    suspendedNavPopGR = nav
+                }
+                parent.swipeState.messageId = id
+                parent.swipeState.offsetX = 0
+
+            case .changed:
+                guard swipeActiveId != nil else { return }
+                // Translate in window coords so the table's 180°
+                // rotation doesn't invert our dx.
+                let dx = gr.translation(in: tv.superview ?? tv).x
+                let clamped: CGFloat
+                if swipeActiveIsMe {
+                    clamped = min(0, max(-swipeThreshold * 1.4, dx))
+                } else {
+                    clamped = max(0, min(swipeThreshold * 1.4, dx))
+                }
+                parent.swipeState.offsetX = clamped
+                if !swipeTriggered, abs(clamped) >= swipeThreshold {
+                    swipeTriggered = true
+                    // A firmer thump when we cross the commit
+                    // threshold — selection-style taps on device are
+                    // easy to miss in motion. Matches Messages.app's
+                    // swipe-to-reply feel.
+                    Haptics.impact(.medium)
+                } else if swipeTriggered, abs(clamped) < swipeThreshold {
+                    swipeTriggered = false
+                }
+
+            case .ended, .cancelled, .failed:
+                let shouldFire = swipeTriggered
+                let firedId = swipeActiveId
+                swipeTriggered = false
+                swipeActiveId = nil
+                // Always restore nav-pop even on cancel/fail paths.
+                suspendedNavPopGR?.isEnabled = true
+                suspendedNavPopGR = nil
+                // Spring back via SwiftUI animation so the bubble
+                // eases home.
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) {
+                    parent.swipeState.offsetX = 0
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+                    guard let self else { return }
+                    if self.parent.swipeState.messageId == firedId {
+                        self.parent.swipeState.messageId = nil
+                    }
+                }
+                if shouldFire,
+                   let id = firedId,
+                   let msg = lastItems.first(where: { $0.id == id }) {
+                    parent.onReply(msg)
+                }
+
+            default:
+                break
+            }
+        }
+
+        /// Walks the responder chain from the table view up to the
+        /// enclosing `UINavigationController` and returns its
+        /// `interactivePopGestureRecognizer`. We disable that
+        /// recognizer while a swipe-to-reply is active so incoming
+        /// bubble swipes don't pop the screen.
+        private func findNavPopRecognizer() -> UIGestureRecognizer? {
+            var responder: UIResponder? = table
+            while let r = responder {
+                if let vc = r as? UIViewController {
+                    if let nav = vc as? UINavigationController {
+                        return nav.interactivePopGestureRecognizer
+                    }
+                    if let nav = vc.navigationController {
+                        return nav.interactivePopGestureRecognizer
+                    }
+                }
+                responder = r.next
+            }
+            return nil
+        }
+
+        // Allow the swipe pan and the table's pan to coexist during
+        // the decision phase — once our recognizer decides it's a
+        // horizontal drag we cancel the table pan in `.began`. We
+        // explicitly do NOT allow simultaneous recognition with the
+        // navigation controller's edge-swipe-back gesture, otherwise
+        // starting a swipe on an incoming (left-aligned) bubble near
+        // the screen edge pops the navigation stack.
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            if otherGestureRecognizer is UIScreenEdgePanGestureRecognizer { return false }
+            return true
+        }
+
+        // No delegate-level priority vs. nav-pop — that broke the
+        // edge-swipe-to-go-back gesture entirely by forcing the nav
+        // pop to wait for ours unconditionally. Instead, the
+        // `shouldBegin` check below excludes a ~24pt zone along the
+        // leading edge so nav-pop stays responsible for that band
+        // while the rest of the row belongs to reply-swipe.
+
+        // Decide direction at the last possible moment — when the
+        // pan wants to transition to `.began`. By now translation is
+        // ~10pt, enough to tell vertical from horizontal. Returning
+        // false fails the gesture so the table's own pan keeps
+        // scrolling for vertical drags.
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? HorizontalPanGestureRecognizer,
+                  let v = pan.view else { return true }
+            let t = pan.translation(in: v.superview ?? v)
+            // If somehow called before any motion, allow; the .began
+            // handler will locate the target cell and bail on missing.
+            if abs(t.x) < 1 && abs(t.y) < 1 { return true }
+            // Strictly horizontal-dominant only — otherwise let the
+            // table scroll.
+            guard abs(t.x) > abs(t.y) * 1.2 else { return false }
+            // Reserve a strip along the leading edge for the nav
+            // controller's swipe-back. Computing start.x from
+            // (current - translation) rather than saving it in
+            // touchesBegan keeps this self-contained.
+            let loc = pan.location(in: v)
+            let startX = loc.x - t.x
+            if startX < 24 { return false }
+            return true
+        }
+
         @objc fileprivate func handleLongPress(_ gr: UILongPressGestureRecognizer) {
             guard gr.state == .began, let tv = table else { return }
             let point = gr.location(in: tv)
+            presentMenu(at: point, in: tv, withHaptic: true)
+        }
+
+        @objc fileprivate func handleSecondaryClick(_ gr: UITapGestureRecognizer) {
+            guard gr.state == .ended, let tv = table else { return }
+            let point = gr.location(in: tv)
+            // No haptic on Mac — a mouse right-click never buzzes.
+            presentMenu(at: point, in: tv, withHaptic: false)
+        }
+
+        private func presentMenu(at point: CGPoint, in tv: UITableView, withHaptic haptic: Bool) {
             guard let indexPath = tv.indexPathForRow(at: point) else { return }
             guard let cell = tv.cellForRow(at: indexPath) else { return }
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
-            if id == ChatV2TypingRowID || id == ChatV2SeenRowID { return }
+            if id == ChatTypingRowID || id == ChatSeenRowID { return }
+            if chatIsDateRow(id) { return }
             guard let msg = lastItems.first(where: { $0.id == id }) else { return }
-            Haptics.impact(.medium)
+            if haptic { Haptics.impact(.medium) }
             let frame = cell.convert(cell.bounds, to: nil)
             parent.onCellLongPressed(msg, frame)
         }
@@ -505,7 +776,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             var urls: [URL] = []
             for ip in indexPaths {
                 guard let id = dataSource.itemIdentifier(for: ip) else { continue }
-                if id == ChatV2TypingRowID || id == ChatV2SeenRowID { continue }
+                if id == ChatTypingRowID || id == ChatSeenRowID { continue }
+                if chatIsDateRow(id) { continue }
                 guard let msg = lastItems.first(where: { $0.id == id }) else { continue }
                 if let atts = msg.attachments {
                     for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {
@@ -535,3 +807,13 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         }
     }
 }
+
+// MARK: - Horizontal-dominant pan recognizer
+
+/// Marker subclass — direction filtering happens in the Coordinator's
+/// `gestureRecognizerShouldBegin(_:)`, which is UIKit's natural hook
+/// for deciding whether a pan may transition from `.possible` to
+/// `.began`. Failing from `touchesMoved` (our first attempt) was
+/// too late: UIKit had already transitioned the state, so vertical
+/// drags leaked through as swipes.
+private final class HorizontalPanGestureRecognizer: UIPanGestureRecognizer {}

@@ -153,12 +153,6 @@ struct NotificationsView: View {
             }
             .navigationTitle("Activity")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if vm.isSyncing {
-                        SyncingIndicator()
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(filter == .all ? "Read all" : "Mark seen") {
                         Task {

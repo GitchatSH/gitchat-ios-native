@@ -218,6 +218,13 @@ struct ConversationsListView: View {
     @State private var confirmDelete: Conversation?
     @State private var selectedConvo: Conversation? = nil
     @State private var tappedConvoId: String?
+    /// Row currently in the 0.32s "press-in squeeze" before the peek
+    /// fires — Telegram's pre-activation feedback (`ContextControllerSourceNode.swift`).
+    @State private var squeezedConvoId: String?
+    /// Token guards the 0.12s delay → 0.20s ramp sequence: if the
+    /// user lifts before the delay completes we want to abort the
+    /// scheduled state update.
+    @State private var pressToken = UUID()
 
     private var isMac: Bool {
         #if targetEnvironment(macCatalyst)
@@ -273,6 +280,55 @@ struct ConversationsListView: View {
     }
 
     var body: some View {
+        coreBody
+    }
+
+    /// Telegram's `max(0.7, (w-15)/w)`. For typical full-width row
+    /// (~screen width), gives ~0.96 — a barely-perceptible squeeze
+    /// that reads as "the row is being grabbed". Smaller controls
+    /// would squeeze toward 0.7.
+    private func rowSqueezeFactor(for convo: Conversation) -> CGFloat {
+        let w = UIScreen.main.bounds.width
+        return max(0.7, (w - 15) / w)
+    }
+
+    private func presentPeek(for convo: Conversation) {
+        // Window-level overlay so the blur covers the tab bar and
+        // nav bar — Telegram does the same with their Display
+        // framework's overlay window stack.
+        PeekHostWindow.shared.present {
+            ConversationPeekOverlay(
+                conversation: convo,
+                myLogin: AuthStore.shared.login,
+                actions: peekActions(for: convo),
+                onCommit: { openConversation(convo) },
+                onDismiss: { PeekHostWindow.shared.dismiss() }
+            )
+        }
+    }
+
+    private func peekActions(for convo: Conversation) -> [PeekMenuAction] {
+        let muted = vm.isLocallyMuted(convo)
+        let pinned = convo.isPinned
+        return [
+            PeekMenuAction(
+                title: pinned ? "Unpin" : "Pin",
+                systemImage: pinned ? "pin.slash" : "pin"
+            ) { Task { await vm.togglePin(convo) } },
+            PeekMenuAction(
+                title: muted ? "Unmute" : "Mute",
+                systemImage: muted ? "bell" : "bell.slash"
+            ) { Task { await vm.toggleMute(convo) } },
+            PeekMenuAction(
+                title: "Delete",
+                systemImage: "trash",
+                isDestructive: true
+            ) { confirmDelete = convo },
+        ]
+    }
+
+    @ViewBuilder
+    private var coreBody: some View {
         #if targetEnvironment(macCatalyst)
         NavigationSplitView(columnVisibility: .constant(.all)) {
             macSidebar
@@ -281,9 +337,6 @@ struct ConversationsListView: View {
                 NavigationStack {
                     ChatDetailView(conversation: convo)
                 }
-                // Force a fresh ChatDetailView (new @StateObject) when
-                // a different conversation is selected — without this
-                // the existing view re-uses the old ChatViewModel.
                 .id(convo.id)
             } else {
                 ContentUnavailableCompat(
@@ -295,9 +348,6 @@ struct ConversationsListView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .background(
-            // Hidden button that installs a window-level Esc shortcut.
-            // SwiftUI bridges keyboardShortcut to a UIKeyCommand on
-            // Catalyst, which fires regardless of focus.
             Button("") { selectedConvo = nil }
                 .keyboardShortcut(.escape, modifiers: [])
                 .hidden()
@@ -310,6 +360,75 @@ struct ConversationsListView: View {
                 }
         }
         #endif
+    }
+
+    @ViewBuilder
+    private func conversationListRow(_ convo: Conversation) -> some View {
+        ConversationRow(
+            conversation: convo,
+            isLocallyRead: vm.locallyRead.contains(convo.id),
+            isMuted: vm.isLocallyMuted(convo)
+        )
+        .contentShape(Rectangle())
+        // Telegram-style press: 0.12s delay, then 0.20s squeeze
+        // ramp, then activate at 0.32s. `onPressingChanged` fires
+        // immediately on touch / release; we use a token to guard
+        // the deferred squeeze against early lifts.
+        .scaleEffect(squeezedConvoId == convo.id ? rowSqueezeFactor(for: convo) : 1)
+        .animation(.easeOut(duration: 0.20), value: squeezedConvoId == convo.id)
+        .onTapGesture { openConversation(convo) }
+        .onLongPressGesture(minimumDuration: 0.32) {
+            squeezedConvoId = nil
+            pressToken = UUID()
+            Haptics.impact(.medium)
+            presentPeek(for: convo)
+        } onPressingChanged: { isPressing in
+            if isPressing {
+                let token = UUID()
+                pressToken = token
+                let id = convo.id
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    guard pressToken == token else { return }
+                    squeezedConvoId = id
+                }
+            } else {
+                pressToken = UUID()
+                squeezedConvoId = nil
+            }
+        }
+        .macHover()
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .scaleEffect(tappedConvoId == convo.id ? 0.97 : 1)
+        .opacity(tappedConvoId == convo.id ? 0.7 : 1)
+        .listRowBackground(
+            convo.isPinned
+                ? Color("AccentColor").opacity(0.08)
+                : Color.clear
+        )
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                Task { await vm.togglePin(convo) }
+            } label: {
+                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash.fill" : "pin.fill")
+            }
+            .tint(.orange)
+            Button {
+                Task { await vm.toggleMute(convo) }
+            } label: {
+                let muted = vm.isLocallyMuted(convo)
+                Label(muted ? "Unmute" : "Mute", systemImage: muted ? "bell.fill" : "bell.slash.fill")
+            }
+            .tint(.gray)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                Task { await vm.delete(convo) }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .tint(.red)
+        }
     }
 
     private var sidebar: some View {
@@ -330,68 +449,7 @@ struct ConversationsListView: View {
                     )
                 } else {
                     List(filtered) { convo in
-                        Button {
-                            openConversation(convo)
-                        } label: {
-                            ConversationRow(
-                                conversation: convo,
-                                isLocallyRead: vm.locallyRead.contains(convo.id),
-                                isMuted: vm.isLocallyMuted(convo)
-                            )
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .macHover()
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .scaleEffect(tappedConvoId == convo.id ? 0.97 : 1)
-                        .opacity(tappedConvoId == convo.id ? 0.7 : 1)
-                        .listRowBackground(
-                            convo.isPinned
-                                ? Color("AccentColor").opacity(0.08)
-                                : Color.clear
-                        )
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button {
-                                Task { await vm.togglePin(convo) }
-                            } label: {
-                                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash.fill" : "pin.fill")
-                            }
-                            .tint(.orange)
-                            Button {
-                                Task { await vm.toggleMute(convo) }
-                            } label: {
-                                let muted = vm.isLocallyMuted(convo)
-                                Label(muted ? "Unmute" : "Mute", systemImage: muted ? "bell.fill" : "bell.slash.fill")
-                            }
-                            .tint(.gray)
-                        }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                Task { await vm.delete(convo) }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                            .tint(.red)
-                        }
-                        .contextMenu {
-                            Button {
-                                Task { await vm.togglePin(convo) }
-                            } label: {
-                                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash" : "pin")
-                            }
-                            Button {
-                                Task { await vm.toggleMute(convo) }
-                            } label: {
-                                Label(vm.isLocallyMuted(convo) ? "Unmute" : "Mute", systemImage: vm.isLocallyMuted(convo) ? "bell" : "bell.slash")
-                            }
-                            Button(role: .destructive) {
-                                confirmDelete = convo
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                            .tint(.red)
-                        }
+                        conversationListRow(convo)
                     }
                     .listStyle(.plain)
                     .scrollIndicators(.hidden)
@@ -402,12 +460,6 @@ struct ConversationsListView: View {
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search chats")
             .navigationTitle("Chats")
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if vm.isSyncing {
-                        SyncingIndicator()
-                            .transition(.scale.combined(with: .opacity))
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showNewChat = true
@@ -417,7 +469,6 @@ struct ConversationsListView: View {
                     .accessibilityLabel("New chat")
                 }
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: vm.isSyncing)
             .alert("Delete conversation?", isPresented: Binding(
                 get: { confirmDelete != nil },
                 set: { if !$0 { confirmDelete = nil } }
@@ -601,7 +652,7 @@ struct ConversationRow: View {
                 Text(RelativeTime.chatListStamp(conversation.last_message_at))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .instantTooltip(MessageBubble.fullTimestamp(conversation.last_message_at))
+                    .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
                 if displayedUnread > 0 {
                     let isMutedBadge = isMuted
                     Text("\(displayedUnread)")
@@ -746,3 +797,142 @@ struct ContentUnavailableCompat: View {
         }
     }
 }
+
+// MARK: - Peek preview shown when holding a conversation row
+
+/// Static snapshot of the last few messages in a conversation, shown
+/// as the `preview:` content of the row's context menu — Telegram /
+/// Messenger style. Reads from `MessageCache` so a preview is only
+/// rich when we've actually opened that conversation before;
+/// otherwise falls back to `conversation.previewText`.
+struct ConversationHoldPreview: View {
+    let conversation: Conversation
+    let myLogin: String?
+
+    private var messages: [Message] {
+        let cached = MessageCache.shared.get(conversation.id)?.messages ?? []
+        // Only show real user messages, and take the most recent 8 so
+        // the preview stays compact on small screens.
+        let filtered = cached.filter { ($0.type ?? "user") == "user" && $0.unsent_at == nil }
+        return Array(filtered.suffix(8))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            if messages.isEmpty {
+                emptyBody
+            } else {
+                messageColumn
+            }
+        }
+        .frame(width: 320, height: 380)
+        // Background blur is provided by the UIVisualEffectView that
+        // hosts this content (see CustomContextMenu.makePreviewVC).
+        // Don't add a SwiftUI material here — it would render on top
+        // of the blur and dilute it.
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            if conversation.isGroup && !conversation.participantsOrEmpty.isEmpty {
+                GroupAvatarCluster(
+                    participants: Array(conversation.participantsOrEmpty.prefix(3)),
+                    size: 36
+                )
+            } else {
+                AvatarView(
+                    url: conversation.displayAvatarURL,
+                    size: 36,
+                    login: conversation.other_user?.login
+                )
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(conversation.displayTitle)
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                if conversation.isGroup {
+                    Text("\(conversation.participantsOrEmpty.count) members")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    private var emptyBody: some View {
+        VStack(spacing: 8) {
+            Spacer()
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+            Text(conversation.previewText ?? "No messages yet")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .padding(.horizontal, 16)
+            Spacer()
+        }
+    }
+
+    private var messageColumn: some View {
+        ScrollView {
+            VStack(spacing: 6) {
+                ForEach(messages, id: \.id) { msg in
+                    previewBubble(for: msg)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .scrollDisabled(true)
+        // ScrollView ships with an opaque systemBackground fill that
+        // occludes our `.regularMaterial` backdrop. Hide it so the
+        // blur reads through.
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
+    }
+
+    @ViewBuilder
+    private func previewBubble(for msg: Message) -> some View {
+        let isMe = msg.sender == myLogin
+        HStack {
+            if isMe { Spacer(minLength: 36) }
+            bubble(for: msg, isMe: isMe)
+            if !isMe { Spacer(minLength: 36) }
+        }
+    }
+
+    @ViewBuilder
+    private func bubble(for msg: Message, isMe: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if !isMe && conversation.isGroup {
+                Text(msg.sender)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            Text(bubbleText(for: msg))
+                .font(.system(size: 13))
+                .lineLimit(4)
+                .foregroundStyle(isMe ? Color.white : Color(.label))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(isMe ? Color("AccentColor") : Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func bubbleText(for msg: Message) -> String {
+        if !msg.content.isEmpty { return msg.content }
+        if (msg.attachments?.isEmpty == false) || msg.attachment_url != nil {
+            return "📷 Photo"
+        }
+        return ""
+    }
+}
+
