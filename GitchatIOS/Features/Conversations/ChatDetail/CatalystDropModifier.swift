@@ -27,9 +27,25 @@ struct CatalystDropModifier<Overlay: View>: ViewModifier {
             .overlay { if showsOverlay { dragOverlay } }
             .animation(.easeInOut(duration: 0.15), value: isDragOver)
             .onDrop(
-                of: [UTType.image.identifier, UTType.fileURL.identifier],
+                // Broadened the accepted UTI set — some drag sources
+                // (Safari image drags, Messages, Finder) expose the
+                // payload under `public.data` or `public.url` instead
+                // of `public.image`. Accept all of them; `handleDrop`
+                // filters to what it can actually decode.
+                of: [
+                    UTType.image.identifier,
+                    UTType.fileURL.identifier,
+                    UTType.url.identifier,
+                    UTType.data.identifier,
+                    "public.jpeg",
+                    "public.png",
+                    "public.heic",
+                ],
                 isTargeted: showsOverlay ? $isDragOver : .constant(false)
             ) { providers in
+                #if DEBUG
+                print("[drop] providers=\(providers.count) types=\(providers.flatMap { $0.registeredTypeIdentifiers })")
+                #endif
                 onDrop(providers)
                 return true
             }

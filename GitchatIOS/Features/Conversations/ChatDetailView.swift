@@ -603,26 +603,70 @@ struct ChatDetailView: View {
         let lock = NSLock()
         var collected: [UIImage] = []
         let group = DispatchGroup()
+
+        func append(_ image: UIImage) {
+            lock.lock(); collected.append(image); lock.unlock()
+        }
+
         for provider in providers {
+            // Try the cheapest path first — NSItemProvider natively
+            // vending a UIImage (PhotosPicker, Photos.app drag, Catalyst
+            // Finder drags of common formats).
             if provider.canLoadObject(ofClass: UIImage.self) {
                 group.enter()
                 provider.loadObject(ofClass: UIImage.self) { obj, _ in
-                    if let img = obj as? UIImage { lock.lock(); collected.append(img); lock.unlock() }
+                    if let img = obj as? UIImage { append(img) }
                     group.leave()
                 }
-            } else if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                continue
+            }
+
+            let types = provider.registeredTypeIdentifiers
+            // Raw image data under a known image UTI.
+            let imageTypes = ["public.jpeg", "public.png", "public.heic", "public.image"]
+            if let uti = types.first(where: { imageTypes.contains($0) }) {
+                group.enter()
+                provider.loadDataRepresentation(forTypeIdentifier: uti) { data, _ in
+                    if let data, let img = UIImage(data: data) { append(img) }
+                    group.leave()
+                }
+                continue
+            }
+
+            // File URL (Finder drag, Catalyst local file).
+            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
                 group.enter()
                 provider.loadItem(forTypeIdentifier: "public.file-url") { item, _ in
                     var url: URL?
                     if let u = item as? URL { url = u }
                     else if let data = item as? Data { url = URL(dataRepresentation: data, relativeTo: nil) }
                     if let url, let img = UIImage(contentsOfFile: url.path) {
-                        lock.lock(); collected.append(img); lock.unlock()
+                        append(img)
                     }
                     group.leave()
                 }
+                continue
+            }
+
+            // Generic URL (Safari image drag usually lands here). Fetch
+            // synchronously in the background — small cost for a one-off
+            // drop, and keeps the UX consistent with drag-drop elsewhere.
+            if provider.hasItemConformingToTypeIdentifier("public.url") {
+                group.enter()
+                provider.loadItem(forTypeIdentifier: "public.url") { item, _ in
+                    defer { group.leave() }
+                    let url: URL? = (item as? URL)
+                        ?? (item as? Data).flatMap { URL(dataRepresentation: $0, relativeTo: nil) }
+                        ?? (item as? NSString).flatMap { URL(string: $0 as String) }
+                    guard let url,
+                          let data = try? Data(contentsOf: url),
+                          let img = UIImage(data: data) else { return }
+                    append(img)
+                }
+                continue
             }
         }
+
         group.notify(queue: .main) {
             guard !collected.isEmpty else { return }
             pendingDropImages = collected
