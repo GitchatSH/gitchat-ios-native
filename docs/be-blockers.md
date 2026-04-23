@@ -79,8 +79,25 @@ Assumed response:
 }
 ```
 
-Please confirm field names. Also: which host should the iOS client
-associate for Universal Links (`apple-app-site-association` file)?
+Please confirm field names.
+
+**Important — the `url` field is currently useless on iOS.** BE returns
+`https://dev.gitchat.sh/invite/<code>`; tapping that link in iMessage,
+Slack, etc. opens Safari and lands on a `404 Page not found`. Two
+separate things need to change on BE before web URLs help:
+
+1. Host `apple-app-site-association` on `gitchat.sh` (and `dev.gitchat.sh`)
+   so iOS recognizes the host as a Universal Link for the Gitchat app.
+   The AASA JSON needs an `applinks` entry with our team id +
+   `chat.git` bundle id and a path pattern like `/invite/*`.
+2. Serve a real web page at `/invite/<code>` that either redirects to
+   the app (when the user already has it installed — AASA handles this)
+   or shows a "Get Gitchat on the App Store" landing page otherwise.
+
+Until that's live, the iOS client deliberately shares the custom
+`gitchat://invite/<code>` URL instead of BE's `url` field. Taps on that
+scheme open the app directly (works for recipients who have Gitchat
+installed; no-ops otherwise, which is still better than a 404).
 
 ### `GET /messages/conversations/join/:code`
 

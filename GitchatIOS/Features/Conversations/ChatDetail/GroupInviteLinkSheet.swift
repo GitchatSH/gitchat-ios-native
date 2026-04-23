@@ -15,10 +15,19 @@ struct GroupInviteLinkSheet: View {
     @State private var errorMessage: String?
     @State private var presentedShare: ActivityItems?
 
+    /// Always share the custom-scheme URL so the tap opens the app
+    /// directly. BE may also return an `https://dev.gitchat.sh/invite/…`
+    /// URL but that route isn't live (404s in Safari) and we haven't
+    /// set up Universal Links, so web URLs are useless for recipients
+    /// right now — tracked in docs/be-blockers.md.
+    private var sharedURL: String? {
+        link.map { "gitchat://invite/\($0.code)" }
+    }
+
     private var shareText: String? {
-        guard let link else { return nil }
+        guard let url = sharedURL else { return nil }
         let label = groupName.map { "Join \"\($0)\" on Gitchat: " } ?? "Join my group on Gitchat: "
-        return label + (link.url ?? "gitchat://invite/\(link.code)")
+        return label + url
     }
 
     var body: some View {
@@ -56,7 +65,7 @@ struct GroupInviteLinkSheet: View {
 
     @ViewBuilder
     private func linkBody(_ link: APIClient.InviteLink) -> some View {
-        let display = link.url ?? "gitchat://invite/\(link.code)"
+        let display = "gitchat://invite/\(link.code)"
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Anyone with this link can join the group.")
