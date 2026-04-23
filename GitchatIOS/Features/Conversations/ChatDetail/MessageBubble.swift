@@ -373,31 +373,12 @@ struct MessageBubble: View {
 
     @ViewBuilder
     private func attachmentGrid(_ atts: [MessageAttachment]) -> some View {
-        if atts.count == 1, let a = atts.first, let url = URL(string: a.url) {
-            singleAttachmentImage(for: url, width: a.width, height: a.height)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .contentShape(Rectangle())
-                .onTapGesture { onAttachmentTap?(a.url) }
-                .contextMenu { imageActions(for: url) }
-        } else {
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(120), spacing: 4), count: 2),
-                spacing: 4
-            ) {
-                ForEach(atts) { a in
-                    if let url = URL(string: a.url) {
-                        attachmentImage(for: url)
-                            .frame(width: 120, height: 120)
-                            .clipped()
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                            .contentShape(Rectangle())
-                            .onTapGesture { onAttachmentTap?(a.url) }
-                            .contextMenu { imageActions(for: url) }
-                    }
-                }
-            }
-            .frame(maxWidth: 248)
-        }
+        AttachmentsGrid(
+            attachments: atts,
+            maxWidth: 260,
+            isUploading: message.id.hasPrefix("local-"),
+            onTap: { onAttachmentTap?($0) }
+        )
     }
 
     @ViewBuilder
