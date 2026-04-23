@@ -121,6 +121,7 @@
 		F3B8B46B510DF9437DFD1CD5 /* WaveHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9567B10D8EBC391075BF9599 /* WaveHistory.swift */; };
 		F468BB4EB9F2D15D17EFA9A1 /* ChatCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA68A0F7BDA1DAF3632082F /* ChatCollectionView.swift */; };
 		F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E94D622A0735683786E43FF /* SafariSheet.swift */; };
+		FB4619901E4E05983336C9CC /* ChatAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02492A4FC3B773792CC52769 /* ChatAnimations.swift */; };
 		FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99301F77409640F810FB1F0D /* UpgradeView.swift */; };
 		FE6B859A2C4C03A1997BE21A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = C572C41B826EC03433688B86 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
@@ -158,6 +159,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		02492A4FC3B773792CC52769 /* ChatAnimations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAnimations.swift; sourceTree = "<group>"; };
 		043204DC26642044739AFFED /* OneSignalNotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OneSignalNotificationServiceExtension.entitlements; sourceTree = "<group>"; };
 		0581BC792D393D25DB425CB4 /* KeyboardHeight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHeight.swift; sourceTree = "<group>"; };
 		0A64D83F5578E057CF2F6A03 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -581,6 +583,7 @@
 				1215054ABAC62F54D09E67A9 /* AddMemberSheet.swift */,
 				1FF9F7A703A31D1773086110 /* AttachmentsGrid.swift */,
 				BA06F06179CF48CD72660313 /* CatalystDropModifier.swift */,
+				02492A4FC3B773792CC52769 /* ChatAnimations.swift */,
 				0FAC444597FF8A45EB8294EC /* ChatBackground.swift */,
 				3EA68A0F7BDA1DAF3632082F /* ChatCollectionView.swift */,
 				2F3F9D645B6410E4BD1139FC /* ChatDetailTitleBar.swift */,
@@ -805,6 +808,7 @@
 				86017ADD5A00CAC64683E83E /* CatalystDropModifier.swift in Sources */,
 				00DB4217A078DC17FD451462 /* ChannelDetailView.swift in Sources */,
 				9FF34A6AA21F0417CEF2D2D5 /* ChannelsView.swift in Sources */,
+				FB4619901E4E05983336C9CC /* ChatAnimations.swift in Sources */,
 				9911E286944B2E5A0B5817D6 /* ChatBackground.swift in Sources */,
 				F468BB4EB9F2D15D17EFA9A1 /* ChatCollectionView.swift in Sources */,
 				03DA54DAB6CB0C9146CF00DB /* ChatDetailTitleBar.swift in Sources */,
