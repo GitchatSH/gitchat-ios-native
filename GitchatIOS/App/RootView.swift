@@ -112,9 +112,9 @@ struct MainTabView: View {
             ConversationsListView()
                 .tabItem { Label("Chats", image: "ChatTabIcon") }
                 .tag(0)
-            TeamsView()
+            DiscoverView()
                 .macReadableWidth()
-                .tabItem { Label("Teams", systemImage: "person.3.fill") }
+                .tabItem { Label("Discover", systemImage: "safari.fill") }
                 .tag(1)
             NotificationsView()
                 .macReadableWidth()
