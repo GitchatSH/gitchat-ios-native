@@ -421,7 +421,19 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             let bottomDistance = scrollView.contentSize.height
                 - (scrollView.contentOffset.y + scrollView.bounds.height)
             let atBottom = bottomDistance < 80
-            if parent.isAtBottom != atBottom { parent.isAtBottom = atBottom }
+            if parent.isAtBottom != atBottom {
+                // Write @Binding async — scrollViewDidScroll can fire
+                // during SwiftUI's view-update phase if a layout pass
+                // inside updateUIView triggers a scroll (e.g., after
+                // snapshot apply or contentSize change), and a sync
+                // write to parent.isAtBottom there produces the
+                // "Modifying state during view update" warning and
+                // occasional freezes.
+                let v = atBottom
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.isAtBottom = v
+                }
+            }
 
             guard didInitialScroll, !loadingMore else { return }
             if scrollView.contentOffset.y < 600 { fireLoadMore() }

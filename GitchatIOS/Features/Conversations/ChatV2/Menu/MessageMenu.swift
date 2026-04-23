@@ -109,7 +109,17 @@ struct MessageMenu<Preview: View>: View {
             }
         )
         .fixedSize()
-        .sizeReader { size in reactionBarHeight = max(reactionBarHeight, size.height) }
+        .sizeReader { size in
+            // Async hop: onPreferenceChange can fire during SwiftUI's
+            // view-update pass, and writing @State synchronously from
+            // there triggers the "Modifying state during view update,
+            // this will cause undefined behavior" warning + layout
+            // thrash.
+            let h = size.height
+            DispatchQueue.main.async {
+                if h > reactionBarHeight { reactionBarHeight = h }
+            }
+        }
         .scaleEffect(
             appeared ? 1 : 0.2,
             anchor: target.isMe ? .bottomTrailing : .bottomLeading
@@ -147,7 +157,12 @@ struct MessageMenu<Preview: View>: View {
         )
         .frame(maxWidth: 240)
         .fixedSize(horizontal: false, vertical: true)
-        .sizeReader { size in actionListHeight = max(actionListHeight, size.height) }
+        .sizeReader { size in
+            let h = size.height
+            DispatchQueue.main.async {
+                if h > actionListHeight { actionListHeight = h }
+            }
+        }
         .scaleEffect(
             appeared ? 1 : 0.3,
             anchor: target.isMe ? .topTrailing : .topLeading
