@@ -163,7 +163,14 @@ struct ChatDetailView: View {
             isAtBottom: $isAtBottom,
             onScrollToIdConsumed: { pendingJumpId = nil },
             onTopReached: { Task { await vm.loadMoreIfNeeded() } },
-            cellBuilder: { msg, idx in messageRow(for: msg, at: idx) }
+            cellBuilder: { msg, idx in messageRow(for: msg, at: idx) },
+            onCellLongPressed: { msg, frame in
+                menuTarget = MessageMenuTarget(
+                    message: msg,
+                    isMe: msg.sender == auth.login,
+                    sourceFrame: frame
+                )
+            }
         )
         .onTapGesture { composerFocused = false }
     }
@@ -467,23 +474,11 @@ struct ChatDetailView: View {
                 bubbleContextMenu: nil
             )
             .padding(.top, showHeader ? 6 : 0)
-            // Long-press opens the menu overlay. We pass a placeholder
-            // source frame (centered); overlay positioning uses the
-            // stack layout — feeding a live per-cell frame would
-            // require a GeometryReader whose .onChange fires on every
-            // scroll tick and rebuilds the whole chat body (tested:
-            // measurable jank on a 500-message list).
-            .highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.28)
-                    .onEnded { _ in
-                        Haptics.impact(.medium)
-                        menuTarget = MessageMenuTarget(
-                            message: msg,
-                            isMe: msg.sender == auth.login,
-                            sourceFrame: .zero
-                        )
-                    }
-            )
+            // Long-press is wired via a UILongPressGestureRecognizer on
+            // the UICollectionView (see ChatCollectionView.makeUIView).
+            // That path knows the cell's exact frame in screen space
+            // without a per-bubble GeometryReader, so scroll stays at
+            // 60/120 fps and the menu overlay can anchor precisely.
             .swipeToReply(isMe: msg.sender == auth.login) {
                 vm.replyingTo = msg
                 vm.editingMessage = nil

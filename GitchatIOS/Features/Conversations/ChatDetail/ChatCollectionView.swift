@@ -31,6 +31,13 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
     let onScrollToIdConsumed: () -> Void
     let onTopReached: () -> Void
     let cellBuilder: (Message, Int) -> Cell
+    /// Fires when a cell is long-pressed. Reports the message + the
+    /// cell's frame in screen coordinates so the menu overlay can
+    /// anchor precisely. Routed through UIKit
+    /// (`UILongPressGestureRecognizer`) rather than a SwiftUI
+    /// `GeometryReader.onChange`: the latter fires on every scroll
+    /// tick and rebuilds the chat body, which crushes scroll fps.
+    var onCellLongPressed: ((Message, CGRect) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -68,6 +75,14 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         cv.backgroundColor = .clear
         cv.delegate = context.coordinator
         cv.prefetchDataSource = context.coordinator
+        let longPress = UILongPressGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleLongPress(_:))
+        )
+        longPress.minimumPressDuration = 0.28
+        longPress.cancelsTouchesInView = false
+        longPress.delaysTouchesBegan = false
+        cv.addGestureRecognizer(longPress)
         cv.keyboardDismissMode = .interactive
         cv.alwaysBounceVertical = true
         cv.showsVerticalScrollIndicator = false
@@ -493,6 +508,20 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
                 }
             }
             return urls
+        }
+
+        @objc func handleLongPress(_ gr: UILongPressGestureRecognizer) {
+            guard gr.state == .began, let cv = collectionView else { return }
+            let point = gr.location(in: cv)
+            guard let indexPath = cv.indexPathForItem(at: point) else { return }
+            guard let cell = cv.cellForItem(at: indexPath) else { return }
+            guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
+            if ChatSectioning.isDateHeader(id) { return }
+            if id == ChatTypingRowID || id == ChatSeenRowID { return }
+            guard let msg = lastItems.first(where: { $0.id == id }) else { return }
+            let frame = cell.convert(cell.bounds, to: nil)
+            Haptics.impact(.medium)
+            parent.onCellLongPressed?(msg, frame)
         }
 
         func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
