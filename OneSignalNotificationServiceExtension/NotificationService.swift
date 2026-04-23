@@ -61,6 +61,18 @@ final class NotificationService: UNNotificationServiceExtension {
             return content
         }
 
+        // Group chats: keep the backend-set title ("sender → groupName")
+        // as-is. iOS Communication Notification's group layout replaces
+        // the title with the sender's name and demotes the group name
+        // to a subtitle, which isn't the Telegram-style banner we want.
+        let isGroupBool = (data["is_group"] as? Bool) == true
+            || (data["is_group"] as? NSNumber)?.boolValue == true
+            || (data["is_group"] as? String) == "true"
+        let groupNameString = (data["group_name"] as? String) ?? ""
+        if isGroupBool && !groupNameString.isEmpty {
+            return content
+        }
+
         let senderName = (data["sender_name"] as? String) ?? senderLogin
         let avatarURLString = (data["sender_avatar_url"] as? String)
             ?? "https://github.com/\(senderLogin).png"
@@ -86,33 +98,14 @@ final class NotificationService: UNNotificationServiceExtension {
             customIdentifier: senderLogin
         )
 
-        // For group chats we pass a speakableGroupName so iOS renders
-        // the notification as a group Communication Notification —
-        // title becomes the group name, subtitle/body include the
-        // sender and message.
-        let isGroupBool = (data["is_group"] as? Bool) == true
-            || (data["is_group"] as? NSNumber)?.boolValue == true
-            || (data["is_group"] as? String) == "true"
-        let groupNameString = (data["group_name"] as? String) ?? ""
-        let speakableGroup: INSpeakableString?
-        if isGroupBool && !groupNameString.isEmpty {
-            speakableGroup = INSpeakableString(spokenPhrase: groupNameString)
-        } else {
-            speakableGroup = nil
-        }
-
         let intent = INSendMessageIntent(
             recipients: nil,
             content: content.body,
-            speakableGroupName: speakableGroup,
+            speakableGroupName: nil,
             conversationIdentifier: (data["conversation_id"] as? String) ?? senderLogin,
             serviceName: nil,
             sender: sender
         )
-        if let avatarImage, speakableGroup != nil {
-            // iOS uses this as the group avatar in the banner.
-            intent.setImage(avatarImage, forParameterNamed: \.speakableGroupName)
-        }
 
         let interaction = INInteraction(intent: intent, response: nil)
         interaction.direction = .incoming
