@@ -34,6 +34,11 @@ struct ChatView: View {
     @Binding var photoItems: [PhotosPickerItem]
     @Binding var pendingClipboardImage: UIImage?
     @Binding var composerVisible: Bool
+    /// Namespace owned by the host view (ChatDetailView) and used for
+    /// the image viewer's zoom transition. Threaded through the cell
+    /// builder so each attachment tile can mark itself as the
+    /// `matchedTransitionSource` for the push.
+    let imageZoomNamespace: Namespace.ID?
 
     let mentionSuggestions: [ConversationParticipant]
     let resolveAvatar: (Message) -> String?
@@ -162,7 +167,8 @@ struct ChatView: View {
                 onReplyTap: { actions.onReplyPreviewTap(msg) },
                 onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
                 onPinTap: { actions.onPinBadgeTap(msg) },
-                onAvatarTap: { actions.onAvatarTap(msg.sender) }
+                onAvatarTap: { actions.onAvatarTap(msg.sender) },
+                imageMatchedNS: imageZoomNamespace
             )
             .padding(.top, showHeader ? 6 : 0)
             .chatSwipeToReply(isMe: isMe) { actions.onReply(msg) }

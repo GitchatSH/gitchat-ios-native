@@ -63,13 +63,30 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         tv.allowsSelection = false
         tv.alwaysBounceVertical = true
         tv.contentInsetAdjustmentBehavior = .automatic
+        tv.scrollsToTop = false
         // Self-sizing cells — UIHostingConfiguration reports its
         // intrinsic height.
         tv.rowHeight = UITableView.automaticDimension
         tv.estimatedRowHeight = 80
-        tv.sectionHeaderHeight = UITableView.automaticDimension
-        tv.estimatedSectionHeaderHeight = 32
+        tv.sectionHeaderHeight = 0
+        tv.estimatedSectionHeaderHeight = 0
         tv.sectionHeaderTopPadding = 0
+        tv.sectionFooterHeight = UITableView.automaticDimension
+        tv.estimatedSectionFooterHeight = 32
+
+        // Rotation trick from exyte/chat (also how Telegram, Stream,
+        // and iMessage handle it): flip the whole table 180° so data
+        // is laid out oldest→newest from top→bottom, but visually
+        // scrolls bottom→top. Inserting a "new row at the top" of
+        // data therefore appears at the BOTTOM of the visible screen
+        // — which is where newly-arrived messages belong. This
+        // eliminates every rubber-band / tail-follow edge case because
+        // the table's natural "keep content at top" behaviour IS the
+        // chat's "stick to latest" behaviour.
+        //
+        // Each cell's SwiftUI content is rotated 180° back so it
+        // renders upright. Same for section headers.
+        tv.transform = CGAffineTransform(rotationAngle: .pi)
 
         // Long-press → menu overlay in SwiftUI.
         let lp = UILongPressGestureRecognizer(
@@ -109,8 +126,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             }
         }
 
-        // Detect prepend (older page) vs append (new message) for the
-        // scroll-compensation path.
+        // Detect prepend (older page) vs append (new message) in
+        // data space — independent of rotation.
         let isPrepend =
             !prevIDs.isEmpty && !newIDs.isEmpty &&
             newIDs.count > prevIDs.count &&
@@ -118,11 +135,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         let isAppend =
             !prevIDs.isEmpty && newIDs.count > prevIDs.count &&
             newIDs.prefix(prevIDs.count) == ArraySlice(prevIDs)
+        _ = isPrepend
 
+        // Rotation-aware: "near bottom" visually = contentOffset near 0.
         let prevHeight = tv.contentSize.height
         let prevOffset = tv.contentOffset.y
-        let wasNearBottom = tv.bounds.height > 0 &&
-            prevHeight - (prevOffset + tv.bounds.height) < 200
+        let wasNearBottom = tv.bounds.height > 0 && prevOffset < 200
 
         // Apply the new snapshot. Animated for new-message arrivals +
         // typing toggles; static for bulk reloads (cache hydration,
@@ -180,45 +198,27 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         }
         coord.lastBottomInset = bottomInset
 
-        // Pagination compensation — keep the current top-of-screen row
-        // parked when older messages prepend.
-        if isPrepend {
-            tv.layoutIfNeeded()
-            let newHeight = tv.contentSize.height
-            let delta = newHeight - prevHeight
-            if delta > 0 {
-                tv.setContentOffset(CGPoint(x: 0, y: prevOffset + delta), animated: false)
-            }
-        } else if !coord.didInitialScroll && !items.isEmpty {
+        // With the rotated-table layout, prepending older messages
+        // (pagination) adds rows at the FAR END of the data
+        // (visually the top). The table stays parked at its current
+        // contentOffset automatically — no manual compensation
+        // needed. Latest-message arrivals go to (section 0, row 0) in
+        // the snapshot = visually at the bottom; UITableView keeps
+        // contentOffset stable, so if the user is parked at 0 they
+        // naturally stay on the new latest row.
+        //
+        // That leaves only the initial-scroll case: when the chat
+        // first renders, make sure we land at (0, 0) in case the
+        // automatic dimension estimate left us slightly offset.
+        if !coord.didInitialScroll && !items.isEmpty {
             coord.didInitialScroll = true
             coord.initialScrollAt = Date()
-            let delays: [Double] = [0, 0.05, 0.15, 0.35, 0.6]
-            for d in delays {
-                DispatchQueue.main.asyncAfter(deadline: .now() + d) { [weak tv] in
-                    guard let tv else { return }
-                    tv.layoutIfNeeded()
-                    coord.scrollToBottom(in: tv, animated: false)
-                }
-            }
-        } else if newIDs != prevIDs && wasNearBottom {
-            // Only follow the tail when the user was near the bottom
-            // AND isn't actively scrolling right now. The previous
-            // 1.5-second "initial scroll" grace period + the "append"
-            // trigger combined to rubber-band the list back to the
-            // latest message whenever typing indicators toggled or a
-            // reaction update landed while the user was trying to
-            // scroll up — forcing them to drag 3+ times to escape.
-            if !tv.isTracking && !tv.isDragging && !tv.isDecelerating {
-                DispatchQueue.main.async { [weak tv] in
-                    guard let tv else { return }
-                    // Re-check tracking state on the runloop tick —
-                    // the user may have started dragging in between.
-                    guard !tv.isTracking, !tv.isDragging else { return }
-                    tv.layoutIfNeeded()
-                    coord.scrollToBottom(in: tv, animated: true)
-                }
+            DispatchQueue.main.async { [weak tv] in
+                guard let tv else { return }
+                tv.setContentOffset(.zero, animated: false)
             }
         }
+        _ = (wasNearBottom, prevHeight, prevOffset, isPrepend)
 
         // Jump-to-id (reply pulse + message search).
         if let id = scrollToId {
@@ -286,10 +286,15 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             cell.backgroundColor = .clear
             cell.selectionStyle = .none
 
+            // Every cell's SwiftUI content is rotated 180° to
+            // counter the table's own 180° transform — so text
+            // reads upright while the table scrolls in the
+            // chat-natural direction. See makeUIView.
             if id == ChatV2TypingRowID {
                 let logins = lastTypingUsers
                 cell.contentConfiguration = UIHostingConfiguration {
                     TypingIndicatorRow(logins: logins)
+                        .rotationEffect(.degrees(180))
                 }
                 .margins(.horizontal, 12)
                 .margins(.vertical, 2)
@@ -305,25 +310,17 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     }
                     .padding(.trailing, 6)
                     .padding(.top, 2)
+                    .rotationEffect(.degrees(180))
                 }
                 .margins(.horizontal, 12)
                 .margins(.vertical, 2)
                 return
             }
             guard let msg = lastItems.first(where: { $0.id == id }) else { return }
-            // The cell builder receives the ORDINAL position of this
-            // message inside `lastItems` so the caller can compute
-            // "show header" / "same sender as previous" without doing
-            // another lookup.
             let idx = lastItems.firstIndex(where: { $0.id == id }) ?? indexPath.row
-            // Horizontal margin gives breathing room from the screen
-            // edges (ports the old ChatCollectionView's
-            // `section.contentInsets = .init(top: 12, leading: 12,
-            // bottom: 12, trailing: 12)`). Vertical margin 2 gives 4pt
-            // total between adjacent bubbles (ports
-            // `section.interGroupSpacing = 4`).
             cell.contentConfiguration = UIHostingConfiguration {
                 parent.cellBuilder(msg, idx)
+                    .rotationEffect(.degrees(180))
             }
             .margins(.horizontal, 12)
             .margins(.vertical, 2)
@@ -342,24 +339,37 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             lastShowSeen = showSeen
 
             var snap = NSDiffableDataSourceSnapshot<String, String>()
-            // Group messages into calendar-day sections.
+            // Rotation-aware snapshot: newest section FIRST, and
+            // within each section the newest row FIRST. Combined
+            // with the 180° rotation on the table, this lays content
+            // out so:
+            //   - section 0, row 0  = latest message  = visually at
+            //                         the bottom of the screen
+            //   - last section, last row = oldest message = visually
+            //                              at the top
+            // Pagination listens for "approached last section, last
+            // row" via willDisplay below.
             let groups = ChatV2Sectioning.groupByDay(items)
-            for group in groups {
+            // Trailing rows (typing indicator / seen avatar row) belong
+            // in data-space AFTER the latest message, so in the
+            // rotated table they appear BELOW the latest bubble. In
+            // rotated-snapshot space they go to section 0 as rows
+            // BEFORE the latest message — i.e. prepended.
+            var trailingRowsForLatestSection: [String] = []
+            if !typingUsers.isEmpty { trailingRowsForLatestSection.append(ChatV2TypingRowID) }
+            if showSeen { trailingRowsForLatestSection.append(ChatV2SeenRowID) }
+
+            for (offset, group) in groups.reversed().enumerated() {
                 snap.appendSections([group.sectionID])
-                snap.appendItems(group.messageIDs, toSection: group.sectionID)
-            }
-            // Trailing synthetic rows live in the last day's section so
-            // they show up after the most recent message without their
-            // own pseudo-section header. If there are no messages yet
-            // we skip them (rare — empty state handled at a higher
-            // level).
-            if let lastSection = groups.last?.sectionID {
-                var trailing: [String] = []
-                if showSeen { trailing.append(ChatV2SeenRowID) }
-                if !typingUsers.isEmpty { trailing.append(ChatV2TypingRowID) }
-                if !trailing.isEmpty {
-                    snap.appendItems(trailing, toSection: lastSection)
+                // `offset == 0` means this is the latest day section
+                // (rotated: visually bottom). Prepend the trailing
+                // synthetic rows here so they sit UNDER the newest
+                // bubble.
+                var rows = Array(group.messageIDs.reversed())
+                if offset == 0 {
+                    rows = trailingRowsForLatestSection + rows
                 }
+                snap.appendItems(rows, toSection: group.sectionID)
             }
             dataSource.apply(snap, animatingDifferences: animated)
         }
@@ -375,14 +385,15 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
         // MARK: Scrolling
 
+        /// "Bottom" visually = section 0, row 0 in the rotated table.
         func scrollToBottom(in tv: UITableView, animated: Bool) {
             let snap = dataSource.snapshot()
-            guard let lastSection = snap.sectionIdentifiers.last else { return }
-            let rowCount = snap.numberOfItems(inSection: lastSection)
-            guard rowCount > 0 else { return }
-            let sectionIdx = snap.sectionIdentifiers.count - 1
-            let indexPath = IndexPath(row: rowCount - 1, section: sectionIdx)
-            tv.scrollToRow(at: indexPath, at: .bottom, animated: animated)
+            guard let firstSection = snap.sectionIdentifiers.first else { return }
+            guard snap.numberOfItems(inSection: firstSection) > 0 else { return }
+            let indexPath = IndexPath(row: 0, section: 0)
+            // `.top` in rotated-table space maps to `.bottom` in
+            // visual space.
+            tv.scrollToRow(at: indexPath, at: .top, animated: animated)
         }
 
         func scrollTo(id: String, in tv: UITableView, animated: Bool) {
@@ -393,22 +404,34 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // MARK: UITableViewDelegate
 
         func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-            // Top of the list reached → load older page.
-            if indexPath.section == 0, indexPath.row == 0, didInitialScroll, !loadingMore {
+            // With the rotation trick, the LAST row of the LAST
+            // section is the oldest message visually (top of screen).
+            // Trigger pagination there.
+            let snap = dataSource.snapshot()
+            let lastSection = snap.sectionIdentifiers.count - 1
+            guard lastSection >= 0 else { return }
+            let lastSectionID = snap.sectionIdentifiers[lastSection]
+            let lastRow = snap.numberOfItems(inSection: lastSectionID) - 1
+            if indexPath.section == lastSection,
+               indexPath.row >= lastRow - 1,
+               !loadingMore {
                 fireLoadMore()
             }
         }
 
-        func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-            // Date-pill header. Constructed via UIHostingConfiguration
-            // on a generic UITableViewHeaderFooterView.
+        func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
+            // Date pill as section FOOTER, not header. In the rotated
+            // table, footers render at the BOTTOM of a section in
+            // rotation space = TOP of the section visually. That's
+            // where the date separator belongs ("Today" above today's
+            // first message, not below the last).
             let snap = dataSource.snapshot()
             guard section < snap.sectionIdentifiers.count else { return nil }
             let sectionID = snap.sectionIdentifiers[section]
             let label = ChatV2Sectioning.label(for: sectionID)
-            let header = UITableViewHeaderFooterView(reuseIdentifier: nil)
-            header.backgroundConfiguration = .clear()
-            header.contentConfiguration = UIHostingConfiguration {
+            let footer = UITableViewHeaderFooterView(reuseIdentifier: nil)
+            footer.backgroundConfiguration = .clear()
+            footer.contentConfiguration = UIHostingConfiguration {
                 HStack {
                     Spacer()
                     Text(label)
@@ -420,31 +443,37 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     Spacer()
                 }
                 .padding(.vertical, 6)
+                .rotationEffect(.degrees(180))
             }
             .margins(.all, 0)
-            return header
+            return footer
+        }
+
+        func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat { 0 }
+
+        func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+            UITableView.automaticDimension
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            let bottomDistance = scrollView.contentSize.height
-                - (scrollView.contentOffset.y + scrollView.bounds.height)
-            let atBottom = bottomDistance < 80
+            // Rotation-aware "at bottom" detection — visually at the
+            // bottom means content-offset near 0 (section 0 row 0 is
+            // just above the viewport's top edge, which is the
+            // screen's bottom after rotation).
+            let atBottom = scrollView.contentOffset.y < 80
             if parent.isAtBottom != atBottom {
-                // Write @Binding async — scrollViewDidScroll can fire
-                // during SwiftUI's view-update phase if a layout pass
-                // inside updateUIView triggers a scroll (e.g., after
-                // snapshot apply or contentSize change), and a sync
-                // write to parent.isAtBottom there produces the
-                // "Modifying state during view update" warning and
-                // occasional freezes.
                 let v = atBottom
                 DispatchQueue.main.async { [weak self] in
                     self?.parent.isAtBottom = v
                 }
             }
 
-            guard didInitialScroll, !loadingMore else { return }
-            if scrollView.contentOffset.y < 600 { fireLoadMore() }
+            // Pagination: approaching the far end of the content (=
+            // visually the TOP of the screen, = oldest messages).
+            guard !loadingMore else { return }
+            let distanceToEnd = scrollView.contentSize.height
+                - (scrollView.contentOffset.y + scrollView.bounds.height)
+            if distanceToEnd < 600 { fireLoadMore() }
         }
 
         private func fireLoadMore() {

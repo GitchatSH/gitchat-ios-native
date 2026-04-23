@@ -66,6 +66,10 @@ struct ChatDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var router = AppRouter.shared
     @ObservedObject private var blocks = BlockStore.shared
+    /// Namespace for the iOS 18+ zoom transition between an
+    /// attachment tile and the full-screen image viewer pushed via
+    /// `navigationDestination(item:)`.
+    @Namespace private var imageZoomNamespace
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -158,8 +162,17 @@ struct ChatDetailView: View {
                 if phase == .active { Task { await vm.load() } }
             }
             .onChange(of: vm.messages.last?.id) { _ in
-                guard let last = vm.messages.last, last.sender == auth.login else { return }
-                scrollToBottomToken &+= 1
+                guard let last = vm.messages.last else { return }
+                // Tail-follow rules:
+                // - Always scroll on own sends (the user just hit
+                //   Send and wants to see their bubble).
+                // - Scroll on incoming only when the user is still
+                //   parked near the bottom (mirrors iMessage /
+                //   Telegram). Otherwise leave the offset alone so
+                //   browsing old messages isn't yanked.
+                if last.sender == auth.login || isAtBottom {
+                    scrollToBottomToken &+= 1
+                }
             }
             .onChange(of: vm.draft) { newValue in
                 socket.emitTyping(
@@ -193,6 +206,7 @@ struct ChatDetailView: View {
             photoItems: $photoItems,
             pendingClipboardImage: pendingClipboardBinding,
             composerVisible: $composerVisible,
+            imageZoomNamespace: imageZoomNamespace,
             mentionSuggestions: mentionSuggestions,
             resolveAvatar: { resolveAvatar(for: $0) },
             seenByLogins: { vm.seenByLogins(for: $0) },
@@ -228,6 +242,17 @@ struct ChatDetailView: View {
         .navigationDestination(for: ProfileLoginRoute.self) { route in
             ProfileView(login: route.login)
         }
+        // Image viewer pushed as a navigation destination so iOS 18+
+        // can run the zoom transition between the tapped attachment
+        // tile (matchedTransitionSource inside ChatAttachmentsGrid)
+        // and the full-screen viewer. On iOS 16 (our minimum), the
+        // navigationDestination(item:) overload isn't available, so
+        // older builds fall back to the legacy full-screen cover in
+        // the sheets modifier.
+        .modifier(ImageViewerDestinationModifier(
+            imagePreview: $imagePreview,
+            namespace: imageZoomNamespace
+        ))
         .modifier(ChatDetailSheets(
             showSearch: $showSearch,
             showPinned: $showPinned,
@@ -729,9 +754,10 @@ private struct ChatDetailSheets: ViewModifier {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
-            .fullScreenCover(item: $imagePreview) { state in
-                ImageViewerSheet(urls: state.urls, startIndex: state.index)
-            }
+            // Image viewer handled by .navigationDestination(item:)
+            // on the chat shell so iOS 18+ can run the zoom
+            // transition (matchedTransitionSource on the tile →
+            // navigationTransition(.zoom(...)) on the destination).
             .alert("Delete message?", isPresented: Binding(
                 get: { confirmDelete != nil },
                 set: { if !$0 { confirmDelete = nil } }
@@ -895,6 +921,50 @@ private struct ReportMessageSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Image viewer destination modifier
+
+/// Presents the image viewer.
+///
+/// - iOS 18+: pushes via `navigationDestination(item:)` and attaches
+///   the native zoom transition (iOS Photos gallery-style —
+///   `matchedTransitionSource` on the tile → `navigationTransition(.zoom)`
+///   on the destination).
+/// - iOS 17 and earlier: falls back to `.fullScreenCover`. The zoom
+///   transition only exists on iOS 18, and navigationDestination(item:)
+///   without it would just be a plain horizontal push, which feels
+///   worse than the cover's cross-dissolve for a photo viewer.
+private struct ImageViewerDestinationModifier: ViewModifier {
+    @Binding var imagePreview: ImagePreviewState?
+    let namespace: Namespace.ID
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, macCatalyst 18.0, *) {
+            content.navigationDestination(item: $imagePreview) { state in
+                zoomDestination(for: state)
+            }
+        } else {
+            content.fullScreenCover(item: $imagePreview) { state in
+                ImageViewerSheet(urls: state.urls, startIndex: state.index)
+            }
+        }
+    }
+
+    @available(iOS 18.0, macCatalyst 18.0, *)
+    @ViewBuilder
+    private func zoomDestination(for state: ImagePreviewState) -> some View {
+        let currentURL = state.index < state.urls.count
+            ? state.urls[state.index]
+            : state.urls.first ?? ""
+        ImageViewerSheet(urls: state.urls, startIndex: state.index)
+            .toolbar(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .tabBar)
+            .navigationTransition(
+                .zoom(sourceID: "chat.image:\(currentURL)", in: namespace)
+            )
     }
 }
 

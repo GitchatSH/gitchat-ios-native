@@ -1,14 +1,18 @@
 import SwiftUI
 
 private extension View {
-    /// Apply `matchedGeometryEffect` only when this tile is the one
-    /// currently being previewed in the viewer overlay. Skipping the
-    /// modifier for all other tiles avoids ambiguity errors when
-    /// multiple tiles share the same namespace.
+    /// iOS 18+ `matchedTransitionSource` so the photo tile becomes
+    /// the zoom-in source when the image viewer is pushed via
+    /// `navigationTransition(.zoom(sourceID:in:))`. Older OSes fall
+    /// through unchanged (the navigation push just slides).
     @ViewBuilder
     func matchedIfActive(url: String, in ns: Namespace.ID?, active: String?) -> some View {
-        if let ns, active == url {
-            self.matchedGeometryEffect(id: "chatv2.image:\(url)", in: ns, isSource: true)
+        if let ns {
+            if #available(iOS 18.0, macCatalyst 18.0, *) {
+                self.matchedTransitionSource(id: "chat.image:\(url)", in: ns)
+            } else {
+                self
+            }
         } else {
             self
         }

@@ -5,7 +5,7 @@ struct ProfileLoginRoute: Hashable, Identifiable {
     var id: String { login }
 }
 
-struct ImagePreviewState: Identifiable {
+struct ImagePreviewState: Hashable, Identifiable {
     let id = UUID()
     let urls: [String]
     let index: Int

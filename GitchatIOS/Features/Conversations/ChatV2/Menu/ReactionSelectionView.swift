@@ -17,12 +17,20 @@ struct ReactionSelectionView: View {
 
     static let quick: [String] = ["❤️", "👍", "😂", "🔥", "🎉", "👀", "🙏", "😢"]
 
-    private let bubbleDiameter: CGFloat = 38
-    private let horizontalInset: CGFloat = 12
-    private let verticalInset: CGFloat = 6
+    /// Sizes tuned so the full 8-emoji + chevron pill fits inside the
+    /// safe area on a standard iPhone (393pt wide) without clipping,
+    /// with each emoji wrapper wide enough that the glyph has
+    /// breathing room (no flush-against-circle look).
+    ///
+    /// Budget: 8 * 36 + 32 (chevron) + 7 * 2 (spacing) + 16 (inset)
+    /// = 350pt — fits a ~365pt column (393 screen − 28 edge-inset).
+    private let bubbleDiameter: CGFloat = 36
+    private let horizontalInset: CGFloat = 8
+    private let verticalInset: CGFloat = 4
+    private let interItemSpacing: CGFloat = 2
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: interItemSpacing) {
             ForEach(Self.quick, id: \.self) { emoji in
                 emojiButton(emoji)
             }

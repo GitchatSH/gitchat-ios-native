@@ -1,18 +1,12 @@
 import SwiftUI
 
-/// Full-screen overlay presented when the user long-presses a
-/// message. Layout philosophy — matches how Telegram handles the
-/// long-press menu:
-/// 1. Reaction bar + action list are both rendered at their natural
-///    intrinsic sizes (measured via PreferenceKey).
-/// 2. The bubble preview is given whatever vertical space REMAINS
-///    after the reaction bar + action list + gaps + safe-area insets.
-///    If the preview's content is taller than that budget it lands
-///    inside a ScrollView so the user can still scan the full
-///    message — but the bar + list never get pushed off-screen.
-/// 3. The whole column is aligned to the sender side and placed
-///    vertically so the preview lines up roughly with the source
-///    cell's original Y, clamped to the safe area.
+/// Full-screen overlay shown when the user long-presses a message.
+/// Ported verbatim from the `feat/chat-rework` branch's working
+/// version — the simpler spring-to-center layout without measure-
+/// then-position gymnastics. Three elements in a VStack (reaction
+/// bar, preview bubble, action list); the whole column springs into
+/// the vertical center of the screen; each element also scales in
+/// from the sender-side anchor.
 struct MessageMenu<Preview: View>: View {
     @Environment(\.chatTheme) private var theme
 
@@ -28,236 +22,105 @@ struct MessageMenu<Preview: View>: View {
 
     @State private var appeared = false
     @State private var dragOffset: CGFloat = 0
-    /// Starts at conservative estimates so the first layout pass
-    /// already budgets the preview correctly. The PreferenceKey
-    /// readers refine these values on the second pass.
-    @State private var reactionBarHeight: CGFloat = 52
-    @State private var actionListHeight: CGFloat = 320
-
-    private let gap: CGFloat = 10
-    private let edgeInset: CGFloat = 14
-    private let showAnim = Animation.spring(response: 0.32, dampingFraction: 0.78)
-    private let hideAnim = Animation.spring(response: 0.24, dampingFraction: 0.9)
 
     var body: some View {
         GeometryReader { geo in
-            let layout = computeLayout(in: geo)
-            let stackMaxHeight = geo.size.height
-                - geo.safeAreaInsets.top
-                - geo.safeAreaInsets.bottom
-                - 2 * edgeInset
+            ZStack {
+                // Dimmed + blurred backdrop. Tap anywhere to dismiss.
+                Color.black.opacity(appeared ? 0.35 : 0)
+                    .background(.ultraThinMaterial.opacity(appeared ? 1 : 0))
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismiss() }
 
-            ZStack(alignment: .top) {
-                backdrop
-                column(maxPreviewHeight: layout.maxPreviewHeight)
-                    .frame(
-                        maxWidth: geo.size.width - 2 * edgeInset,
-                        maxHeight: stackMaxHeight,
-                        alignment: target.isMe ? .trailing : .leading
-                    )
-                    .padding(.horizontal, edgeInset)
-                    .offset(y: layout.topOffset + dragOffset)
+                content(in: geo)
+                    .offset(y: dragOffset)
                     .gesture(
                         DragGesture()
-                            .onChanged { v in dragOffset = max(0, v.translation.height) }
+                            .onChanged { v in
+                                dragOffset = max(0, v.translation.height)
+                            }
                             .onEnded { v in
-                                if v.translation.height > 80 { beginDismiss() }
+                                if v.translation.height > 80 { dismiss() }
                                 else {
-                                    withAnimation(showAnim) { dragOffset = 0 }
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                        dragOffset = 0
+                                    }
                                 }
                             }
                     )
             }
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
-        .ignoresSafeArea()
         .onAppear {
-            withAnimation(showAnim) { appeared = true }
-        }
-    }
-
-    // MARK: Backdrop
-
-    @ViewBuilder
-    private var backdrop: some View {
-        ZStack {
-            Rectangle().fill(.ultraThinMaterial)
-            theme.menuBackdrop.opacity(0.18)
-        }
-        .opacity(appeared ? 1 : 0)
-        .ignoresSafeArea()
-        .contentShape(Rectangle())
-        .onTapGesture { beginDismiss() }
-    }
-
-    // MARK: Column
-
-    @ViewBuilder
-    private func column(maxPreviewHeight: CGFloat) -> some View {
-        VStack(alignment: target.isMe ? .trailing : .leading, spacing: gap) {
-            reactionBar
-            previewSlot(maxHeight: maxPreviewHeight)
-            actionList
-        }
-    }
-
-    @ViewBuilder
-    private var reactionBar: some View {
-        ReactionSelectionView(
-            currentReactions: currentReactions,
-            onPick: { emoji in
-                onReact(emoji)
-                beginDismiss()
-            },
-            onMore: {
-                beginDismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-                    onMoreReactions()
-                }
-            }
-        )
-        .fixedSize()
-        .sizeReader { size in
-            // Async hop: onPreferenceChange can fire during SwiftUI's
-            // view-update pass, and writing @State synchronously from
-            // there triggers the "Modifying state during view update,
-            // this will cause undefined behavior" warning + layout
-            // thrash.
-            let h = size.height
-            DispatchQueue.main.async {
-                if h > reactionBarHeight { reactionBarHeight = h }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.75)) {
+                appeared = true
             }
         }
-        .scaleEffect(
-            appeared ? 1 : 0.2,
-            anchor: target.isMe ? .bottomTrailing : .bottomLeading
-        )
-        .opacity(appeared ? 1 : 0)
     }
 
     @ViewBuilder
-    private func previewSlot(maxHeight: CGFloat) -> some View {
-        // Preview is budgeted: natural size up to `maxHeight`, then
-        // ScrollView for overflow so very long bubbles stay readable
-        // without pushing the action list off screen.
-        ScrollView(.vertical, showsIndicators: false) {
-            preview()
-                .fixedSize(horizontal: false, vertical: true)
-                .scaleEffect(
-                    appeared ? 1 : 0.88,
-                    anchor: target.isMe ? .trailing : .leading
-                )
-                .opacity(appeared ? 1 : 0)
-        }
-        .frame(maxHeight: maxHeight)
-        .scrollDisabled(false)
-    }
-
-    @ViewBuilder
-    private var actionList: some View {
-        MessageMenuActionList(
-            actions: actions,
-            seenCount: seenCount,
-            onAction: { action in
-                onAction(action)
-                beginDismiss()
-            }
-        )
-        .frame(maxWidth: 240)
-        .fixedSize(horizontal: false, vertical: true)
-        .sizeReader { size in
-            let h = size.height
-            DispatchQueue.main.async {
-                if h > actionListHeight { actionListHeight = h }
-            }
-        }
-        .scaleEffect(
-            appeared ? 1 : 0.3,
-            anchor: target.isMe ? .topTrailing : .topLeading
-        )
-        .opacity(appeared ? 1 : 0)
-    }
-
-    // MARK: Layout budget
-
-    private struct Layout {
-        let maxPreviewHeight: CGFloat
-        let topOffset: CGFloat
-    }
-
-    private func computeLayout(in geo: GeometryProxy) -> Layout {
+    private func content(in geo: GeometryProxy) -> some View {
+        let screenW = geo.size.width
         let source = target.sourceFrame
-        let safeTop = geo.safeAreaInsets.top + edgeInset
-        let safeBottom = geo.safeAreaInsets.bottom + edgeInset
-        let available = geo.size.height - safeTop - safeBottom
-        // Reserve space for the reaction bar + action list + two gaps.
-        // With conservative initial estimates (see @State defaults),
-        // the preview never gets a runaway budget on first render, so
-        // the action list can't spill off the bottom while the
-        // PreferenceKey readers refine the measurements.
-        let budget = available
-            - reactionBarHeight
-            - actionListHeight
-            - 2 * gap
-        let maxPreviewHeight = max(100, budget)
+        let bubbleMaxWidth = min(screenW - 40, max(source.width, 260))
 
-        // Stack height we expect to render once layout settles.
-        let previewHeight = min(maxPreviewHeight, max(120, source.height))
-        let stackHeightEstimate = reactionBarHeight + actionListHeight
-            + previewHeight + 2 * gap
-        // Anchor near source; clamp so the full stack fits inside
-        // safe top...bottom.
-        let preferredTop = source.minY - reactionBarHeight - gap
-        let maxTop = geo.size.height - geo.safeAreaInsets.bottom
-            - edgeInset - stackHeightEstimate
-        let clampedTop = max(safeTop, min(preferredTop, maxTop))
+        VStack(spacing: 12) {
+            ReactionSelectionView(
+                currentReactions: currentReactions,
+                onPick: { emoji in
+                    onReact(emoji)
+                    dismiss()
+                },
+                onMore: {
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                        onMoreReactions()
+                    }
+                }
+            )
+            .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
+            .padding(.horizontal, 20)
+            .scaleEffect(appeared ? 1 : 0.3, anchor: target.isMe ? .topTrailing : .topLeading)
+            .opacity(appeared ? 1 : 0)
 
-        // During the enter animation, slide a hair down from the source
-        // cell so the preview "flies in" feeling stays.
-        let closedTop = max(safeTop, source.minY - 30)
-        return Layout(
-            maxPreviewHeight: maxPreviewHeight,
-            topOffset: appeared ? clampedTop : closedTop
+            HStack {
+                if target.isMe { Spacer(minLength: 0) }
+                preview()
+                    .frame(maxWidth: bubbleMaxWidth)
+                if !target.isMe { Spacer(minLength: 0) }
+            }
+            .padding(.horizontal, 20)
+
+            MessageMenuActionList(
+                actions: actions,
+                seenCount: seenCount,
+                onAction: { action in
+                    onAction(action)
+                    dismiss()
+                }
+            )
+            .frame(maxWidth: 260)
+            .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
+            .padding(.horizontal, 20)
+            .scaleEffect(appeared ? 1 : 0.4, anchor: target.isMe ? .topTrailing : .topLeading)
+            .opacity(appeared ? 1 : 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .position(
+            x: geo.size.width / 2,
+            y: appeared
+                ? max(geo.size.height * 0.5, min(source.midY, geo.size.height * 0.55))
+                : source.midY
         )
     }
 
-    // MARK: Transitions
-
-    private func beginDismiss() {
-        withAnimation(hideAnim) {
+    private func dismiss() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
             appeared = false
             dragOffset = 0
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
             onDismiss()
         }
-    }
-}
-
-// MARK: - Size-reader modifier
-
-/// Reads a view's rendered size into a closure via `PreferenceKey`.
-/// Used inside `MessageMenu` to budget the preview's height based on
-/// the reaction bar + action list's actual rendered heights.
-extension View {
-    fileprivate func sizeReader(_ onChange: @escaping (CGSize) -> Void) -> some View {
-        background(
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: MessageMenuSizePrefKey.self,
-                    value: proxy.size
-                )
-            }
-        )
-        .onPreferenceChange(MessageMenuSizePrefKey.self) { size in
-            onChange(size)
-        }
-    }
-}
-
-private struct MessageMenuSizePrefKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
-        value = nextValue()
     }
 }
