@@ -119,6 +119,7 @@
 		F07EC6FF64615C4EC3A6BD5C /* SharePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA542FE64B1B825C0A997A08 /* SharePayload.swift */; };
 		F12E71059065072ADB4108CA /* ReactorsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */; };
 		F3B8B46B510DF9437DFD1CD5 /* WaveHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9567B10D8EBC391075BF9599 /* WaveHistory.swift */; };
+		F3BCE82C2875E39EB0AFFE21 /* ChatTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67617533C77197DB23F9935B /* ChatTheme.swift */; };
 		F468BB4EB9F2D15D17EFA9A1 /* ChatCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA68A0F7BDA1DAF3632082F /* ChatCollectionView.swift */; };
 		F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E94D622A0735683786E43FF /* SafariSheet.swift */; };
 		FB4619901E4E05983336C9CC /* ChatAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02492A4FC3B773792CC52769 /* ChatAnimations.swift */; };
@@ -204,6 +205,7 @@
 		5DA6355A70C27DBE9EA3F912 /* ChatSkeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSkeleton.swift; sourceTree = "<group>"; };
 		5EAE1676E5FD6FD4A964A668 /* GroupSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupSettingsSheet.swift; sourceTree = "<group>"; };
 		653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GitchatIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		67617533C77197DB23F9935B /* ChatTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTheme.swift; sourceTree = "<group>"; };
 		6E57C30BA465BAC85D5F1F79 /* Geist-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Black.ttf"; sourceTree = "<group>"; };
 		6F911D72B3577520347C7A25 /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		71BF468C5E19762E01C9A603 /* TypingIndicatorRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicatorRow.swift; sourceTree = "<group>"; };
@@ -589,6 +591,7 @@
 				2F3F9D645B6410E4BD1139FC /* ChatDetailTitleBar.swift */,
 				FAE5A882D0777953CC275E6D /* ChatSectioning.swift */,
 				5DA6355A70C27DBE9EA3F912 /* ChatSkeleton.swift */,
+				67617533C77197DB23F9935B /* ChatTheme.swift */,
 				2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */,
 				A122FF1335C1413E045F5276 /* ClipboardWatcher.swift */,
 				C3B4E0D7FC5BEBE8BD771C03 /* DesktopReturnToSend.swift */,
@@ -815,6 +818,7 @@
 				CD8AD7132CAC90482CAD8C90 /* ChatDetailView.swift in Sources */,
 				845A1D8F7C08D91180AF94F1 /* ChatSectioning.swift in Sources */,
 				8EC49E171B11904ED31ED2C4 /* ChatSkeleton.swift in Sources */,
+				F3BCE82C2875E39EB0AFFE21 /* ChatTheme.swift in Sources */,
 				58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */,
 				9C608A27E1755509C4A7E88E /* ClipboardWatcher.swift in Sources */,
 				AECA351FBDBD09565E295CA7 /* Config.swift in Sources */,

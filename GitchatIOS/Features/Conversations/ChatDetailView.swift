@@ -135,6 +135,7 @@ struct ChatDetailView: View {
         chatBody
             .padding(.bottom, keyboard.height > 0 ? keyboard.height - safeAreaBottom : 0)
             .ignoresSafeArea(.keyboard, edges: .bottom)
+            .environment(\.chatTheme, .default)
     }
 
     @ViewBuilder
