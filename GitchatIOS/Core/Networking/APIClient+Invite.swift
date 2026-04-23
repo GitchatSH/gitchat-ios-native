@@ -34,6 +34,39 @@ extension APIClient {
         let expires_at: String?
         let already_member: Bool?
         let conversation_id: String?
+
+        // BE's field names for the "already joined" signal aren't in
+        // swagger, so accept a handful of plausible spellings. Any true
+        // value wins; everything else defers to the local cache check in
+        // InvitePreviewSheet.
+        private enum CodingKeys: String, CodingKey {
+            case code, group_name, group_avatar_url, member_count, expires_at
+            case conversation_id
+            case already_member
+            case is_member, isMember
+            case already_joined, alreadyJoined
+            case member
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.code = try c.decodeIfPresent(String.self, forKey: .code)
+            self.group_name = try c.decodeIfPresent(String.self, forKey: .group_name)
+            self.group_avatar_url = try c.decodeIfPresent(String.self, forKey: .group_avatar_url)
+            self.member_count = try c.decodeIfPresent(Int.self, forKey: .member_count)
+            self.expires_at = try c.decodeIfPresent(String.self, forKey: .expires_at)
+            self.conversation_id = try c.decodeIfPresent(String.self, forKey: .conversation_id)
+
+            let flags: [CodingKeys] = [.already_member, .is_member, .isMember, .already_joined, .alreadyJoined, .member]
+            var resolved: Bool? = nil
+            for key in flags {
+                if let v = try? c.decodeIfPresent(Bool.self, forKey: key) {
+                    if v { resolved = true; break }
+                    resolved = resolved ?? false
+                }
+            }
+            self.already_member = resolved
+        }
     }
 
     /// Create or fetch the active invite link for a group. BE may return

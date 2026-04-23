@@ -52,15 +52,14 @@ struct InvitePreviewSheet: View {
 
             Spacer()
 
-            if preview.already_member == true {
+            if isAlreadyMember(preview) {
                 Button {
-                    if let id = preview.conversation_id {
-                        dismiss()
+                    let id = preview.conversation_id ?? localConversationId(for: preview)
+                    dismiss()
+                    if let id {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                             AppRouter.shared.openConversation(id: id)
                         }
-                    } else {
-                        dismiss()
                     }
                 } label: {
                     Label("Open chat", systemImage: "arrow.right")
@@ -102,6 +101,31 @@ struct InvitePreviewSheet: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// True when BE explicitly flagged `already_member`, or the previewed
+    /// conversation shows up in our locally-cached conversation list
+    /// (BE's flag naming isn't in swagger — this fallback covers cases
+    /// where it returns the code/name but no `already_member`).
+    private func isAlreadyMember(_ preview: APIClient.InvitePreview) -> Bool {
+        if preview.already_member == true { return true }
+        if localConversationId(for: preview) != nil { return true }
+        return false
+    }
+
+    /// Look up the preview against the cached conversations. Matches by
+    /// `conversation_id` first, then by group name as a soft fallback.
+    private func localConversationId(for preview: APIClient.InvitePreview) -> String? {
+        let cached = ConversationsCache.shared.get() ?? []
+        if let cid = preview.conversation_id,
+           cached.contains(where: { $0.id == cid }) {
+            return cid
+        }
+        if let name = preview.group_name?.lowercased(), !name.isEmpty,
+           let match = cached.first(where: { $0.isGroup && $0.group_name?.lowercased() == name }) {
+            return match.id
+        }
+        return nil
     }
 
     private func load() async {
