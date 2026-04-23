@@ -111,6 +111,7 @@
 		C157BC035592D85E4685543B /* MutedConversationsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */; };
 		C17F6E3938CE1135ADF031BA /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */; };
 		C5707AE9DCD25A6E076EA2E8 /* ImageViewerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7E871CD8B3B98D4064FC71 /* ImageViewerSheet.swift */; };
+		C6CA09C02AFB8EEA5D0A8272 /* JumpToBottomButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F89A77A51F41F7B5E72C64E /* JumpToBottomButton.swift */; };
 		C98522FBA2E4D5570269FF3C /* KeyboardHeight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0581BC792D393D25DB425CB4 /* KeyboardHeight.swift */; };
 		CA8B93C79C92E071D59B9E7B /* DiscoverPeopleList.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2053D2F18EEE53949C1F3DB /* DiscoverPeopleList.swift */; };
 		CD8AD7132CAC90482CAD8C90 /* ChatDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDF70233C14FFDD5E7CB1A8 /* ChatDetailView.swift */; };
@@ -130,6 +131,7 @@
 		F468BB4EB9F2D15D17EFA9A1 /* ChatCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA68A0F7BDA1DAF3632082F /* ChatCollectionView.swift */; };
 		F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E94D622A0735683786E43FF /* SafariSheet.swift */; };
 		F6E98B62F6D82F67C94B3820 /* ChatMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19313A352663839223304B80 /* ChatMessageView.swift */; };
+		F9CCF0FA5514DBFADB2FDD74 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88C26B4701D8DF99B61A2EBC /* ChatView.swift */; };
 		FA4925B0F93E4284EF1C19CD /* KeyboardState.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF1838FB8285360F69B9705C /* KeyboardState.swift */; };
 		FC4E90850F76AD86BD82B822 /* MessageMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A107F7FD44BCB5D2CD17D3D /* MessageMenu.swift */; };
 		FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99301F77409640F810FB1F0D /* UpgradeView.swift */; };
@@ -225,9 +227,11 @@
 		79D9DA88399CF4A4C8C4371F /* NewChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatView.swift; sourceTree = "<group>"; };
 		7A0AAC07BE23842F6B28DC04 /* ForwardSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardSheet.swift; sourceTree = "<group>"; };
 		7E94D622A0735683786E43FF /* SafariSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariSheet.swift; sourceTree = "<group>"; };
+		7F89A77A51F41F7B5E72C64E /* JumpToBottomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JumpToBottomButton.swift; sourceTree = "<group>"; };
 		808AF0F70444427011FF450A /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = OneSignalNotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		877BDA4EA59EAE485A2E7219 /* DiscoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModel.swift; sourceTree = "<group>"; };
+		88C26B4701D8DF99B61A2EBC /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		89BAE4B3A156D6C78753220D /* ChatInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		8A624F25A8589989F02FE384 /* Geist-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Regular.ttf"; sourceTree = "<group>"; };
 		8B35747826D72C7006417827 /* ChatReplyEditBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReplyEditBar.swift; sourceTree = "<group>"; };
@@ -619,6 +623,8 @@
 		CA413BBB49D875FA5A6141A4 /* ChatV2 */ = {
 			isa = PBXGroup;
 			children = (
+				88C26B4701D8DF99B61A2EBC /* ChatView.swift */,
+				7F89A77A51F41F7B5E72C64E /* JumpToBottomButton.swift */,
 				F718DE1C28EBB2B77828374B /* Input */,
 				BD58705ED94E0125C263CE36 /* List */,
 				D9BEA1B54A719DDFAF758D77 /* Managers */,
@@ -904,6 +910,7 @@
 				8EC49E171B11904ED31ED2C4 /* ChatSkeleton.swift in Sources */,
 				538F8E5961D9FBD82FA7F52E /* ChatSwipeReply.swift in Sources */,
 				892405DD41651DDE9E12F37A /* ChatTheme.swift in Sources */,
+				F9CCF0FA5514DBFADB2FDD74 /* ChatView.swift in Sources */,
 				58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */,
 				9C608A27E1755509C4A7E88E /* ClipboardWatcher.swift in Sources */,
 				AECA351FBDBD09565E295CA7 /* Config.swift in Sources */,
@@ -932,6 +939,7 @@
 				C5707AE9DCD25A6E076EA2E8 /* ImageViewerSheet.swift in Sources */,
 				27D2E36C0F88847474346B66 /* InstantTooltip.swift in Sources */,
 				354CA3C2BF0A5A320F72340D /* InvitePreviewSheet.swift in Sources */,
+				C6CA09C02AFB8EEA5D0A8272 /* JumpToBottomButton.swift in Sources */,
 				C98522FBA2E4D5570269FF3C /* KeyboardHeight.swift in Sources */,
 				FA4925B0F93E4284EF1C19CD /* KeyboardState.swift in Sources */,
 				633B7848AFE04D7B0D1939B2 /* LinkGithubBanner.swift in Sources */,

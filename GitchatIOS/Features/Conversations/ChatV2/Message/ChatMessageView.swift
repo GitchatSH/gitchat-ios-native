@@ -41,11 +41,18 @@ struct ChatMessageView: View {
 
     /// Session-wide set of message ids that have already materialized
     /// on screen — so the fade-in animation only fires the *first*
-    /// time a bubble appears, not on every scroll recycle.
-    nonisolated(unsafe) static var seenIds: Set<String> = []
+    /// time a bubble appears, not on every scroll recycle. Shared
+    /// with the legacy `MessageBubble` type (both live in the same
+    /// module and `ChatViewModel.load` marks seen via that symbol)
+    /// so the V1 → V2 transition can swap the rendering class
+    /// without losing the "already seen this session" state.
+    static var seenIds: Set<String> {
+        get { MessageBubble.seenIds }
+        set { MessageBubble.seenIds = newValue }
+    }
 
     static func markSeen(_ ids: [String]) {
-        for id in ids { seenIds.insert(id) }
+        MessageBubble.markSeen(ids)
     }
 
     // MARK: Body
@@ -60,7 +67,7 @@ struct ChatMessageView: View {
             bubbleColumn
             if !isMe { Spacer(minLength: 40) }
         }
-        .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
+        .opacity(MessageBubble.seenIds.contains(message.id) || appeared ? 1 : 0)
         .onAppear(perform: onFirstAppear)
     }
 
@@ -265,10 +272,10 @@ struct ChatMessageView: View {
     // MARK: Lifecycle
 
     private func onFirstAppear() {
-        if Self.seenIds.contains(message.id) {
+        if MessageBubble.seenIds.contains(message.id) {
             appeared = true
         } else {
-            Self.seenIds.insert(message.id)
+            MessageBubble.seenIds.insert(message.id)
             withAnimation(.spring(response: 0.38, dampingFraction: 0.62)) {
                 appeared = true
             }
