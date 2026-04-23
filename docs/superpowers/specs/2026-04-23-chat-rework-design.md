@@ -2,7 +2,7 @@
 
 Date: 2026-04-23
 Status: Draft / pending review
-Branch: `feat/chat-rework-spec` (this doc + plan), then one branch per phase.
+Branch: `feat/chat-rework` — single working branch, one PR when all phases complete.
 
 ## 1. Goals
 
@@ -161,24 +161,31 @@ every frame of the keyboard animation).
 
 ### 6.3 Image cache
 
-Add Kingfisher as a SwiftPM dependency (`project.yml` → `packages:`) and
-wrap it with a thin `CachedImage` view used both inside and outside chat:
+**Revised after reading existing code.** `ImageCache` already does
+in-memory + disk cache + off-main ImageIO downsampling + inflight
+deduplication, and `CachedAsyncImage` already has a sync fast path and
+aspect-exact framing. Adding Kingfisher would be a dependency for
+marginal gain. Instead we tighten the existing pipeline in place:
 
-```swift
-struct CachedImage<P: View, F: View>: View {
-  let url: URL?
-  @ViewBuilder var placeholder: () -> P
-  @ViewBuilder var failure: () -> F
-  var body: some View { /* KFImage */ }
-}
-```
+- Move the synchronous disk read inside `ImageCache.image(for:)` off
+  the main thread. The in-memory fast path stays sync; a new
+  `warmFromDisk(_:) async` helper awaits the disk read and is called
+  by `CachedAsyncImage.load()` before falling back to network.
+- Replace the unbounded `storage: [String: UIImage]` with an `NSCache`
+  wrapped in a thin type. `totalCostLimit = 50 MB`, per-entry cost
+  equal to the decoded pixel bytes. Keeps peak memory bounded without
+  forcing a full purge on every memory warning.
+- Add prefetch: `ChatCollectionView.Coordinator` implements
+  `UICollectionViewDataSourcePrefetching`; it collects image URLs
+  from rows about to enter the visible window (lookahead 10 rows) and
+  calls `ImageCache.shared.prefetch(urls:, maxPixelSize:)`. The method
+  routes through the existing inflight dedup so no duplicate
+  downloads fire.
+- Cancellation: when `cancelPrefetchingForItemsAt` fires, cancel the
+  associated `URLSessionTask` via a stored map.
 
-Then a sweep replaces every call site that currently uses
-`ImageCache.shared.load(url)` + manual `Image(uiImage:)` (avatars, attachments,
-link previews, seen-by avatars, ...). `ImageCache` itself is kept around for
-code paths that need raw `UIImage` (e.g. "Copy image" in the message menu) —
-those route through Kingfisher's retriever under the hood. This phase is a
-standalone PR because it touches files outside `ChatDetail/`.
+No Kingfisher, no new dependency, no app-wide call-site sweep — every
+existing `CachedAsyncImage` call site inherits the improvements.
 
 ### 6.4 Message menu with preview
 
@@ -276,28 +283,28 @@ Single `ChatAnimations.swift`:
 - `.replyPulse`: keep existing two-stage, but move timing into
   `ChatAnimations.pulseHighlight`.
 
-## 7. Phases / PR breakdown
+## 7. Phases / commit breakdown
 
-Each phase is an independent branch + PR. Order is chosen so every
-phase independently improves the app, and later phases compose on top of
-the earlier ones.
+All phases ship on a **single branch `feat/chat-rework`** with one PR
+at the end. Each phase below becomes one (or a small cluster of)
+commits, in order. `main` stays shippable until the final squash/merge.
 
-| # | Branch | PR scope | Priority fixes |
-|---|---|---|---|
-| 0 | `feat/chat-rework-spec` | This spec + plan only | — |
-| 1 | `feat/chat-image-cache` | Add Kingfisher, `CachedImage`, sweep call sites | A |
-| 2 | `feat/chat-composer-keyboard` | Extract `Composer/*`, `KeyboardTimedObserver`, curve-matched animation | B |
-| 3 | `feat/chat-godview-split` | Extract `MessageMenu/*`, `ReplyBubble`, `ReplyEditBar`, `MentionSuggestionRow`, `ClipboardChip` out of `ChatDetailView` (no UX change) | G (maintainability) |
-| 4 | `feat/chat-menu-preview` | New long-press preview + reaction picker + action list | D |
-| 5 | `feat/chat-swipe-reply` | `SwipeReplyModifier` + polished `ReplyBubble` render | E |
-| 6 | `feat/chat-date-headers` | `ChatSectioning` + date-header cell | C (polish) |
-| 7 | `feat/chat-attachments-grid` | `AttachmentsGrid` + `AttachmentProgressOverlay` + VM progress plumbing | F |
-| 8 | `feat/chat-animations` | `ChatAnimations`, scroll-to-bottom polish, bubble-appear, reaction pop, typing dots | C |
-| 9 | `feat/chat-theme` | Consolidate colors into `ChatTheme`, apply throughout chat | polish / G |
+| # | Commit scope | Priority fixes |
+|---|---|---|
+| 0 | Spec + plan docs | — |
+| 1 | `ImageCache` NSCache + async disk + prefetch; `CachedAsyncImage` load order; `ChatCollectionView` prefetch delegate | A |
+| 2 | Extract `Composer/*`; `KeyboardTimedObserver`; curve-matched animation | B |
+| 3 | `ChatDetailView` godview split (extract `MessageMenu/*`, `ReplyBubble`, sheets pieces) — no UX change | G (maintainability) |
+| 4 | Long-press menu preview + bespoke reaction picker + action list | D |
+| 5 | `SwipeReplyModifier` + polished `ReplyBubble` render | E |
+| 6 | `ChatSectioning` + date-header cell | C (polish) |
+| 7 | `AttachmentsGrid` + `AttachmentProgressOverlay` + VM progress plumbing | F |
+| 8 | `ChatAnimations`, scroll-to-bottom polish, bubble-appear, reaction pop, typing dots | C |
+| 9 | Consolidate colors into `ChatTheme`, apply throughout chat | polish / G |
 
-Each PR is reviewed and shipped before the next starts. No feature flag —
-the rework is additive-or-isomorphic at every phase (nothing user-facing
-breaks mid-flight).
+Order is chosen so each commit compiles and the app remains usable —
+later commits compose on earlier ones. No feature flag; the rework is
+additive-or-isomorphic at every step.
 
 ## 8. Rollout & safety
 

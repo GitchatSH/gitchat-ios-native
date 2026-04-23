@@ -2,8 +2,9 @@
 
 Companion to `docs/superpowers/specs/2026-04-23-chat-rework-design.md`.
 
-Each phase = one branch, one PR, one review, one merge, in order.
-Never start a phase until the previous one is merged to `main`.
+All phases live on a single branch `feat/chat-rework`. One PR opens
+when every phase is complete. Each phase is one (or a small cluster
+of) commits in the order below.
 
 Commits follow `feat(ios):` / `refactor(ios):` / `chore:` per CLAUDE.md,
 always with the `Co-Authored-By: Claude Opus 4.7 (1M context)` trailer.
@@ -23,86 +24,80 @@ Every phase ends with the same canonical verification block:
 
 ## Phase 0 — Spec + plan
 
-**Branch:** `feat/chat-rework-spec`
-**PR:** "docs(chat): rework spec + phased plan"
+**Commit:** `docs(chat): rework spec + phased plan`
 **Files added:**
 - `docs/superpowers/specs/2026-04-23-chat-rework-design.md`
 - `docs/superpowers/plans/2026-04-23-chat-rework-plan.md`
 
-**Steps:**
-1. Commit both docs.
-2. Push branch.
-3. Open PR with body = link to spec §1-§6 + link to plan phases.
-
-**Acceptance:** user approves spec direction. PR merges to `main`.
+Already landed on `feat/chat-rework` as commit `4226e1c`. Revised in a
+follow-up commit after scoping discussion (Phase 1 approach changed).
 
 ---
 
-## Phase 1 — Image cache (Kingfisher)
+## Phase 1 — Image cache (in-place improvements)
 
-**Branch:** `feat/chat-image-cache`
 **Priority fix:** A (scroll jank from images).
+
+**Revised approach:** after reading `ImageCache.swift` and
+`CachedAsyncImage.swift`, the existing pipeline already has in-memory +
+disk cache, off-main ImageIO downsampling, and inflight dedup. Kingfisher
+would be a dependency for marginal gain. Instead, fix the three real
+gaps: sync disk read on main, unbounded memory dict, no prefetch.
 
 **Steps:**
 
-1. Add Kingfisher to `project.yml`:
-   ```yaml
-   packages:
-     Kingfisher:
-       url: https://github.com/onevcat/Kingfisher
-       exactVersion: 8.1.3   # pin current stable; update in a separate chore PR
-   targets:
-     GitchatIOS:
-       dependencies:
-         - package: Kingfisher
-   ```
-   Also add to `GitchatShareExtension` and `OneSignalNotificationServiceExtension`
-   only if they import an image component (they currently do not — skip).
-2. Run `xcodegen generate`.
-3. Create `GitchatIOS/Core/UI/CachedImage.swift`:
-   - Accepts `url: URL?`, `placeholder`, `failure`, content transform
-     closures, and a `contentMode` knob.
-   - Internally uses `KFImage`. Sets `.diskCacheExpiration(.days(7))`,
-     `.processor(DownsamplingImageProcessor(size:))` sized to the view's
-     layout size, `.backgroundDecode()`.
-   - Returns a `View` whose layout is stable from before load (the
-     placeholder matches the final frame).
-4. Grep + replace every call site in `GitchatIOS/` that currently does
-   manual `ImageCache.shared.load(url)` + `Image(uiImage:)` or uses
-   `AsyncImage` for remote URLs:
-   - `AvatarView` (already has its own path — update it to use
-     `CachedImage` internally).
-   - `MessageBubble` attachment rendering path.
-   - `ImageSendPreview` remote thumbnails.
-   - `ForwardSheet` preview cell.
-   - `SeenAvatarWithTooltip`.
-   - `PinnedMessagesSheet` rows.
-   - `MessageSearchSheet` rows.
-   - Any `ConversationsListView` avatar uses.
-5. Keep `ImageCache` class as a thin wrapper around Kingfisher's
-   `KingfisherManager.shared.retrieveImage(with:)` for raw `UIImage`
-   callers (the "Copy Image" menu path). Remove its internal
-   `URLCache` once the tests below pass.
-6. Add a prefetch pass: when `ChatCollectionView` scrolls, collect
-   URLs from the 10 items ahead, call
-   `ImagePrefetcher(resources: urls).start()` on a dispatch queue.
-   Implementation in `ChatCollectionView.Coordinator.scrollViewDidScroll`.
+1. `GitchatIOS/Core/UI/ImageCache.swift`:
+   - Replace `private var storage: [String: UIImage]` with a
+     `NSCache<NSString, UIImage>` wrapped in `ImageMemoryCache`. Set
+     `totalCostLimit = 50 * 1024 * 1024`. Compute cost per insert as
+     `Int(image.size.width * image.size.height * image.scale * image.scale * 4)`.
+     Drop the `storageLock` — `NSCache` is thread-safe.
+   - Add `warmFromDisk(_ url: URL, maxPixelSize: CGFloat?) async -> UIImage?`
+     that runs `Data(contentsOf:)` on `Self.diskQueue` via
+     `withCheckedContinuation`, decodes, caches, returns.
+   - Keep `image(for:)` returning only the in-memory hit (make it
+     pure sync lookup — no disk side effect).
+   - Rename the existing method that synchronously touches disk to
+     `imageSync(for:)` and mark it as `@available(*, deprecated)` so
+     the compiler flags any remaining caller. Fix the one internal
+     caller by routing through `warmFromDisk` async.
+   - Add `prefetch(urls: [URL], maxPixelSize: CGFloat?)` that fires
+     detached `Task`s through the existing inflight dedup.
+   - Add `cancelPrefetch(urls: [URL])` that cancels the inflight
+     `Task`s whose URLs are in the set.
+2. `GitchatIOS/Core/UI/CachedAsyncImage.swift`:
+   - `init`: keep the sync in-memory fast path via
+     `ImageCache.shared.image(for:)`. Drop the sync disk fallback.
+   - `load()`: first try in-memory, then `await warmFromDisk`, then
+     `await load` (network). This moves the disk read off main but
+     keeps the perceived-instant feel via the sync in-memory path.
+3. `GitchatIOS/Features/Conversations/ChatDetail/ChatCollectionView.swift`:
+   - Conform `Coordinator` to `UICollectionViewDataSourcePrefetching`.
+     Assign `cv.prefetchDataSource = coordinator` in `makeUIView`.
+   - `prefetchItemsAt(indexPaths:)`: pull the `Message` for each index
+     path; extract `attachments?.map(\.url)` and `attachment_url` plus
+     `sender_avatar`; collect remote URLs; call
+     `ImageCache.shared.prefetch(urls:, maxPixelSize: 800)`.
+   - `cancelPrefetchingForItemsAt(indexPaths:)`: collect the same URLs
+     and call `ImageCache.shared.cancelPrefetch(urls:)`.
+4. No xcodegen change needed (no new files, no package add).
 
 **Verification (this phase):**
 - Scroll a 300+-image conversation twice: second scroll shows every
-  tile instantly from disk cache.
-- Kill-and-relaunch the app, open same conversation: every previously
-  seen image appears from disk within one frame.
-- Instruments > Time Profiler during scroll: no `decodeImage` stacks
-  land on the main thread.
-- Grep confirms zero remaining `ImageCache.shared.load(` call sites
-  in view code (only the one internal wrapper + "Copy Image" path).
+  tile instantly from disk cache (warmFromDisk prefetched earlier).
+- Kill-and-relaunch the app, open same conversation, scroll up and
+  down once: every previously seen image appears within one frame
+  (in-memory) or after the first frame (async disk warm).
+- Instruments > Time Profiler during scroll: no `Data(contentsOf:)`
+  stacks on the main thread.
+- After a long session memory use stays below a bounded ceiling
+  (watch memory graph in Xcode; `NSCache` evicts under pressure).
 
 ---
 
 ## Phase 2 — Composer + keyboard
 
-**Branch:** `feat/chat-composer-keyboard`
+**On branch:** `feat/chat-composer-keyboard`
 **Priority fix:** B (composer snap).
 
 **Steps:**
@@ -166,7 +161,7 @@ Every phase ends with the same canonical verification block:
 
 ## Phase 3 — Split god-view
 
-**Branch:** `feat/chat-godview-split`
+**On branch:** `feat/chat-godview-split`
 **Priority fix:** G (maintainability; also unblocks Phases 4+).
 
 Purely structural. Zero user-visible change.
@@ -200,7 +195,7 @@ Purely structural. Zero user-visible change.
 
 ## Phase 4 — Long-press menu preview
 
-**Branch:** `feat/chat-menu-preview`
+**On branch:** `feat/chat-menu-preview`
 **Priority fix:** D (context-menu UX).
 
 **Steps:**
@@ -242,7 +237,7 @@ Purely structural. Zero user-visible change.
 
 ## Phase 5 — Swipe-to-reply + reply bubble polish
 
-**Branch:** `feat/chat-swipe-reply`
+**On branch:** `feat/chat-swipe-reply`
 **Priority fix:** E.
 
 **Steps:**
@@ -284,7 +279,7 @@ Purely structural. Zero user-visible change.
 
 ## Phase 6 — Date section headers
 
-**Branch:** `feat/chat-date-headers`
+**On branch:** `feat/chat-date-headers`
 **Priority fix:** polish (C).
 
 **Steps:**
@@ -313,7 +308,7 @@ Purely structural. Zero user-visible change.
 
 ## Phase 7 — Attachments grid + upload progress
 
-**Branch:** `feat/chat-attachments-grid`
+**On branch:** `feat/chat-attachments-grid`
 **Priority fix:** F.
 
 **Steps:**
@@ -351,7 +346,7 @@ Purely structural. Zero user-visible change.
 
 ## Phase 8 — Animations pass
 
-**Branch:** `feat/chat-animations`
+**On branch:** `feat/chat-animations`
 **Priority fix:** C.
 
 **Steps:**
@@ -381,7 +376,7 @@ Purely structural. Zero user-visible change.
 
 ## Phase 9 — Theme consolidation
 
-**Branch:** `feat/chat-theme`
+**On branch:** `feat/chat-theme`
 **Priority fix:** polish / G.
 
 **Steps:**
