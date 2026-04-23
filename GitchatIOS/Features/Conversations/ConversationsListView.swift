@@ -28,9 +28,11 @@ final class ConversationsViewModel: ObservableObject {
         if wasMuted {
             locallyMuted.remove(convo.id)
             locallyUnmuted.insert(convo.id)
+            MutedConversationsStore.remove(convo.id)
         } else {
             locallyUnmuted.remove(convo.id)
             locallyMuted.insert(convo.id)
+            MutedConversationsStore.insert(convo.id)
         }
         do {
             if wasMuted {
@@ -45,12 +47,24 @@ final class ConversationsViewModel: ObservableObject {
             if wasMuted {
                 locallyUnmuted.remove(convo.id)
                 locallyMuted.insert(convo.id)
+                MutedConversationsStore.insert(convo.id)
             } else {
                 locallyMuted.remove(convo.id)
                 locallyUnmuted.insert(convo.id)
+                MutedConversationsStore.remove(convo.id)
             }
             ToastCenter.shared.show(.error, "Mute failed", error.localizedDescription)
         }
+    }
+
+    /// Refresh the shared (app-group) muted-id set from the latest
+    /// server-returned conversations. Merged with any optimistic
+    /// flips that haven't completed yet.
+    private func syncMutedStore() {
+        var ids = Set(conversations.filter { $0.is_muted == true }.map(\.id))
+        ids.formUnion(locallyMuted)
+        ids.subtract(locallyUnmuted)
+        MutedConversationsStore.replace(with: ids)
     }
 
     init() {
@@ -108,6 +122,7 @@ final class ConversationsViewModel: ObservableObject {
             let deduped = Self.dedupeChannels(resp.conversations)
             self.conversations = deduped
             ConversationsCache.shared.store(deduped)
+            syncMutedStore()
             for convo in deduped {
                 MessageCache.shared.prefetch(conversationId: convo.id)
             }
@@ -221,6 +236,9 @@ struct ConversationsListView: View {
         }
         return base.sorted { a, b in
             if a.isPinned != b.isPinned { return a.isPinned }
+            let aMuted = vm.isLocallyMuted(a)
+            let bMuted = vm.isLocallyMuted(b)
+            if aMuted != bMuted { return !aMuted }
             return (a.last_message_at ?? "") > (b.last_message_at ?? "")
         }
     }
@@ -311,6 +329,13 @@ struct ConversationsListView: View {
                                 Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash.fill" : "pin.fill")
                             }
                             .tint(.orange)
+                            Button {
+                                Task { await vm.toggleMute(convo) }
+                            } label: {
+                                let muted = vm.isLocallyMuted(convo)
+                                Label(muted ? "Unmute" : "Mute", systemImage: muted ? "bell.fill" : "bell.slash.fill")
+                            }
+                            .tint(.gray)
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                             Button(role: .destructive) {

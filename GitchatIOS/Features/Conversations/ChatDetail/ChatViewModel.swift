@@ -330,6 +330,11 @@ final class ChatViewModel: ObservableObject {
         // Flip optimistically so the menu label updates instantly.
         let wasMuted = isMuted
         isMuted.toggle()
+        if isMuted {
+            MutedConversationsStore.insert(conversation.id)
+        } else {
+            MutedConversationsStore.remove(conversation.id)
+        }
         do {
             if wasMuted {
                 try await APIClient.shared.unmuteConversation(id: conversation.id)
@@ -340,6 +345,11 @@ final class ChatViewModel: ObservableObject {
             }
         } catch {
             isMuted = wasMuted
+            if wasMuted {
+                MutedConversationsStore.insert(conversation.id)
+            } else {
+                MutedConversationsStore.remove(conversation.id)
+            }
             ToastCenter.shared.show(.error, "Mute failed", error.localizedDescription)
         }
     }

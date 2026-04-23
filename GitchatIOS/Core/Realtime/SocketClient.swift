@@ -1,6 +1,13 @@
 import Foundation
 import SocketIO
 
+extension NSNotification.Name {
+    /// Posted on the main actor whenever the server emits
+    /// `conversation:updated`. Non-list screens (e.g. the open chat detail)
+    /// use it to re-read per-conversation state such as `is_muted`.
+    static let gitchatConversationUpdated = NSNotification.Name("gitchat.conversationUpdated")
+}
+
 @MainActor
 final class SocketClient: ObservableObject {
     static let shared = SocketClient()
@@ -84,7 +91,10 @@ final class SocketClient: ObservableObject {
             }
         }
         socket.on("conversation:updated") { [weak self] _, _ in
-            Task { @MainActor in self?.onConversationUpdated?() }
+            Task { @MainActor in
+                self?.onConversationUpdated?()
+                NotificationCenter.default.post(name: .gitchatConversationUpdated, object: nil)
+            }
         }
         let presenceHandler: NormalCallback = { [weak self] data, _ in
             // Backend shape: { event_name, data: { login, status: "online" | "offline", lastSeenAt? } }

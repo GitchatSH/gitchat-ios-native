@@ -381,6 +381,9 @@ struct ChatDetailView: View {
             if focused { scrollToBottomToken &+= 1 }
         }
         .onDisappear { onDisappearCleanup() }
+        .onReceive(NotificationCenter.default.publisher(for: .gitchatConversationUpdated)) { _ in
+            syncMutedFromCache()
+        }
         .onChange(of: vm.draft) { newValue in
             socket.emitTyping(
                 conversationId: vm.conversation.id,
@@ -1115,6 +1118,14 @@ struct ChatDetailView: View {
             guard convId == vm.conversation.id else { return }
             vm.pinnedIds.remove(msgId)
         }
+    }
+
+    /// Pull the freshest `is_muted` for the open chat from the shared
+    /// conversations cache. Called when a `conversation:updated` socket
+    /// event fires so the bell-slash indicator reflects remote toggles.
+    private func syncMutedFromCache() {
+        guard let fresh = ConversationsCache.shared.get()?.first(where: { $0.id == vm.conversation.id }) else { return }
+        vm.isMuted = fresh.is_muted == true
     }
 
     private func onDisappearCleanup() {

@@ -32,6 +32,7 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
+    scheme: {}
     sources:
       - path: GitchatIOS
     resources:
@@ -139,6 +140,7 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: OneSignalNotificationServiceExtension
+      - path: GitchatIOS/Core/MutedConversationsStore.swift
     dependencies:
       - package: OneSignalXCFramework
         product: OneSignalExtension
