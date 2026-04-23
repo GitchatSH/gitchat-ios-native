@@ -81,6 +81,26 @@ final class PushManager: ObservableObject {
             if let login = additional["actor_login"] as? String, !login.isEmpty {
                 AppRouter.shared.openProfile(login: login)
             }
+        case "wave":
+            // Tapping a wave push auto-accepts — BE creates the DM and
+            // we jump straight in. On failure (expired / 404 / 409) fall
+            // back to opening the sender's profile.
+            let waveId = (additional["wave_id"] as? String) ?? (additional["waveId"] as? String)
+            let actor = (additional["actor_login"] as? String) ?? (additional["fromLogin"] as? String)
+            if let waveId, !waveId.isEmpty {
+                Task { @MainActor in
+                    do {
+                        let resp = try await APIClient.shared.respondToWave(waveId: waveId)
+                        AppRouter.shared.openConversation(id: resp.conversationId)
+                    } catch {
+                        if let actor, !actor.isEmpty {
+                            AppRouter.shared.openProfile(login: actor)
+                        }
+                    }
+                }
+            } else if let actor, !actor.isEmpty {
+                AppRouter.shared.openProfile(login: actor)
+            }
         default:
             AppRouter.shared.selectedTab = 2 // Activity tab
         }

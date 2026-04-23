@@ -13,6 +13,10 @@ extension NSNotification.Name {
     /// updates immediately even when BE doesn't emit a separate
     /// `conversation:updated` event.
     static let gitchatMessageSent = NSNotification.Name("gitchat.messageSent")
+
+    /// Posted when a recipient accepts a wave — fires on the sender's
+    /// socket. The `object` is the new DM conversation id (String).
+    static let gitchatWaveResponded = NSNotification.Name("gitchat.waveResponded")
 }
 
 @MainActor
@@ -124,6 +128,17 @@ final class SocketClient: ObservableObject {
         }
         socket.on("notification:new") { [weak self] _, _ in
             Task { @MainActor in self?.onNotificationNew?() }
+        }
+        socket.on("wave:responded") { data, _ in
+            // Payload is either the raw envelope or wrapped under `data`.
+            let dict = (data.first as? [String: Any]) ?? [:]
+            let inner = (dict["data"] as? [String: Any]) ?? dict
+            let cid = (inner["conversation_id"] as? String)
+                ?? (inner["conversationId"] as? String)
+            Task { @MainActor in
+                guard let cid else { return }
+                NotificationCenter.default.post(name: .gitchatWaveResponded, object: cid)
+            }
         }
         socket.on("typing:start") { [weak self] data, _ in
             guard let dict = data.first as? [String: Any],

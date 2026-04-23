@@ -46,6 +46,7 @@
 		54503540CFF2CBDF6CCAE91C /* LinkPreviewCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD43FE561D7FEFCB9BF2702C /* LinkPreviewCard.swift */; };
 		5769D859AC782AFDBB13C6B1 /* DiscoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877BDA4EA59EAE485A2E7219 /* DiscoverViewModel.swift */; };
 		58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */; };
+		589F007C9FC3C65B41E24DF1 /* WaveButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE841F1B53AE0E4DAA4F004E /* WaveButton.swift */; };
 		60D610D3E81196FD29EADE83 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F911D72B3577520347C7A25 /* AppRouter.swift */; };
 		633B7848AFE04D7B0D1939B2 /* LinkGithubBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0108E6ED2C630F572A0C5F9 /* LinkGithubBanner.swift */; };
 		654B9A9D39D48AB87373AA1F /* Routes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A066E307A07B247124125B04 /* Routes.swift */; };
@@ -107,6 +108,7 @@
 		EE5CBCE9BC27AF2BD66CB1FA /* GitchatShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C3B238A579BDAC391159C493 /* GitchatShareExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F07EC6FF64615C4EC3A6BD5C /* SharePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA542FE64B1B825C0A997A08 /* SharePayload.swift */; };
 		F12E71059065072ADB4108CA /* ReactorsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */; };
+		F3B8B46B510DF9437DFD1CD5 /* WaveHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9567B10D8EBC391075BF9599 /* WaveHistory.swift */; };
 		F468BB4EB9F2D15D17EFA9A1 /* ChatCollectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EA68A0F7BDA1DAF3632082F /* ChatCollectionView.swift */; };
 		F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E94D622A0735683786E43FF /* SafariSheet.swift */; };
 		FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99301F77409640F810FB1F0D /* UpgradeView.swift */; };
@@ -200,6 +202,7 @@
 		877BDA4EA59EAE485A2E7219 /* DiscoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModel.swift; sourceTree = "<group>"; };
 		8A624F25A8589989F02FE384 /* Geist-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Regular.ttf"; sourceTree = "<group>"; };
 		8E987C78E04FD812B6372B42 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		9567B10D8EBC391075BF9599 /* WaveHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveHistory.swift; sourceTree = "<group>"; };
 		9685947BA9F7F47948D0D9FD /* ChannelDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelDetailView.swift; sourceTree = "<group>"; };
 		96C7DB031D380DE22F80C960 /* BlockStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockStore.swift; sourceTree = "<group>"; };
 		99301F77409640F810FB1F0D /* UpgradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpgradeView.swift; sourceTree = "<group>"; };
@@ -240,6 +243,7 @@
 		DDDF70233C14FFDD5E7CB1A8 /* ChatDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailView.swift; sourceTree = "<group>"; };
 		DE08A0DE3086C45434C3F914 /* GitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitchatApp.swift; sourceTree = "<group>"; };
 		DE2F21B2C49829CF682C71EB /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
+		DE841F1B53AE0E4DAA4F004E /* WaveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveButton.swift; sourceTree = "<group>"; };
 		E53A491227A1B50663F174A3 /* APIClient+Invite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Invite.swift"; sourceTree = "<group>"; };
 		ED882894AD818DBFB0421E96 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
@@ -381,6 +385,7 @@
 				9BD8099D1B297E089FD9BEDE /* SeenAvatarWithTooltip.swift */,
 				3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */,
 				FFB37F9F8D7D60BEB1494E05 /* Toast.swift */,
+				DE841F1B53AE0E4DAA4F004E /* WaveButton.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -450,6 +455,7 @@
 				CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */,
 				D1257724417C399DFA806F4A /* PresenceStore.swift */,
 				808AF0F70444427011FF450A /* PushManager.swift */,
+				9567B10D8EBC391075BF9599 /* WaveHistory.swift */,
 				B2EE5CBC6E98EC1E0991565A /* Analytics */,
 				9F15F5366DF09B87DCD6B465 /* Models */,
 				62AB9BB7FB15FBD0242CDC62 /* Networking */,
@@ -827,6 +833,8 @@
 				DEA9CCB7625D47EC3D8A9A78 /* Toast.swift in Sources */,
 				AB9FCA5C4BD98C40D7E5CC9C /* TypingIndicatorRow.swift in Sources */,
 				FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */,
+				589F007C9FC3C65B41E24DF1 /* WaveButton.swift in Sources */,
+				F3B8B46B510DF9437DFD1CD5 /* WaveHistory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

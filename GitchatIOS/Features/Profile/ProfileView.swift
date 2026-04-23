@@ -109,15 +109,22 @@ struct ProfileView: View {
                             }
                             .disabled(followBusy || followState == nil)
 
-                            Button {
-                                Task { await startChat(with: p.login) }
-                            } label: {
-                                actionLabel(
-                                    systemImage: startingChat ? "hourglass" : "paperplane.fill",
-                                    title: "Chat"
-                                )
+                            if let follow = followState, !(follow.following && follow.followed_by) {
+                                // Non-mutual: Wave is the low-friction primary
+                                // action. Chat still accessible via the overflow
+                                // menu below.
+                                WaveButton(targetLogin: p.login)
+                            } else {
+                                Button {
+                                    Task { await startChat(with: p.login) }
+                                } label: {
+                                    actionLabel(
+                                        systemImage: startingChat ? "hourglass" : "paperplane.fill",
+                                        title: "Chat"
+                                    )
+                                }
+                                .disabled(startingChat)
                             }
-                            .disabled(startingChat)
 
                             Menu {
                                 ShareLink(

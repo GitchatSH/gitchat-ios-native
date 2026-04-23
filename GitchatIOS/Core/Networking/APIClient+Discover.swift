@@ -86,4 +86,37 @@ extension APIClient {
             body: Body(type: "community", repo_full_name: repoFullName)
         )
     }
+
+    // MARK: - Waves (#35)
+
+    struct WaveSent: Decodable {
+        /// Wave id. BE field is `id`.
+        let id: String
+        let fromLogin: String?
+        let toLogin: String?
+        let status: String?
+        let createdAt: String?
+    }
+
+    struct WaveAccepted: Decodable {
+        let waveId: String
+        /// DM conversation id created (or existing) for the pair.
+        let conversationId: String
+    }
+
+    /// Send a one-tap wave to `login`. BE creates only a notification —
+    /// no message, no conversation — until the recipient responds.
+    /// 409 on duplicate; 400 when waving yourself.
+    func sendWave(to login: String) async throws -> WaveSent {
+        struct Body: Encodable { let toLogin: String }
+        return try await request("waves", method: "POST", body: Body(toLogin: login))
+    }
+
+    /// Accept a wave — BE atomically creates the DM and emits
+    /// `wave:responded` on the sender's socket. Returns the new
+    /// (or pre-existing) conversation id.
+    func respondToWave(waveId: String) async throws -> WaveAccepted {
+        struct Empty: Encodable {}
+        return try await request("waves/\(waveId)/respond", method: "POST", body: Empty())
+    }
 }
