@@ -175,7 +175,14 @@ struct ChatDetailView: View {
                 blockedBanner(login: blockedLogin)
             } else if composerVisible {
                 if vm.replyingTo != nil || vm.editingMessage != nil {
-                    replyEditBar
+                    ReplyEditBar(
+                        editing: vm.editingMessage,
+                        replyingTo: vm.replyingTo,
+                        onDismiss: {
+                            if vm.editingMessage != nil { vm.cancelEdit() }
+                            else { vm.replyingTo = nil }
+                        }
+                    )
                 }
                 if !mentionSuggestions.isEmpty {
                     mentionSuggestionList
@@ -186,7 +193,7 @@ struct ChatDetailView: View {
                 composer
                     .overlay(alignment: .topTrailing) {
                         if !isAtBottom {
-                            jumpToBottomButton
+                            JumpToBottomButton(action: { scrollToBottomToken &+= 1 })
                                 .padding(.trailing, 6)
                                 .offset(y: -52)
                                 .transition(.scale(scale: 0.4).combined(with: .opacity))
@@ -896,61 +903,6 @@ struct ChatDetailView: View {
                 reportingMessage = msg
             } label: { Label("Report", systemImage: "flag") }
             .tint(.red)
-        }
-    }
-
-    private var replyEditBar: some View {
-        HStack {
-            Image(systemName: vm.editingMessage != nil ? "pencil" : "arrowshape.turn.up.left")
-                .foregroundStyle(Color("AccentColor"))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(vm.editingMessage != nil ? "Editing" : "Replying to \(vm.replyingTo?.sender ?? "")")
-                    .font(.caption.bold())
-                    .foregroundStyle(Color("AccentColor"))
-                Text((vm.editingMessage ?? vm.replyingTo)?.content ?? "")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            Button {
-                if vm.editingMessage != nil { vm.cancelEdit() }
-                else { vm.replyingTo = nil }
-            } label: {
-                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal).padding(.vertical, 8)
-        .background(Color(.secondarySystemBackground))
-    }
-
-    @ViewBuilder
-    private var jumpToBottomButton: some View {
-        let action: () -> Void = {
-            Haptics.selection()
-            scrollToBottomToken &+= 1
-        }
-        if #available(iOS 26.0, *) {
-            Button(action: action) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 16, weight: .bold))
-            }
-            .buttonBorderShape(.circle)
-            .buttonStyle(.glass)
-            .controlSize(.large)
-            .tint(Color(.label))
-        } else {
-            Button(action: action) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color(.label))
-                    .frame(width: 38, height: 38)
-                    .background(.ultraThinMaterial, in: Circle())
-                    .overlay(Circle().stroke(Color(.separator).opacity(0.4), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
-            }
-            .buttonStyle(.plain)
-            .instantTooltip("Jump to latest")
         }
     }
 

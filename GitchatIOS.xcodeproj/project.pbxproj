@@ -67,6 +67,7 @@
 		7CF62DD78AB08C4384CDF42A /* GroupManagementSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B26B063AB6FD5899CF40E0 /* GroupManagementSheets.swift */; };
 		7E0C8192B9A0E77104D32979 /* APIClient+Discover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B339A4FABDFD26D236D1E5CF /* APIClient+Discover.swift */; };
 		80C07FFED87C334C9E6943FF /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500978A5175704DEC944236B /* NotificationService.swift */; };
+		841FEE6DA708C8BE64B3D6C4 /* ReplyEditBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9A1AFD3020F1206E54DA77A /* ReplyEditBar.swift */; };
 		85D7EE81B5791E46FB9D5E00 /* GroupInviteLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 169765DCCC813091D7683903 /* GroupInviteLinkSheet.swift */; };
 		86017ADD5A00CAC64683E83E /* CatalystDropModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA06F06179CF48CD72660313 /* CatalystDropModifier.swift */; };
 		875CBDD4A2B05627C889CFF4 /* OneSignalNotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -96,6 +97,7 @@
 		BECCFD9188F71D9C196D1394 /* ImageSendPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 329C9B0EF873958D6A6CA198 /* ImageSendPreview.swift */; };
 		C157BC035592D85E4685543B /* MutedConversationsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */; };
 		C17F6E3938CE1135ADF031BA /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */; };
+		C41E398C90A9053918588AEE /* JumpToBottomButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242AC390D468D5CCF42A810D /* JumpToBottomButton.swift */; };
 		C5707AE9DCD25A6E076EA2E8 /* ImageViewerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7E871CD8B3B98D4064FC71 /* ImageViewerSheet.swift */; };
 		C98522FBA2E4D5570269FF3C /* KeyboardHeight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0581BC792D393D25DB425CB4 /* KeyboardHeight.swift */; };
 		CA8B93C79C92E071D59B9E7B /* DiscoverPeopleList.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2053D2F18EEE53949C1F3DB /* DiscoverPeopleList.swift */; };
@@ -164,6 +166,7 @@
 		17539A82EA8BDD61C6458F4F /* SyncingDotsLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncingDotsLabel.swift; sourceTree = "<group>"; };
 		1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MembersSheet.swift; sourceTree = "<group>"; };
 		1FF77661873F7ECBA61F6EEC /* ShareRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareRootView.swift; sourceTree = "<group>"; };
+		242AC390D468D5CCF42A810D /* JumpToBottomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JumpToBottomButton.swift; sourceTree = "<group>"; };
 		24DA1766BE87B16368E73F58 /* GlassPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPill.swift; sourceTree = "<group>"; };
 		2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
 		2AFC776F8EAF46612FBA12D7 /* InstantTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantTooltip.swift; sourceTree = "<group>"; };
@@ -232,6 +235,7 @@
 		C52A3C804970611E07FF79D0 /* SystemMessageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMessageRow.swift; sourceTree = "<group>"; };
 		C572C41B826EC03433688B86 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		C8CAB4116A44600924A5B1A4 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
+		C9A1AFD3020F1206E54DA77A /* ReplyEditBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyEditBar.swift; sourceTree = "<group>"; };
 		CA25F2BA4BC86A0256C4C1DD /* SocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClient.swift; sourceTree = "<group>"; };
 		CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutedConversationsStore.swift; sourceTree = "<group>"; };
 		CE9078C15E5B9CC4441DCE26 /* GitHubWebOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubWebOAuth.swift; sourceTree = "<group>"; };
@@ -570,12 +574,14 @@
 				40DB657ADF1F6FC16C8A2BA9 /* ImageCropSheet.swift */,
 				329C9B0EF873958D6A6CA198 /* ImageSendPreview.swift */,
 				DC7E871CD8B3B98D4064FC71 /* ImageViewerSheet.swift */,
+				242AC390D468D5CCF42A810D /* JumpToBottomButton.swift */,
 				1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */,
 				DE2F21B2C49829CF682C71EB /* MessageBubble.swift */,
 				59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */,
 				781AD42CB2F6BD7F8C084678 /* MessageSearchSheet.swift */,
 				C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */,
 				2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */,
+				C9A1AFD3020F1206E54DA77A /* ReplyEditBar.swift */,
 				A066E307A07B247124125B04 /* Routes.swift */,
 				170CC226995548D4A03863C3 /* SeenBySheet.swift */,
 				17539A82EA8BDD61C6458F4F /* SyncingDotsLabel.swift */,
@@ -806,6 +812,7 @@
 				C5707AE9DCD25A6E076EA2E8 /* ImageViewerSheet.swift in Sources */,
 				27D2E36C0F88847474346B66 /* InstantTooltip.swift in Sources */,
 				354CA3C2BF0A5A320F72340D /* InvitePreviewSheet.swift in Sources */,
+				C41E398C90A9053918588AEE /* JumpToBottomButton.swift in Sources */,
 				C98522FBA2E4D5570269FF3C /* KeyboardHeight.swift in Sources */,
 				633B7848AFE04D7B0D1939B2 /* LinkGithubBanner.swift in Sources */,
 				54503540CFF2CBDF6CCAE91C /* LinkPreviewCard.swift in Sources */,
@@ -826,6 +833,7 @@
 				A9CB0EEA7EC214D19D530910 /* PushManager.swift in Sources */,
 				F12E71059065072ADB4108CA /* ReactorsSheet.swift in Sources */,
 				2A9935280A2FA6DB2275A27D /* RelativeTime.swift in Sources */,
+				841FEE6DA708C8BE64B3D6C4 /* ReplyEditBar.swift in Sources */,
 				494D3D00F4249ABA940FC7E0 /* RootView.swift in Sources */,
 				654B9A9D39D48AB87373AA1F /* Routes.swift in Sources */,
 				F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */,
