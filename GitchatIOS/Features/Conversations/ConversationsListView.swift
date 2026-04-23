@@ -17,6 +17,38 @@ final class ConversationsViewModel: ObservableObject {
         locallyRead.insert(id)
     }
 
+    /// Patch a conversation row's preview + timestamp in-place so the
+    /// list reflects a just-arrived message without waiting for a full
+    /// `listConversations()` refetch. Used by the socket `message:sent`
+    /// listener — BE doesn't always emit `conversation:updated` alongside.
+    func applyIncomingMessage(_ msg: Message) {
+        guard let cid = msg.conversation_id,
+              let idx = conversations.firstIndex(where: { $0.id == cid }) else { return }
+        let c = conversations[idx]
+        let preview = msg.content.isEmpty ? c.last_message_preview : msg.content
+        conversations[idx] = Conversation(
+            id: c.id,
+            type: c.type,
+            is_group: c.is_group,
+            group_name: c.group_name,
+            group_avatar_url: c.group_avatar_url,
+            repo_full_name: c.repo_full_name,
+            participants: c.participants,
+            other_user: c.other_user,
+            last_message: msg,
+            last_message_preview: preview,
+            last_message_text: msg.content.isEmpty ? c.last_message_text : msg.content,
+            last_message_at: msg.created_at ?? c.last_message_at,
+            unread_count: c.unread_count,
+            pinned: c.pinned,
+            pinned_at: c.pinned_at,
+            is_request: c.is_request,
+            updated_at: c.updated_at,
+            is_muted: c.is_muted
+        )
+        ConversationsCache.shared.store(conversations)
+    }
+
     func isLocallyMuted(_ convo: Conversation) -> Bool {
         if locallyMuted.contains(convo.id) { return true }
         if locallyUnmuted.contains(convo.id) { return false }
@@ -411,6 +443,10 @@ struct ConversationsListView: View {
             .task {
                 await vm.load()
                 socket.onConversationUpdated = { Task { await vm.load() } }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .gitchatMessageSent)) { note in
+                guard let msg = note.object as? Message else { return }
+                vm.applyIncomingMessage(msg)
             }
             .onChange(of: scenePhase) { phase in
                 if phase == .active { Task { await vm.load() } }

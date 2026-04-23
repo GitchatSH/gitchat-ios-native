@@ -6,6 +6,13 @@ extension NSNotification.Name {
     /// `conversation:updated`. Non-list screens (e.g. the open chat detail)
     /// use it to re-read per-conversation state such as `is_muted`.
     static let gitchatConversationUpdated = NSNotification.Name("gitchat.conversationUpdated")
+
+    /// Posted on the main actor for every incoming `message:sent`. The
+    /// `object` is the `Message`. The list uses this to patch the
+    /// matching conversation's preview + timestamp in place so the row
+    /// updates immediately even when BE doesn't emit a separate
+    /// `conversation:updated` event.
+    static let gitchatMessageSent = NSNotification.Name("gitchat.messageSent")
 }
 
 @MainActor
@@ -88,6 +95,7 @@ final class SocketClient: ObservableObject {
             Task { @MainActor in
                 self?.globalOnMessageSent?(msg)
                 self?.onMessageSent?(msg)
+                NotificationCenter.default.post(name: .gitchatMessageSent, object: msg)
             }
         }
         socket.on("conversation:updated") { [weak self] _, _ in
