@@ -293,6 +293,25 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
             self.collectionView = cv
             let registration = UICollectionView.CellRegistration<UICollectionViewCell, String> { [weak self] cell, indexPath, id in
                 guard let self else { return }
+                if ChatSectioning.isDateHeader(id) {
+                    let label = ChatSectioning.label(for: id)
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        HStack {
+                            Spacer()
+                            Text(label)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5)
+                                .background(.ultraThinMaterial, in: Capsule())
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .margins(.all, 0)
+                    cell.backgroundConfiguration = .clear()
+                    return
+                }
                 if id == ChatTypingRowID {
                     let logins = self.lastTypingUsers
                     cell.contentConfiguration = UIHostingConfiguration {
@@ -365,7 +384,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
             lastShowSeen = showSeen
             var snap = NSDiffableDataSourceSnapshot<Int, String>()
             snap.appendSections([0])
-            var ids = items.map(\.id)
+            var ids = ChatSectioning.snapshotIds(for: items)
             if showSeen { ids.append(ChatSeenRowID) }
             if !typingUsers.isEmpty { ids.append(ChatTypingRowID) }
             snap.appendItems(ids)
@@ -446,8 +465,10 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         private func imageURLs(at indexPaths: [IndexPath]) -> [URL] {
             var urls: [URL] = []
             for ip in indexPaths {
-                guard ip.item >= 0, ip.item < lastItems.count else { continue }
-                let msg = lastItems[ip.item]
+                guard let id = dataSource.itemIdentifier(for: ip) else { continue }
+                if ChatSectioning.isDateHeader(id) { continue }
+                if id == ChatTypingRowID || id == ChatSeenRowID { continue }
+                guard let msg = lastItems.first(where: { $0.id == id }) else { continue }
                 if let atts = msg.attachments {
                     for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {
                         if let u = URL(string: a.url), !u.isFileURL { urls.append(u) }
