@@ -307,18 +307,20 @@ struct ChatView: View {
                 onAction: { action in dispatch(action, for: t.message) },
                 onDismiss: { menuTarget = nil },
                 preview: {
-                    // `hideReplyPreview: true` — the lifted bubble in
-                    // the menu drops the inline reply quote so a
-                    // reply message's preview is the same height as
-                    // a normal message's preview. The "Reply" action
-                    // in the menu's action list still lets the user
-                    // jump to the quoted message.
+                    // Keep `showHeader: true` so normal messages still
+                    // show their avatar + sender name in the lifted
+                    // bubble. `hideReplyPreview: true` drops only the
+                    // inline reply quote — that brings reply-message
+                    // previews down to the same height as normal-
+                    // message previews. The "Reply" action in the
+                    // menu's action list still lets the user jump to
+                    // the quoted message.
                     ChatMessageView(
                         message: t.message,
                         isMe: t.isMe,
                         myLogin: myLogin,
                         resolvedAvatar: resolveAvatar(t.message),
-                        showHeader: false,
+                        showHeader: true,
                         isPinned: vm.pinnedIds.contains(t.message.id),
                         hideReplyPreview: true
                     )
