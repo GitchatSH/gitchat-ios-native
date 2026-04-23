@@ -48,6 +48,8 @@ struct ChatDetailView: View {
     @State private var cropTarget: Int?
     @State private var isDragOver = false
     @StateObject private var clipboard = ClipboardWatcher()
+    @State private var menuTarget: MessageMenuTarget?
+    @State private var bubbleFrames: [String: CGRect] = [:]
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -202,6 +204,31 @@ struct ChatDetailView: View {
                     .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAtBottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+            }
+        }
+        .overlay {
+            if let t = menuTarget {
+                MessageMenuOverlay(
+                    target: t,
+                    onDismiss: { menuTarget = nil },
+                    onQuickReact: { emoji in quickReact(t.message, emoji) },
+                    onMoreReactions: { reactingFor = t.message },
+                    preview: {
+                        MessageBubble(
+                            message: t.message,
+                            isMe: t.isMe,
+                            myLogin: auth.login,
+                            resolvedAvatar: resolveAvatar(for: t.message),
+                            showHeader: true,
+                            isPinned: vm.pinnedIds.contains(t.message.id)
+                        )
+                    },
+                    actions: {
+                        menuActionRows(for: t.message)
+                    }
+                )
+                .zIndex(100)
+                .transition(.opacity)
             }
         }
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
@@ -464,9 +491,26 @@ struct ChatDetailView: View {
                 onPinTap: { showPinned = true },
                 onAvatarTap: { profileRoute = ProfileLoginRoute(login: msg.sender) },
                 isPulsing: pulsingId == msg.id,
-                bubbleContextMenu: { AnyView(messageActions(for: msg)) }
+                bubbleContextMenu: nil
             )
             .padding(.top, showHeader ? 6 : 0)
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { bubbleFrames[msg.id] = proxy.frame(in: .global) }
+                        .onChange(of: proxy.frame(in: .global)) { new in
+                            bubbleFrames[msg.id] = new
+                        }
+                }
+            )
+            .onLongPressGesture(minimumDuration: 0.28) {
+                Haptics.impact(.medium)
+                menuTarget = MessageMenuTarget(
+                    message: msg,
+                    isMe: msg.sender == auth.login,
+                    sourceFrame: bubbleFrames[msg.id] ?? .zero
+                )
+            }
             .onTapGesture(count: 2) {
                 Haptics.impact(.light)
                 vm.applyOptimisticReaction(messageId: msg.id, emoji: "❤️", myLogin: auth.login)
@@ -786,6 +830,73 @@ struct ChatDetailView: View {
             .padding(.vertical, 6)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// Action list rendered inside `MessageMenuOverlay` — same behaviours
+    /// as `messageActions(for:)` but styled as overlay rows instead of
+    /// iOS ControlGroup items. Each tap also dismisses the overlay.
+    @ViewBuilder
+    private func menuActionRows(for msg: Message) -> some View {
+        let dismiss: () -> Void = { menuTarget = nil }
+        MessageMenuActionButton(title: "Reply", systemImage: "arrowshape.turn.up.left") {
+            dismiss()
+            vm.replyingTo = msg
+            vm.editingMessage = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { composerFocused = true }
+        }
+        if !msg.content.isEmpty {
+            MessageMenuActionButton(title: "Copy", systemImage: "doc.on.doc") {
+                UIPasteboard.general.string = msg.content
+                ToastCenter.shared.show(.success, "Copied")
+                dismiss()
+            }
+        }
+        if let imageURLs = Self.imageAttachmentURLs(msg), !imageURLs.isEmpty {
+            MessageMenuActionButton(title: "Copy Image", systemImage: "photo.on.rectangle") {
+                copyImageToClipboard(urls: imageURLs)
+                dismiss()
+            }
+        }
+        MessageMenuActionButton(
+            title: vm.pinnedIds.contains(msg.id) ? "Unpin" : "Pin",
+            systemImage: vm.pinnedIds.contains(msg.id) ? "pin.slash" : "pin"
+        ) {
+            Task { await vm.togglePin(msg) }
+            dismiss()
+        }
+        MessageMenuActionButton(title: "Forward", systemImage: "arrowshape.turn.up.right") {
+            dismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { showForward = msg }
+        }
+        if vm.conversation.isGroup {
+            let seenBy = vm.seenByLogins(for: msg)
+            MessageMenuActionButton(
+                title: seenBy.isEmpty ? "Seen by" : "Seen by \(seenBy.count)",
+                systemImage: "eye"
+            ) {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { seenByFor = msg }
+            }
+        }
+        if msg.sender == auth.login {
+            MessageMenuActionButton(title: "Edit", systemImage: "pencil") {
+                vm.startEdit(msg)
+                dismiss()
+            }
+            MessageMenuActionButton(title: "Unsend", systemImage: "arrow.uturn.backward") {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { confirmUnsend = msg }
+            }
+            MessageMenuActionButton(title: "Delete", systemImage: "trash", role: .destructive) {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { confirmDelete = msg }
+            }
+        } else {
+            MessageMenuActionButton(title: "Report", systemImage: "flag", role: .destructive) {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) { reportingMessage = msg }
+            }
+        }
     }
 
     @ViewBuilder
