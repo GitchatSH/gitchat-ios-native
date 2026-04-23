@@ -64,6 +64,24 @@ final class ImageCache {
         return img
     }
 
+    /// Best-effort cached variant for a URL regardless of pixel size
+    /// key. Returned image may be larger OR smaller than the caller
+    /// wanted — it's meant as a first-paint fallback so SwiftUI tiles
+    /// don't flash empty after a viewer dismiss (the viewer warms the
+    /// 2048px key; when the tile re-materializes, reading the 800px
+    /// key can miss even though we have another resolution ready).
+    /// The correctly-sized variant is still loaded by the caller's
+    /// async task afterwards.
+    nonisolated func anyImage(for url: URL) -> UIImage? {
+        let prefix = url.absoluteString + "|"
+        let exact = url.absoluteString
+        storageLock.lock()
+        defer { storageLock.unlock() }
+        if let hit = storage[exact] { return hit }
+        for (k, v) in storage where k.hasPrefix(prefix) { return v }
+        return nil
+    }
+
     nonisolated func store(_ image: UIImage, for url: URL, maxPixelSize: CGFloat? = nil) {
         let key = Self.key(url, maxPixelSize)
         storageLock.lock(); storage[key] = image; storageLock.unlock()
@@ -228,7 +246,14 @@ struct CachedAsyncImage: View {
             if url.isFileURL {
                 _image = State(initialValue: UIImage(contentsOfFile: url.path))
             } else {
-                _image = State(initialValue: ImageCache.shared.image(for: url, maxPixelSize: self.maxPixelSize))
+                // Prefer the exact-size variant; fall back to any
+                // cached size for this URL so tile re-materialization
+                // (e.g. after the image viewer dismisses) doesn't
+                // flash an empty placeholder while the correct size
+                // async-loads.
+                let initial = ImageCache.shared.image(for: url, maxPixelSize: self.maxPixelSize)
+                    ?? ImageCache.shared.anyImage(for: url)
+                _image = State(initialValue: initial)
             }
         }
     }
@@ -306,7 +331,14 @@ struct CachedAsyncImage: View {
             image = cached
             return
         }
-        let loaded = await ImageCache.shared.load(url, maxPixelSize: maxPixelSize)
-        image = loaded
+        // No exact-size cache hit. Show *something* (any-size
+        // variant) so the view doesn't flash empty while we decode
+        // the correct size — upgraded below when decode finishes.
+        if image == nil, let any = ImageCache.shared.anyImage(for: url) {
+            image = any
+        }
+        if let loaded = await ImageCache.shared.load(url, maxPixelSize: maxPixelSize) {
+            image = loaded
+        }
     }
 }

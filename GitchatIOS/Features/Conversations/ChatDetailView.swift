@@ -355,6 +355,20 @@ struct ChatDetailView: View {
         a.onAttachmentTap = { msg, url in
             let urls = (msg.attachments?.map(\.url) ?? [msg.attachment_url].compactMap { $0 })
             if let start = urls.firstIndex(of: url) {
+                // Warm the 2048px cache for the tapped image (and
+                // its immediate neighbours) before presenting the
+                // viewer. Without this, the zoom transition plays
+                // while the destination is still downsampling the
+                // full-res variant — the grid tile was cached at
+                // 800px, so the viewer key misses and the push
+                // starts on an empty frame. Prefetching here gives
+                // the transition solid content to morph into.
+                let nearby = Set([start, start - 1, start + 1])
+                    .filter { $0 >= 0 && $0 < urls.count }
+                    .compactMap { URL(string: urls[$0]) }
+                if !nearby.isEmpty {
+                    ImageCache.shared.prefetch(urls: nearby, maxPixelSize: 2048)
+                }
                 imagePreview = ImagePreviewState(urls: urls, index: start)
             }
         }

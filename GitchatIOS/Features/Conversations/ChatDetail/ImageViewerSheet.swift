@@ -83,56 +83,80 @@ private struct ZoomableImage: View {
     @State private var offset: CGSize = .zero
     @State private var lastOffset: CGSize = .zero
 
+    /// Low-res cached variant (the 800px tile version) captured once
+    /// on appear. Rendered as the bottom layer so the push / zoom
+    /// transition always has solid content to morph into — without
+    /// this, the viewer shows a transparent frame until the 2048px
+    /// variant finishes downsampling, which reads as a flicker.
+    @State private var lowResSnapshot: UIImage?
+
     var body: some View {
         GeometryReader { geo in
-            imageView
-                .scaleEffect(scale)
-                .offset(offset)
-                .frame(width: geo.size.width, height: geo.size.height)
-                // Magnification is always active — pinch to zoom in/out.
-                .gesture(
-                    MagnificationGesture()
-                        .onChanged { value in
-                            scale = max(1, min(4, lastScale * value))
-                        }
-                        .onEnded { _ in
-                            lastScale = scale
-                            if scale <= 1 {
-                                withAnimation(.spring()) {
-                                    offset = .zero; lastOffset = .zero
-                                }
+            ZStack {
+                if let img = lowResSnapshot {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                }
+                CachedAsyncImage(
+                    url: URL(string: url),
+                    contentMode: .fit,
+                    placeholder: .transparent,
+                    maxPixelSize: 2048
+                )
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .scaleEffect(scale)
+            .offset(offset)
+            // Magnification is always active — pinch to zoom in/out.
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        scale = max(1, min(4, lastScale * value))
+                    }
+                    .onEnded { _ in
+                        lastScale = scale
+                        if scale <= 1 {
+                            withAnimation(.spring()) {
+                                offset = .zero; lastOffset = .zero
                             }
                         }
-                )
-                // Pan gesture only when zoomed — otherwise horizontal
-                // touches must reach the parent TabView so it can page
-                // between images.
-                .gesture(
-                    scale > 1 ?
-                    DragGesture()
-                        .onChanged { value in
-                            offset = CGSize(
-                                width: lastOffset.width + value.translation.width,
-                                height: lastOffset.height + value.translation.height
-                            )
-                        }
-                        .onEnded { _ in lastOffset = offset }
-                    : nil
-                )
-                .onTapGesture(count: 2) {
-                    withAnimation(.spring()) {
-                        if scale > 1 {
-                            scale = 1; lastScale = 1
-                            offset = .zero; lastOffset = .zero
-                        } else {
-                            scale = 2; lastScale = 2
-                        }
+                    }
+            )
+            // Pan gesture only when zoomed — otherwise horizontal
+            // touches must reach the parent TabView so it can page
+            // between images.
+            .gesture(
+                scale > 1 ?
+                DragGesture()
+                    .onChanged { value in
+                        offset = CGSize(
+                            width: lastOffset.width + value.translation.width,
+                            height: lastOffset.height + value.translation.height
+                        )
+                    }
+                    .onEnded { _ in lastOffset = offset }
+                : nil
+            )
+            .onTapGesture(count: 2) {
+                withAnimation(.spring()) {
+                    if scale > 1 {
+                        scale = 1; lastScale = 1
+                        offset = .zero; lastOffset = .zero
+                    } else {
+                        scale = 2; lastScale = 2
                     }
                 }
+            }
         }
-    }
-
-    private var imageView: some View {
-        CachedAsyncImage(url: URL(string: url), contentMode: .fit, placeholder: .transparent, maxPixelSize: 2048)
+        .onAppear {
+            if lowResSnapshot == nil, let u = URL(string: url) {
+                // The grid tile primes the 800px key. Reuse it as
+                // the starting frame so the zoom transition has
+                // content immediately; the 2048px layer fades in
+                // on top once it decodes.
+                lowResSnapshot = ImageCache.shared.image(for: u, maxPixelSize: 800)
+            }
+        }
     }
 }

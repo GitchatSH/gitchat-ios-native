@@ -1,83 +1,89 @@
 import SwiftUI
 
-/// Horizontal-drag modifier that fires `onTrigger` when the user
-/// swipes past a threshold in the direction appropriate for the
-/// message's sender. A reply-arrow icon fades in as the user drags.
+/// Shared state for the swipe-to-reply gesture. Lives at the
+/// `ChatView` level; the UITableView coordinator in
+/// `ChatMessagesList` drives it from a UIKit `UIPanGestureRecognizer`,
+/// and each message cell observes it via `@EnvironmentObject` to
+/// apply the visual offset + reply-arrow overlay.
 ///
-/// Gesture tuning:
-/// - Minimum 12pt horizontal displacement before the gesture engages
-///   so vertical list scroll still wins on fast flicks.
-/// - Haptic selection fires once on threshold crossing (not on every
-///   frame past it).
-/// - Release below threshold springs back with `snapBack` feel.
+/// Driving the gesture from UIKit (rather than a SwiftUI
+/// `simultaneousGesture(DragGesture)` per bubble) is what lets the
+/// table's own pan still scroll when the user drags on a bubble.
+/// SwiftUI's `simultaneousGesture` is only "simultaneous" among
+/// SwiftUI gestures — it does NOT configure
+/// `shouldRecognizeSimultaneouslyWith` between DragGesture's internal
+/// pan recognizer and the UITableView's pan, which is why the bubble
+/// used to swallow vertical scrolls.
+final class ChatSwipeState: ObservableObject {
+    @Published var messageId: String?
+    @Published var offsetX: CGFloat = 0
+}
+
+/// Visual-only modifier for the swipe-to-reply feedback. Reads the
+/// active offset from `ChatSwipeState` and renders the offset bubble
+/// plus the reply-arrow icon that fades in past `fadeStart`.
 struct ChatSwipeReply: ViewModifier {
     let isMe: Bool
-    let onTrigger: () -> Void
-
-    @State private var offsetX: CGFloat = 0
-    @State private var triggered = false
+    let messageId: String
+    @EnvironmentObject private var swipe: ChatSwipeState
 
     private let threshold: CGFloat = 60
     private let fadeStart: CGFloat = 20
 
+    private var offsetX: CGFloat {
+        swipe.messageId == messageId ? swipe.offsetX : 0
+    }
+
+    private var fadeOpacity: Double {
+        Double(min(1, max(0, (abs(offsetX) - fadeStart) / (threshold - fadeStart))))
+    }
+
+    /// How far the icon slides in from outside the row as the drag
+    /// progresses. Stays pinned once the bubble is clearly displaced
+    /// so it reads as a fixed target the bubble is sliding toward —
+    /// Messages.app behaviour.
+    private var iconInset: CGFloat {
+        // Icon starts 12pt hidden off the row edge and slides to 0
+        // as offsetX approaches threshold.
+        let progress = min(1, abs(offsetX) / threshold)
+        return 12 * (1 - progress)
+    }
+
     func body(content: Content) -> some View {
-        content
-            .offset(x: offsetX)
-            .overlay(alignment: isMe ? .trailing : .leading) {
-                Image(systemName: "arrowshape.turn.up.left.fill")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color("AccentColor"))
-                    .padding(10)
-                    .background(Circle().fill(Color(.secondarySystemBackground)))
-                    .offset(x: isMe ? (abs(offsetX) - 36) : (-abs(offsetX) + 36))
-                    .opacity(
-                        Double(min(1, max(0, (abs(offsetX) - fadeStart) / (threshold - fadeStart))))
-                    )
-                    .allowsHitTesting(false)
-            }
-            // simultaneousGesture so the table's scroll pan still
-            // wins on vertical drags — .gesture() has default
-            // priority and can swallow early touch events, which on
-            // real devices shows up as "drag doesn't start until I
-            // tap a few times". simultaneous lets both observe; we
-            // still only engage the swipe when motion is predominantly
-            // horizontal.
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 12, coordinateSpace: .local)
-                    .onChanged { v in
-                        let dx = v.translation.width
-                        let dy = v.translation.height
-                        // Only engage for predominantly-horizontal drags
-                        // toward the expected side.
-                        guard abs(dx) > abs(dy) * 1.2 else { return }
-                        if isMe {
-                            offsetX = min(0, max(-threshold * 1.4, dx))
-                        } else {
-                            offsetX = max(0, min(threshold * 1.4, dx))
-                        }
-                        if !triggered, abs(offsetX) >= threshold {
-                            triggered = true
-                            Haptics.selection()
-                        } else if triggered, abs(offsetX) < threshold {
-                            triggered = false
-                        }
-                    }
-                    .onEnded { _ in
-                        let shouldFire = triggered
-                        triggered = false
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.72)) {
-                            offsetX = 0
-                        }
-                        if shouldFire { onTrigger() }
-                    }
-            )
+        // Wrap content (with its own offset) in a ZStack so its
+        // frame is the single source of truth for the row's size,
+        // then attach the reply icon as an `.overlay`. Overlays do
+        // NOT contribute to parent layout — previously the icon
+        // sat as a ZStack sibling, and because the icon is ~34pt
+        // tall it inflated short-bubble rows and forced a visible
+        // vertical gap between consecutive same-sender messages.
+        //
+        // The inner `.offset(x:)` only translates rendering, not
+        // layout, so the outer ZStack's frame stays = content
+        // frame, and the overlay anchors to content's original
+        // (pre-offset) edge. Exactly what we want: bubble slides,
+        // icon stays pinned to the row's leading/trailing.
+        ZStack {
+            content
+                .offset(x: offsetX)
+        }
+        .overlay(alignment: isMe ? .trailing : .leading) {
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color("AccentColor"))
+                .padding(10)
+                .background(Circle().fill(Color(.secondarySystemBackground)))
+                .padding(.horizontal, iconInset)
+                .opacity(fadeOpacity)
+                .allowsHitTesting(false)
+        }
     }
 }
 
 extension View {
-    /// Apply `ChatSwipeReply` to a message bubble. `isMe` drives
-    /// direction (outgoing drags left, incoming drags right).
-    func chatSwipeToReply(isMe: Bool, onTrigger: @escaping () -> Void) -> some View {
-        modifier(ChatSwipeReply(isMe: isMe, onTrigger: onTrigger))
+    /// Apply the swipe-to-reply visual to a message bubble. The actual
+    /// gesture lives on the UITableView — see `ChatMessagesList`.
+    func chatSwipeToReply(isMe: Bool, messageId: String) -> some View {
+        modifier(ChatSwipeReply(isMe: isMe, messageId: messageId))
     }
 }

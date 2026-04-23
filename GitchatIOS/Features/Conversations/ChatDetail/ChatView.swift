@@ -86,6 +86,7 @@ struct ChatView: View {
 
     @StateObject private var keyboard = KeyboardState()
     @State private var menuTarget: MessageMenuTarget?
+    @StateObject private var swipeState = ChatSwipeState()
 
     // MARK: Body
 
@@ -135,6 +136,9 @@ struct ChatView: View {
                         sourceFrame: frame
                     )
                 },
+                isMe: { $0.sender == myLogin },
+                onReply: { actions.onReply($0) },
+                swipeState: swipeState,
                 cellBuilder: { msg, idx in
                     messageRow(for: msg, at: idx)
                 }
@@ -155,26 +159,38 @@ struct ChatView: View {
             let prev = idx > 0 ? visibleMessages[idx - 1] : nil
             let showHeader = prev?.sender != msg.sender || (prev?.type ?? "user") != "user"
             let isMe = msg.sender == myLogin
-            ChatMessageView(
-                message: msg,
-                isMe: isMe,
-                myLogin: myLogin,
-                resolvedAvatar: resolveAvatar(msg),
-                showHeader: showHeader,
-                isPinned: vm.pinnedIds.contains(msg.id),
-                isPulsing: pulsingId == msg.id,
-                onReactionsTap: { actions.onReactionsTap(msg) },
-                onReplyTap: { actions.onReplyPreviewTap(msg) },
-                onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
-                onPinTap: { actions.onPinBadgeTap(msg) },
-                onAvatarTap: { actions.onAvatarTap(msg.sender) },
-                imageMatchedNS: imageZoomNamespace
-            )
-            .padding(.top, showHeader ? 6 : 0)
-            .chatSwipeToReply(isMe: isMe) { actions.onReply(msg) }
-            .onTapGesture(count: 2) { actions.onDoubleTapHeart(msg) }
-            if let cursors = Optional(seenCursorLogins(msg, idx)), !cursors.isEmpty {
-                seenByAvatarsRow(cursors: cursors, isMe: isMe, for: msg)
+            let cursors = seenCursorLogins(msg, idx)
+            // Explicit VStack(spacing: 0) — without it, the two
+            // sibling views (bubble + optional seen-by row) get
+            // wrapped in a TupleView that UIHostingConfiguration
+            // renders via an implicit stack with default spacing
+            // (~8pt). That default was silently padding every row
+            // that had a seen-by avatar, making same-sender spacing
+            // "chỗ đúng chỗ sai" (right on bubbles without seen-by,
+            // wrong on bubbles with it). Pinning to 0 makes the
+            // vertical rhythm entirely owned by .padding(.top) below.
+            VStack(spacing: 0) {
+                ChatMessageView(
+                    message: msg,
+                    isMe: isMe,
+                    myLogin: myLogin,
+                    resolvedAvatar: resolveAvatar(msg),
+                    showHeader: showHeader,
+                    isPinned: vm.pinnedIds.contains(msg.id),
+                    isPulsing: pulsingId == msg.id,
+                    onReactionsTap: { actions.onReactionsTap(msg) },
+                    onReplyTap: { actions.onReplyPreviewTap(msg) },
+                    onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
+                    onPinTap: { actions.onPinBadgeTap(msg) },
+                    onAvatarTap: { actions.onAvatarTap(msg.sender) },
+                    imageMatchedNS: imageZoomNamespace
+                )
+                .padding(.top, showHeader ? 14 : 2)
+                .chatSwipeToReply(isMe: isMe, messageId: msg.id)
+                .onTapGesture(count: 2) { actions.onDoubleTapHeart(msg) }
+                if !cursors.isEmpty {
+                    seenByAvatarsRow(cursors: cursors, isMe: isMe, for: msg)
+                }
             }
         }
     }
@@ -209,49 +225,64 @@ struct ChatView: View {
 
     @ViewBuilder
     private var composerStack: some View {
-        if vm.replyingTo != nil || vm.editingMessage != nil {
-            ChatReplyEditBar(
-                editing: vm.editingMessage,
-                replyingTo: vm.replyingTo,
-                onDismiss: {
-                    if vm.editingMessage != nil { vm.cancelEdit() }
-                    else { vm.replyingTo = nil }
-                }
-            )
-        }
-        if !mentionSuggestions.isEmpty {
-            ChatMentionSuggestionRow(
-                suggestions: mentionSuggestions,
-                onPick: { actions.onInsertMention($0) }
-            )
-        }
-        if let img = pendingClipboardImage {
-            ChatClipboardChip(
-                image: img,
-                onPaste: { actions.onClipboardPaste(img) },
-                onDismiss: { actions.onClipboardDismiss() }
-            )
-        }
-        ChatInputView(
-            draft: $vm.draft,
-            photoItems: $photoItems,
-            mode: composerMode,
-            isUploading: vm.uploading,
-            onSend: actions.onSend,
-            onSubmitMacCatalyst: actions.onMacCatalystSubmit,
-            focusProxy: focusProxy
-        )
-        .overlay(alignment: .topTrailing) {
-            if !isAtBottom {
-                JumpToBottomButton {
-                    scrollToBottomToken &+= 1
-                }
-                .padding(.trailing, 6)
-                .offset(y: -52)
-                .transition(.scale(scale: 0.4).combined(with: .opacity))
+        // Wrap the whole stack (reply bar / mention row / clipboard
+        // chip / composer) in a VStack so the jump-to-bottom overlay
+        // anchors above whichever row is currently topmost. Before,
+        // the overlay was attached only to ChatInputView, so when a
+        // reply bar appeared the button floated 52pt above the
+        // composer — i.e. right on top of the reply preview.
+        VStack(spacing: 0) {
+            if vm.replyingTo != nil || vm.editingMessage != nil {
+                ChatReplyEditBar(
+                    editing: vm.editingMessage,
+                    replyingTo: vm.replyingTo,
+                    onDismiss: {
+                        if vm.editingMessage != nil { vm.cancelEdit() }
+                        else { vm.replyingTo = nil }
+                    }
+                )
             }
+            if !mentionSuggestions.isEmpty {
+                ChatMentionSuggestionRow(
+                    suggestions: mentionSuggestions,
+                    onPick: { actions.onInsertMention($0) }
+                )
+            }
+            if let img = pendingClipboardImage {
+                ChatClipboardChip(
+                    image: img,
+                    onPaste: { actions.onClipboardPaste(img) },
+                    onDismiss: { actions.onClipboardDismiss() }
+                )
+            }
+            ChatInputView(
+                draft: $vm.draft,
+                photoItems: $photoItems,
+                mode: composerMode,
+                isUploading: vm.uploading,
+                onSend: actions.onSend,
+                onSubmitMacCatalyst: actions.onMacCatalystSubmit,
+                focusProxy: focusProxy
+            )
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAtBottom)
+        .overlay(alignment: .topTrailing) {
+            // Animation scoped to just the jump button — previously
+            // `.animation(_:value:)` was attached to the whole
+            // composerStack, which re-rendered every subview on each
+            // `isAtBottom` flip and rippled layout changes down into
+            // the list mid-scroll.
+            ZStack {
+                if !isAtBottom {
+                    JumpToBottomButton {
+                        scrollToBottomToken &+= 1
+                    }
+                    .padding(.trailing, 6)
+                    .offset(y: -52)
+                    .transition(.scale(scale: 0.4).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAtBottom)
+        }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
@@ -276,13 +307,20 @@ struct ChatView: View {
                 onAction: { action in dispatch(action, for: t.message) },
                 onDismiss: { menuTarget = nil },
                 preview: {
+                    // `hideReplyPreview: true` — the lifted bubble in
+                    // the menu drops the inline reply quote so a
+                    // reply message's preview is the same height as
+                    // a normal message's preview. The "Reply" action
+                    // in the menu's action list still lets the user
+                    // jump to the quoted message.
                     ChatMessageView(
                         message: t.message,
                         isMe: t.isMe,
                         myLogin: myLogin,
                         resolvedAvatar: resolveAvatar(t.message),
-                        showHeader: true,
-                        isPinned: vm.pinnedIds.contains(t.message.id)
+                        showHeader: false,
+                        isPinned: vm.pinnedIds.contains(t.message.id),
+                        hideReplyPreview: true
                     )
                 }
             )

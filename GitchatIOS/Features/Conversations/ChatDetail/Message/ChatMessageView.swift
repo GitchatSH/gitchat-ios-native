@@ -40,6 +40,12 @@ struct ChatMessageView: View {
     /// URL currently shown in the viewer overlay. Used so only the
     /// tapped tile participates in the matchedGeometryEffect.
     var activeImagePreviewURL: String? = nil
+    /// When true, the inline `ChatReplyPreview` is omitted from the
+    /// bubble column. Used by the long-press menu so a reply
+    /// message's lifted bubble matches the height of a normal-message
+    /// preview (the menu's actions already let the user navigate to
+    /// the quoted message via "Reply").
+    var hideReplyPreview: Bool = false
 
     // MARK: Local state
 
@@ -107,7 +113,7 @@ struct ChatMessageView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            if let reply = message.reply {
+            if let reply = message.reply, !hideReplyPreview {
                 ChatReplyPreview(reply: reply, isMe: isMe) { onReplyTap?() }
             }
             bubble
