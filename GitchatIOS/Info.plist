@@ -26,6 +26,14 @@
 				<string>fb1492200602416732</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>chat.git.invite</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>gitchat</string>
+			</array>
+		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>66</string>

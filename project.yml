@@ -5,6 +5,27 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
   developmentLanguage: en
+schemes:
+  GitchatIOS:
+    build:
+      targets:
+        GitchatIOS: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+      preActions:
+        - name: Bump build number
+          settingsTarget: GitchatIOS
+          script: |
+            cd "$SRCROOT"
+            ./scripts/bump-build.sh >> /tmp/gitchat-bump.log 2>&1
 settings:
   base:
     DEVELOPMENT_TEAM: 9S5F8693FB
@@ -65,6 +86,9 @@ targets:
           - Default
         aps-environment: development
         com.apple.developer.usernotifications.communication: true
+        com.apple.developer.associated-domains:
+          - applinks:gitchat.sh
+          - applinks:dev.gitchat.sh
         com.apple.security.application-groups:
           - group.chat.git.onesignal
           - group.chat.git.share
@@ -117,6 +141,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - fb1492200602416732
+          - CFBundleURLName: chat.git.invite
+            CFBundleURLSchemes:
+              - gitchat
         NSUserActivityTypes:
           - INSendMessageIntent
     settings:
@@ -139,6 +166,7 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: OneSignalNotificationServiceExtension
+      - path: GitchatIOS/Core/MutedConversationsStore.swift
     dependencies:
       - package: OneSignalXCFramework
         product: OneSignalExtension

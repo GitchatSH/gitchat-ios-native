@@ -38,5 +38,6 @@ struct EmojiPickerSheet: View {
                 .padding(.bottom, 24)
             }
         }
+        .catalystDismissable()
     }
 }

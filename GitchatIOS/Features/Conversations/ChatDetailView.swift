@@ -36,15 +36,17 @@ struct ChatDetailView: View {
     @State private var showMembers = false
     @State private var showAddMember = false
     @State private var showLeaveConfirm = false
+    @State private var showInviteLink = false
+    @State private var showGroupSettings = false
+    @State private var showDeleteGroupConfirm = false
+    @State private var deletingGroup = false
     @Environment(\.dismiss) private var dismiss
     @FocusState private var composerFocused: Bool
     @State private var pendingDropImages: [UIImage] = []
     @State private var showDropConfirm = false
     @State private var dropCaption = ""
     @State private var cropTarget: Int?
-    #if targetEnvironment(macCatalyst)
     @State private var isDragOver = false
-    #endif
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -191,17 +193,7 @@ struct ChatDetailView: View {
             }
             }
         }
-        #if targetEnvironment(macCatalyst)
-        .overlay { dragOverlay }
-        .animation(.easeInOut(duration: 0.15), value: isDragOver)
-        .onDrop(of: [UTType.image.identifier, UTType.fileURL.identifier], isTargeted: $isDragOver) { providers in
-            handleDrop(providers)
-            return true
-        }
-        .onPasteCommand(of: [UTType.image.identifier]) { providers in
-            handleDrop(providers)
-        }
-        #endif
+        .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
         .sheet(item: Binding<CropRoute?>(
             get: { cropTarget.map(CropRoute.init) },
@@ -294,6 +286,13 @@ struct ChatDetailView: View {
                 }
                 return .handled
             }
+            // Handle invite links (both gitchat:// and https://*.gitchat.sh)
+            // in-app so a tap on a shared invite routes to the preview
+            // sheet instead of opening Safari and 404'ing on BE's /invite
+            // route (Universal Links / AASA aren't set up yet).
+            if AppRouter.shared.handleDeepLink(url) {
+                return .handled
+            }
             #if targetEnvironment(macCatalyst)
             UIApplication.shared.open(url)
             #else
@@ -351,6 +350,17 @@ struct ChatDetailView: View {
                 Task { await vm.load() }
             }
         }
+        .modifier(GroupManagementSheets(
+            conversation: vm.conversation,
+            showInviteLink: $showInviteLink,
+            showGroupSettings: $showGroupSettings,
+            showDeleteConfirm: $showDeleteGroupConfirm,
+            onSettingsSaved: { newName, newAvatarUrl in
+                vm.applyLocalMetadata(name: newName, avatarUrl: newAvatarUrl)
+                Task { await vm.load() }
+            },
+            onDeleteConfirmed: { Task { await disbandGroup() } }
+        ))
         .sheet(item: $reportingMessage) { msg in reportSheet(for: msg) }
         .alert("Thanks — we'll review it within 24 hours.", isPresented: $showReportConfirm) {
             Button("OK", role: .cancel) {}
@@ -381,6 +391,9 @@ struct ChatDetailView: View {
             if focused { scrollToBottomToken &+= 1 }
         }
         .onDisappear { onDisappearCleanup() }
+        .onReceive(NotificationCenter.default.publisher(for: .gitchatConversationUpdated)) { _ in
+            syncMutedFromCache()
+        }
         .onChange(of: vm.draft) { newValue in
             socket.emitTyping(
                 conversationId: vm.conversation.id,
@@ -488,7 +501,6 @@ struct ChatDetailView: View {
         }
     }
 
-    #if targetEnvironment(macCatalyst)
     @ViewBuilder
     private var dragOverlay: some View {
         if isDragOver {
@@ -514,7 +526,6 @@ struct ChatDetailView: View {
             .transition(.opacity)
         }
     }
-    #endif
 
     private var dropPreviewSheet: some View {
         NavigationStack {
@@ -687,9 +698,24 @@ struct ChatDetailView: View {
                     } label: {
                         Label("Add member", systemImage: "person.crop.circle.badge.plus")
                     }
+                    Button {
+                        showInviteLink = true
+                    } label: {
+                        Label("Invite link", systemImage: "link")
+                    }
+                    Button {
+                        showGroupSettings = true
+                    } label: {
+                        Label("Edit group", systemImage: "pencil")
+                    }
                 } else if let other = vm.conversation.other_user {
                     NavigationLink(value: ProfileLoginRoute(login: other.login)) {
                         Label("View profile", systemImage: "person.crop.circle")
+                    }
+                    Button {
+                        Task { await convertToGroupAndAddMember() }
+                    } label: {
+                        Label("Add to conversation", systemImage: "person.crop.circle.badge.plus")
                     }
                 }
                 Button { showSearch = true } label: { Label("Search", systemImage: "magnifyingglass") }
@@ -708,6 +734,11 @@ struct ChatDetailView: View {
                         showLeaveConfirm = true
                     } label: {
                         Label("Leave group", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                    Button(role: .destructive) {
+                        showDeleteGroupConfirm = true
+                    } label: {
+                        Label("Delete group", systemImage: "trash")
                     }
                 }
             } label: {
@@ -1115,6 +1146,42 @@ struct ChatDetailView: View {
             guard convId == vm.conversation.id else { return }
             vm.pinnedIds.remove(msgId)
         }
+    }
+
+    /// Promote the current DM to a group then show the add-member sheet
+    /// so the user can pick a third participant. BE returns the updated
+    /// Conversation; we re-hydrate via vm.load() so the header + ••• menu
+    /// switch into group mode.
+    private func convertToGroupAndAddMember() async {
+        do {
+            _ = try await APIClient.shared.convertToGroup(id: vm.conversation.id)
+            await vm.load()
+            showAddMember = true
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't convert", error.localizedDescription)
+        }
+    }
+
+    private func disbandGroup() async {
+        deletingGroup = true
+        defer { deletingGroup = false }
+        do {
+            try await APIClient.shared.disbandGroup(id: vm.conversation.id)
+            ToastCenter.shared.show(.success, "Group deleted")
+            dismiss()
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't delete", error.localizedDescription)
+        }
+    }
+
+    /// Pull the freshest Conversation for the open chat from the shared
+    /// conversations cache. Called when a `conversation:updated` socket
+    /// event fires so the header (title / avatar / bell-slash) reflects
+    /// remote edits without requiring the user to back out and re-enter.
+    private func syncMutedFromCache() {
+        guard let fresh = ConversationsCache.shared.get()?.first(where: { $0.id == vm.conversation.id }) else { return }
+        vm.conversation = fresh
+        vm.isMuted = fresh.is_muted == true
     }
 
     private func onDisappearCleanup() {

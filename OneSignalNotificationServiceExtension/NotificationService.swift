@@ -27,7 +27,8 @@ final class NotificationService: UNNotificationServiceExtension {
         ) { [weak self] processed in
             // Attempt to upgrade to a Communication Notification (big avatar
             // + small app icon) when we have a sender login in the payload.
-            let finalContent = self?.applyCommunicationIntent(to: processed) ?? processed
+            var finalContent = self?.applyCommunicationIntent(to: processed) ?? processed
+            finalContent = self?.silenceIfMuted(finalContent) ?? finalContent
             contentHandler(finalContent)
         }
     }
@@ -40,6 +41,31 @@ final class NotificationService: UNNotificationServiceExtension {
             )
             contentHandler(bestAttemptContent)
         }
+    }
+
+    /// Silence lockscreen / banner sound for pushes belonging to a muted
+    /// conversation. iOS doesn't let an NSE drop a banner entirely, so the
+    /// banner still surfaces — but zeroing the sound matches iMessage-style
+    /// muted-chat behavior. @mention pushes bypass mute so urgent pings
+    /// still come through.
+    private func silenceIfMuted(_ content: UNNotificationContent) -> UNNotificationContent {
+        let userInfo = content.userInfo
+        let custom = (userInfo["custom"] as? [String: Any]) ?? [:]
+        let data = (custom["a"] as? [String: Any]) ?? (userInfo["data"] as? [String: Any]) ?? [:]
+        guard
+            let convoId = data["conversation_id"] as? String,
+            !convoId.isEmpty,
+            MutedConversationsStore.contains(convoId)
+        else { return content }
+
+        let type = (data["type"] as? String) ?? ""
+        if type == "mention" { return content }
+
+        guard let mutable = content.mutableCopy() as? UNMutableNotificationContent else {
+            return content
+        }
+        mutable.sound = nil
+        return mutable
     }
 
     /// Upgrade a notification to a Communication Notification when we have a

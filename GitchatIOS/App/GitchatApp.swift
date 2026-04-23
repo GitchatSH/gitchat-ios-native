@@ -44,12 +44,24 @@ struct GitchatApp: App {
                 .onAppear { applyInterfaceStyle() }
                 .onChange(of: appearance) { _ in applyInterfaceStyle() }
                 .onOpenURL { url in
+                    // Gitchat-native deep links (invite etc.) short-circuit
+                    // the Facebook SDK handler.
+                    if AppRouter.shared.handleDeepLink(url) { return }
                     ApplicationDelegate.shared.application(
                         UIApplication.shared,
                         open: url,
                         sourceApplication: nil,
                         annotation: [UIApplication.OpenURLOptionsKey.annotation]
                     )
+                }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    // Universal Link entry point. When BE serves AASA on
+                    // gitchat.sh / dev.gitchat.sh, iOS hands the tapped
+                    // https URL to us here — we route invite links to
+                    // the preview sheet the same way as the custom scheme.
+                    if let url = activity.webpageURL {
+                        AppRouter.shared.handleDeepLink(url)
+                    }
                 }
         }
     }

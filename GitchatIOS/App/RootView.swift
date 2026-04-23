@@ -1,6 +1,11 @@
 import SwiftUI
 import StoreKit
 
+private struct InviteCodeRoute: Identifiable {
+    let code: String
+    var id: String { code }
+}
+
 struct RootView: View {
     @EnvironmentObject var auth: AuthStore
     @EnvironmentObject var socket: SocketClient
@@ -29,6 +34,12 @@ struct RootView: View {
             set: { router.pendingProfileLogin = $0?.login }
         )) { route in
             NavigationStack { ProfileView(login: route.login) }
+        }
+        .sheet(item: Binding(
+            get: { router.pendingInviteCode.map(InviteCodeRoute.init(code:)) },
+            set: { router.pendingInviteCode = $0?.code }
+        )) { route in
+            InvitePreviewSheet(code: route.code)
         }
         .onChange(of: scenePhase) { phase in
             // Fresh heartbeat the moment the app comes back to the

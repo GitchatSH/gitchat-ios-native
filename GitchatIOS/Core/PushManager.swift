@@ -116,6 +116,12 @@ private final class ForegroundListener: NSObject, OSNotificationLifecycleListene
         guard let convoId = data["conversation_id"] as? String, !convoId.isEmpty else { return }
         if ActiveConversationTracker.shared.id == convoId {
             event.preventDefault()
+            return
+        }
+        // Mute kills chatter only — @mentions still break through.
+        let type = (data["type"] as? String) ?? ""
+        if type != "mention" && MutedConversationsStore.contains(convoId) {
+            event.preventDefault()
         }
     }
 }

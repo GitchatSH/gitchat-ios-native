@@ -44,24 +44,16 @@ final class FollowingViewModel: ObservableObject {
     }
 }
 
-enum FriendsScope: String, CaseIterable, Identifiable {
-    case all, online
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .all: return "All"
-        case .online: return "Online now"
-        }
-    }
-}
-
 struct FollowingView: View {
     @StateObject private var vm = FollowingViewModel()
     @State private var filter = ""
-    @State private var scope: FriendsScope = .all
     @State private var showExplore = false
     @ObservedObject private var presence = PresenceStore.shared
 
+    /// Smart ordering for the single friends list:
+    /// 1. Online friends first, sorted by display name (case-insensitive).
+    /// 2. Offline friends with a known `lastSeen`, most-recently-seen first.
+    /// 3. Offline friends without any presence data, alphabetical.
     private var filtered: [FriendUser] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let base: [FriendUser]
@@ -73,35 +65,28 @@ struct FollowingView: View {
                     || (u.name ?? "").lowercased().contains(q)
             }
         }
-        if scope == .online {
-            return base
-                .filter { presence.isOnline($0.login) }
-                .sorted { $0.login.lowercased() < $1.login.lowercased() }
+        func displayKey(_ u: FriendUser) -> String {
+            (u.name ?? u.login).lowercased()
         }
-        // Online-first, each group alphabetical by login.
+
         let online = base
             .filter { presence.isOnline($0.login) }
-            .sorted { $0.login.lowercased() < $1.login.lowercased() }
-        let offline = base
-            .filter { !presence.isOnline($0.login) }
-            .sorted { $0.login.lowercased() < $1.login.lowercased() }
-        return online + offline
+            .sorted { displayKey($0) < displayKey($1) }
+
+        let offlineAll = base.filter { !presence.isOnline($0.login) }
+        let offlineRecent = offlineAll
+            .filter { presence.lastSeen[$0.login] != nil }
+            .sorted { (presence.lastSeen[$0.login] ?? .distantPast) > (presence.lastSeen[$1.login] ?? .distantPast) }
+        let offlineUnknown = offlineAll
+            .filter { presence.lastSeen[$0.login] == nil }
+            .sorted { displayKey($0) < displayKey($1) }
+
+        return online + offlineRecent + offlineUnknown
     }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("", selection: $scope) {
-                    ForEach(FriendsScope.allCases) { s in
-                        Text(s.title).tag(s)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-
-                scopeContent
-            }
+            scopeContent
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search friends")
             .navigationTitle("Friends")
             .toolbar {
@@ -159,11 +144,9 @@ struct FollowingView: View {
                     )
                 } else if filtered.isEmpty {
                     ContentUnavailableCompat(
-                        title: scope == .online ? "Nobody online" : "No results",
-                        systemImage: scope == .online ? "moon.zzz" : "magnifyingglass",
-                        description: scope == .online
-                            ? "Friends appear here when they're active in Gitchat."
-                            : "Try a different search."
+                        title: "No results",
+                        systemImage: "magnifyingglass",
+                        description: "Try a different search."
                     )
                 } else {
                     List(filtered) { u in
