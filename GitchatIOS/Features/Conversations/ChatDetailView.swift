@@ -47,6 +47,7 @@ struct ChatDetailView: View {
     @State private var dropCaption = ""
     @State private var cropTarget: Int?
     @State private var isDragOver = false
+    @StateObject private var clipboard = ClipboardWatcher()
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -179,6 +180,9 @@ struct ChatDetailView: View {
                 if !mentionSuggestions.isEmpty {
                     mentionSuggestionList
                 }
+                if let img = clipboard.pendingImage {
+                    clipboardChip(for: img)
+                }
                 composer
                     .overlay(alignment: .topTrailing) {
                         if !isAtBottom {
@@ -195,16 +199,6 @@ struct ChatDetailView: View {
         }
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
-        .sheet(item: Binding<CropRoute?>(
-            get: { cropTarget.map(CropRoute.init) },
-            set: { cropTarget = $0?.index }
-        )) { route in
-            if route.index < pendingDropImages.count {
-                ImageCropSheet(image: pendingDropImages[route.index]) { cropped in
-                    pendingDropImages[route.index] = cropped
-                }
-            }
-        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -406,6 +400,9 @@ struct ChatDetailView: View {
                 // Route picked photos through the same preview sheet
                 // used by drag-and-drop and paste — gives users a
                 // chance to review, caption, or crop before sending.
+                // Also merges into any existing pendingDropImages so
+                // the "Add more" tile in the preview sheet appends
+                // rather than replaces.
                 var collected: [UIImage] = []
                 for item in newItems {
                     if let data = try? await item.loadTransferable(type: Data.self),
@@ -415,8 +412,12 @@ struct ChatDetailView: View {
                 }
                 photoItems = []
                 guard !collected.isEmpty else { return }
-                pendingDropImages = collected
-                showDropConfirm = true
+                if showDropConfirm {
+                    pendingDropImages.append(contentsOf: collected)
+                } else {
+                    pendingDropImages = collected
+                    showDropConfirm = true
+                }
             }
         }
     }
@@ -528,91 +529,93 @@ struct ChatDetailView: View {
     }
 
     private var dropPreviewSheet: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
-                        ForEach(Array(pendingDropImages.enumerated()), id: \.offset) { i, img in
-                            ZStack(alignment: .topTrailing) {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(height: 150)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                Button {
-                                    cropTarget = i
-                                } label: {
-                                    Image(systemName: "crop")
-                                        .font(.caption.bold())
-                                        .foregroundStyle(.white)
-                                        .padding(6)
-                                        .background(Color.black.opacity(0.55), in: Circle())
-                                }
-                                .padding(6)
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .padding()
-                }
-                HStack(spacing: 8) {
-                    TextField("Add a message…", text: $dropCaption)
-                        .textFieldStyle(.roundedBorder)
-                    Button {
-                        showDropConfirm = false
-                        sendDroppedImages()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(Color("AccentColor"))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground))
+        ImageSendPreview(
+            images: $pendingDropImages,
+            caption: $dropCaption,
+            cropTarget: $cropTarget,
+            photoItems: $photoItems,
+            onCancel: {
+                cropTarget = nil
+                pendingDropImages = []
+                dropCaption = ""
+                showDropConfirm = false
+            },
+            onSend: {
+                cropTarget = nil
+                showDropConfirm = false
+                sendDroppedImages()
             }
-            .navigationTitle("Send \(pendingDropImages.count) image\(pendingDropImages.count == 1 ? "" : "s")")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        pendingDropImages = []
-                        dropCaption = ""
-                        showDropConfirm = false
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
+        )
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) {
         let lock = NSLock()
         var collected: [UIImage] = []
         let group = DispatchGroup()
+
+        func append(_ image: UIImage) {
+            lock.lock(); collected.append(image); lock.unlock()
+        }
+
         for provider in providers {
+            // Try the cheapest path first — NSItemProvider natively
+            // vending a UIImage (PhotosPicker, Photos.app drag, Catalyst
+            // Finder drags of common formats).
             if provider.canLoadObject(ofClass: UIImage.self) {
                 group.enter()
                 provider.loadObject(ofClass: UIImage.self) { obj, _ in
-                    if let img = obj as? UIImage { lock.lock(); collected.append(img); lock.unlock() }
+                    if let img = obj as? UIImage { append(img) }
                     group.leave()
                 }
-            } else if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                continue
+            }
+
+            let types = provider.registeredTypeIdentifiers
+            // Raw image data under a known image UTI.
+            let imageTypes = ["public.jpeg", "public.png", "public.heic", "public.image"]
+            if let uti = types.first(where: { imageTypes.contains($0) }) {
+                group.enter()
+                provider.loadDataRepresentation(forTypeIdentifier: uti) { data, _ in
+                    if let data, let img = UIImage(data: data) { append(img) }
+                    group.leave()
+                }
+                continue
+            }
+
+            // File URL (Finder drag, Catalyst local file).
+            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
                 group.enter()
                 provider.loadItem(forTypeIdentifier: "public.file-url") { item, _ in
                     var url: URL?
                     if let u = item as? URL { url = u }
                     else if let data = item as? Data { url = URL(dataRepresentation: data, relativeTo: nil) }
                     if let url, let img = UIImage(contentsOfFile: url.path) {
-                        lock.lock(); collected.append(img); lock.unlock()
+                        append(img)
                     }
                     group.leave()
                 }
+                continue
+            }
+
+            // Generic URL (Safari image drag usually lands here). Fetch
+            // synchronously in the background — small cost for a one-off
+            // drop, and keeps the UX consistent with drag-drop elsewhere.
+            if provider.hasItemConformingToTypeIdentifier("public.url") {
+                group.enter()
+                provider.loadItem(forTypeIdentifier: "public.url") { item, _ in
+                    defer { group.leave() }
+                    let url: URL? = (item as? URL)
+                        ?? (item as? Data).flatMap { URL(dataRepresentation: $0, relativeTo: nil) }
+                        ?? (item as? NSString).flatMap { URL(string: $0 as String) }
+                    guard let url,
+                          let data = try? Data(contentsOf: url),
+                          let img = UIImage(data: data) else { return }
+                    append(img)
+                }
+                continue
             }
         }
+
         group.notify(queue: .main) {
             guard !collected.isEmpty else { return }
             pendingDropImages = collected
@@ -629,8 +632,12 @@ struct ChatDetailView: View {
             vm.draft = caption
             Task { await vm.send() }
         }
+        // Resize to match the PhotosPicker path (compressIfImage runs
+        // 1600 max dim @ quality 0.75). Drop / paste used to skip this
+        // step and send photos at full device resolution.
         let items: [(Data, String, String)] = images.enumerated().compactMap { i, img in
-            guard let d = img.jpegData(compressionQuality: 0.9) else { return nil }
+            let resized = ChatViewModel.resizeForUpload(img)
+            guard let d = resized.jpegData(compressionQuality: 0.85) else { return nil }
             return (d, "image-\(i).jpg", "image/jpeg")
         }
         guard !items.isEmpty else { return }
@@ -1010,6 +1017,49 @@ struct ChatDetailView: View {
             .background(Color.clear)
             .modifier(GlassPill())
         #endif
+    }
+
+    /// Compact chip above the composer that surfaces an image sitting on
+    /// the pasteboard. Tap → route through the same crop/caption/send
+    /// flow drag-drop uses. X → dedup this image so it doesn't re-prompt.
+    private func clipboardChip(for image: UIImage) -> some View {
+        HStack(spacing: 10) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Image in clipboard")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Tap to attach").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Paste") {
+                Haptics.impact(.light)
+                pendingDropImages = [image]
+                showDropConfirm = true
+                clipboard.consume()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            Button {
+                clipboard.dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss clipboard image")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .overlay(Divider(), alignment: .bottom)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private var composer: some View {
