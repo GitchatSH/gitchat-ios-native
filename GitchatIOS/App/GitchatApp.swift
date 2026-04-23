@@ -54,6 +54,15 @@ struct GitchatApp: App {
                         annotation: [UIApplication.OpenURLOptionsKey.annotation]
                     )
                 }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    // Universal Link entry point. When BE serves AASA on
+                    // gitchat.sh / dev.gitchat.sh, iOS hands the tapped
+                    // https URL to us here — we route invite links to
+                    // the preview sheet the same way as the custom scheme.
+                    if let url = activity.webpageURL {
+                        AppRouter.shared.handleDeepLink(url)
+                    }
+                }
         }
     }
 

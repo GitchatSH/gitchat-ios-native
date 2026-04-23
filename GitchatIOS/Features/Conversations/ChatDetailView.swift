@@ -286,6 +286,13 @@ struct ChatDetailView: View {
                 }
                 return .handled
             }
+            // Handle invite links (both gitchat:// and https://*.gitchat.sh)
+            // in-app so a tap on a shared invite routes to the preview
+            // sheet instead of opening Safari and 404'ing on BE's /invite
+            // route (Universal Links / AASA aren't set up yet).
+            if AppRouter.shared.handleDeepLink(url) {
+                return .handled
+            }
             #if targetEnvironment(macCatalyst)
             UIApplication.shared.open(url)
             #else

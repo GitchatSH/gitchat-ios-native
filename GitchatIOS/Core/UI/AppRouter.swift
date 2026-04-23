@@ -26,20 +26,42 @@ final class AppRouter: ObservableObject {
 
     private init() {}
 
-    /// Route a `gitchat://` URL opened via `.onOpenURL`. Returns `true`
-    /// if the URL was recognized, so callers can skip the fallback
-    /// (Facebook SDK) delegate.
+    /// Route a Gitchat deep link. Accepts both our custom scheme
+    /// (`gitchat://invite/<code>`) and https URLs that point at our web
+    /// host (`https://{dev.,}gitchat.sh/invite/<code>`) — the latter so
+    /// in-app taps on a shared invite URL route to `InvitePreviewSheet`
+    /// instead of opening Safari and hitting a 404 while BE/AASA is
+    /// still being set up.
+    ///
+    /// Returns `true` when recognized so callers can skip the fallback
+    /// handler (Facebook SDK for scheme URLs, SafariSheet for https).
     @discardableResult
     func handleDeepLink(_ url: URL) -> Bool {
-        guard url.scheme == "gitchat" else { return false }
-        // Accepts both `gitchat://invite/<code>` and the host-form
-        // `gitchat:invite/<code>` — iOS parses the former with host="invite"
-        // and a leading-slash path, the latter with the full path.
-        let parts = ([url.host].compactMap { $0 } + url.pathComponents)
+        // Path form works for both schemes — gather everything after
+        // the host/scheme into an ordered list of non-empty segments.
+        let parts = (([url.host].compactMap { $0 }) + url.pathComponents)
             .filter { !$0.isEmpty && $0 != "/" }
-        guard parts.count >= 2, parts[0] == "invite" else { return false }
-        pendingInviteCode = parts[1]
-        return true
+
+        switch url.scheme?.lowercased() {
+        case "gitchat":
+            guard parts.count >= 2, parts[0] == "invite" else { return false }
+            pendingInviteCode = parts[1]
+            return true
+
+        case "https":
+            guard let host = url.host?.lowercased(),
+                  host == "gitchat.sh" || host.hasSuffix(".gitchat.sh") else {
+                return false
+            }
+            // parts[0] is the host — find the "invite" segment explicitly.
+            let path = url.pathComponents.filter { !$0.isEmpty && $0 != "/" }
+            guard path.count >= 2, path[0] == "invite" else { return false }
+            pendingInviteCode = path[1]
+            return true
+
+        default:
+            return false
+        }
     }
 
     func openConversation(id: String, messageId: String? = nil) {

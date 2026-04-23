@@ -66,6 +66,9 @@ targets:
           - Default
         aps-environment: development
         com.apple.developer.usernotifications.communication: true
+        com.apple.developer.associated-domains:
+          - applinks:gitchat.sh
+          - applinks:dev.gitchat.sh
         com.apple.security.application-groups:
           - group.chat.git.onesignal
           - group.chat.git.share
