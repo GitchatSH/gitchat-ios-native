@@ -39,6 +39,7 @@ enum FollowListKind: Identifiable {
 struct ProfileView: View {
     @StateObject private var vm: ProfileViewModel
     @StateObject private var store = StoreManager.shared
+    @ObservedObject private var waveHistory = WaveHistory.shared
     @State private var showUpgrade = false
     @State private var followList: FollowListKind?
     @State private var chatSheet: Conversation?
@@ -111,9 +112,9 @@ struct ProfileView: View {
 
                             if let follow = followState, !(follow.following && follow.followed_by) {
                                 // Non-mutual: Wave is the low-friction primary
-                                // action. Chat still accessible via the overflow
-                                // menu below.
-                                WaveButton(targetLogin: p.login)
+                                // action. Sized to match the Follow button on
+                                // its left.
+                                waveCTA(for: p.login)
                             } else {
                                 Button {
                                     Task { await startChat(with: p.login) }
@@ -338,6 +339,52 @@ struct ProfileView: View {
             chatSheet = convo
         } catch {
             ToastCenter.shared.show(.error, "Couldn't start chat", error.localizedDescription)
+        }
+    }
+
+    /// Wave CTA styled to match the Follow / Chat sibling buttons' height
+    /// and rounded-rectangle background, instead of the compact
+    /// `WaveButton` used on list rows.
+    @ViewBuilder
+    private func waveCTA(for login: String) -> some View {
+        let waved = waveHistory.alreadyWaved(login)
+        let pending = waveHistory.isPending(login)
+        Button {
+            Task { await sendWave(to: login) }
+        } label: {
+            HStack(spacing: 6) {
+                if pending {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: waved ? "hand.wave.fill" : "hand.wave")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                Text(waved ? "Waved" : "Wave")
+                    .font(.geist(14, weight: .semibold))
+            }
+            .foregroundStyle(Color(.label))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 12))
+        }
+        .disabled(waved || pending)
+    }
+
+    private func sendWave(to login: String) async {
+        Haptics.impact(.light)
+        WaveHistory.shared.markPending(login)
+        do {
+            _ = try await APIClient.shared.sendWave(to: login)
+            WaveHistory.shared.markWaved(login)
+            ToastCenter.shared.show(.success, "Waved at @\(login)")
+        } catch {
+            let msg = error.localizedDescription.lowercased()
+            if msg.contains("already") {
+                WaveHistory.shared.markWaved(login)
+            } else {
+                WaveHistory.shared.markFailed(login)
+                ToastCenter.shared.show(.error, "Couldn't wave", error.localizedDescription)
+            }
         }
     }
 
