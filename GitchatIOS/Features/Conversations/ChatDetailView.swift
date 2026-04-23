@@ -49,7 +49,6 @@ struct ChatDetailView: View {
     @State private var isDragOver = false
     @StateObject private var clipboard = ClipboardWatcher()
     @State private var menuTarget: MessageMenuTarget?
-    @State private var bubbleFrames: [String: CGRect] = [:]
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -468,19 +467,12 @@ struct ChatDetailView: View {
                 bubbleContextMenu: nil
             )
             .padding(.top, showHeader ? 6 : 0)
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { bubbleFrames[msg.id] = proxy.frame(in: .global) }
-                        .onChange(of: proxy.frame(in: .global)) { new in
-                            bubbleFrames[msg.id] = new
-                        }
-                }
-            )
-            // highPriorityGesture so our long-press wins over
-            // `.textSelection(.enabled)` on the bubble body — otherwise
-            // iOS's text Copy menu fires first and our overlay never
-            // appears.
+            // Long-press opens the menu overlay. We pass a placeholder
+            // source frame (centered); overlay positioning uses the
+            // stack layout — feeding a live per-cell frame would
+            // require a GeometryReader whose .onChange fires on every
+            // scroll tick and rebuilds the whole chat body (tested:
+            // measurable jank on a 500-message list).
             .highPriorityGesture(
                 LongPressGesture(minimumDuration: 0.28)
                     .onEnded { _ in
@@ -488,7 +480,7 @@ struct ChatDetailView: View {
                         menuTarget = MessageMenuTarget(
                             message: msg,
                             isMe: msg.sender == auth.login,
-                            sourceFrame: bubbleFrames[msg.id] ?? .zero
+                            sourceFrame: .zero
                         )
                     }
             )

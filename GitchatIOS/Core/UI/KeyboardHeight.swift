@@ -31,15 +31,21 @@ final class KeyboardObserver: ObservableObject {
             UIView.AnimationOptions(rawValue: curveRawValue << 16)
         }
 
-        /// SwiftUI animation matching the keyboard's private curve
-        /// (raw value 7 ≈ easeInOut). Use for `withAnimation` when
-        /// driving `@State` rather than CALayer.
+        /// SwiftUI animation tuned to track the keyboard in lock-step.
+        /// `interpolatingSpring` reads the current velocity of the
+        /// animatable value so mid-flight reversals (interactive
+        /// dismiss; dragging the keyboard) don't break the tracking —
+        /// unlike `timingCurve` which restarts from velocity=0 on every
+        /// new change. stiffness 320/damping 30 is the same profile
+        /// Apple uses on UIKit's bottom-sheet tracking.
         var swiftUIAnimation: Animation {
             guard duration > 0 else { return .linear(duration: 0) }
-            // Private curve 7 is keyboard-only but matches easeInOut in
-            // practice; 0.42/0/0.58/1 are the CSS easeInOut bezier
-            // control points, close to UIKit's easeInOut as well.
-            return .timingCurve(0.42, 0, 0.58, 1, duration: duration)
+            return .interpolatingSpring(
+                mass: 1.0,
+                stiffness: 320,
+                damping: 32,
+                initialVelocity: 0
+            )
         }
     }
 
