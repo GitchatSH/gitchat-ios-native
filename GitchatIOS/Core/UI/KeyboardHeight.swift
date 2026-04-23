@@ -49,7 +49,7 @@ final class KeyboardObserver: ObservableObject {
         let hide = center.publisher(for: UIResponder.keyboardWillHideNotification)
 
         show.merge(with: hide)
-            .compactMap { note -> Change? in KeyboardObserver.change(from: note) }
+            .compactMap { (note: Foundation.Notification) -> Change? in KeyboardObserver.change(from: note) }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] (change: Change) in
                 guard let self else { return }
@@ -61,7 +61,7 @@ final class KeyboardObserver: ObservableObject {
             .store(in: &bag)
     }
 
-    private static func change(from note: Notification) -> Change? {
+    private static func change(from note: Foundation.Notification) -> Change? {
         let info = note.userInfo ?? [:]
         let isHide = note.name == UIResponder.keyboardWillHideNotification
         let frame = info[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect ?? .zero
