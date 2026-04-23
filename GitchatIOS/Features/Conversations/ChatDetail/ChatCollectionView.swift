@@ -67,6 +67,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         let cv = UICollectionView(frame: .zero, collectionViewLayout: layout)
         cv.backgroundColor = .clear
         cv.delegate = context.coordinator
+        cv.prefetchDataSource = context.coordinator
         cv.keyboardDismissMode = .interactive
         cv.alwaysBounceVertical = true
         cv.showsVerticalScrollIndicator = false
@@ -267,7 +268,7 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, UICollectionViewDelegate {
+    final class Coordinator: NSObject, UICollectionViewDelegate, UICollectionViewDataSourcePrefetching {
         var parent: ChatCollectionView
         private weak var collectionView: UICollectionView?
         private var dataSource: UICollectionViewDiffableDataSource<Int, String>!
@@ -435,6 +436,45 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 self?.loadingMore = false
             }
+        }
+
+        // MARK: - Prefetching
+
+        /// Collect remote image URLs referenced by the messages at the
+        /// given index paths (attachments + sender avatar). Used by both
+        /// prefetch and cancel paths.
+        private func imageURLs(at indexPaths: [IndexPath]) -> [URL] {
+            var urls: [URL] = []
+            for ip in indexPaths {
+                guard ip.item >= 0, ip.item < lastItems.count else { continue }
+                let msg = lastItems[ip.item]
+                if let atts = msg.attachments {
+                    for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {
+                        if let u = URL(string: a.url), !u.isFileURL { urls.append(u) }
+                    }
+                }
+                if let s = msg.attachment_url, let u = URL(string: s), !u.isFileURL {
+                    urls.append(u)
+                }
+                if let s = msg.sender_avatar, let u = URL(string: s), !u.isFileURL {
+                    urls.append(u)
+                }
+            }
+            return urls
+        }
+
+        func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+            let urls = imageURLs(at: indexPaths)
+            guard !urls.isEmpty else { return }
+            // Downsample ceiling matches CachedAsyncImage's default for
+            // chat bubbles; keeps the cache key aligned.
+            ImageCache.shared.prefetch(urls: urls, maxPixelSize: 800)
+        }
+
+        func collectionView(_ collectionView: UICollectionView, cancelPrefetchingForItemsAt indexPaths: [IndexPath]) {
+            let urls = imageURLs(at: indexPaths)
+            guard !urls.isEmpty else { return }
+            ImageCache.shared.cancelPrefetch(urls: urls, maxPixelSize: 800)
         }
     }
 }
