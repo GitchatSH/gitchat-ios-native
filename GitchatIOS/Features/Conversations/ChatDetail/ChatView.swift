@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
-/// Top-level ChatV2 surface — the message list + composer + menu
+/// Top-level Chat surface — the message list + composer + menu
 /// overlay + keyboard-aware bottom inset, all composed. Caller
 /// (ChatDetailView) owns navigation, sheets, and the view model; this
 /// view is the reusable "chat screen body" with a clean external

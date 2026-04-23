@@ -3,7 +3,7 @@ import Foundation
 /// Groups messages into calendar-day sections for the UITableView
 /// diffable data source. Section identifiers use the `date-YYYY-MM-DD`
 /// shape so they never collide with server-generated message ids.
-enum ChatV2Sectioning {
+enum ChatSectioning {
 
     /// A single day's worth of messages, ready for
     /// `snap.appendSections([sectionID])` +

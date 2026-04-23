@@ -6,11 +6,29 @@ import UIKit
 /// Stable identifier for the typing-indicator row pinned to the end
 /// of the list. Chosen so it never collides with a server-generated
 /// message id.
-let ChatV2TypingRowID: String = "__v2_typing__"
+let ChatTypingRowID: String = "__v2_typing__"
 
 /// Stable identifier for the "seen" avatar row pinned under the last
 /// outgoing message in a DM.
-let ChatV2SeenRowID: String = "__v2_seen__"
+let ChatSeenRowID: String = "__v2_seen__"
+
+/// Prefix for synthetic date-pill rows. Using a regular row instead
+/// of a section footer avoids UITableView `.plain` style's
+/// sticky-footer behaviour, which pinned "Today" mid-screen as the
+/// user scrolled past the day's last message.
+private let ChatDateRowPrefix = "__v2_date__|"
+
+private func chatDateRowID(for sectionID: String) -> String {
+    "\(ChatDateRowPrefix)\(sectionID)"
+}
+
+private func chatIsDateRow(_ id: String) -> Bool {
+    id.hasPrefix(ChatDateRowPrefix)
+}
+
+private func chatSectionID(fromDateRow id: String) -> String {
+    String(id.dropFirst(ChatDateRowPrefix.count))
+}
 
 // MARK: - Messages list
 
@@ -71,8 +89,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         tv.sectionHeaderHeight = 0
         tv.estimatedSectionHeaderHeight = 0
         tv.sectionHeaderTopPadding = 0
-        tv.sectionFooterHeight = UITableView.automaticDimension
-        tv.estimatedSectionFooterHeight = 32
+        tv.sectionFooterHeight = 0
+        tv.estimatedSectionFooterHeight = 0
 
         // Rotation trick from exyte/chat (also how Telegram, Stream,
         // and iMessage handle it): flip the whole table 180° so data
@@ -267,14 +285,14 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // UIHostingConfiguration, so one class is enough. Instance-
         // level rather than static because Swift forbids static
         // stored properties inside a nested generic type.
-        private let cellID = "ChatV2MessageCell"
+        private let cellID = "ChatMessageCell"
 
         func attach(table: UITableView) {
             self.table = table
             table.register(UITableViewCell.self, forCellReuseIdentifier: cellID)
 
             dataSource = UITableViewDiffableDataSource<String, String>(tableView: table) { [weak self] tv, indexPath, id in
-                let cell = tv.dequeueReusableCell(withIdentifier: self?.cellID ?? "ChatV2MessageCell", for: indexPath)
+                let cell = tv.dequeueReusableCell(withIdentifier: self?.cellID ?? "ChatMessageCell", for: indexPath)
                 guard let self else { return cell }
                 self.configure(cell: cell, id: id, indexPath: indexPath)
                 return cell
@@ -290,7 +308,28 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // counter the table's own 180° transform — so text
             // reads upright while the table scrolls in the
             // chat-natural direction. See makeUIView.
-            if id == ChatV2TypingRowID {
+            if chatIsDateRow(id) {
+                let sectionID = chatSectionID(fromDateRow: id)
+                let label = ChatSectioning.label(for: sectionID)
+                cell.contentConfiguration = UIHostingConfiguration {
+                    HStack {
+                        Spacer()
+                        Text(label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
+                    .rotationEffect(.degrees(180))
+                }
+                .margins(.horizontal, 12)
+                .margins(.vertical, 2)
+                return
+            }
+            if id == ChatTypingRowID {
                 let logins = lastTypingUsers
                 cell.contentConfiguration = UIHostingConfiguration {
                     TypingIndicatorRow(logins: logins)
@@ -300,7 +339,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 .margins(.vertical, 2)
                 return
             }
-            if id == ChatV2SeenRowID {
+            if id == ChatSeenRowID {
                 let avatarURL = parent.seenAvatarURL
                 cell.contentConfiguration = UIHostingConfiguration {
                     HStack {
@@ -349,26 +388,27 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             //                              at the top
             // Pagination listens for "approached last section, last
             // row" via willDisplay below.
-            let groups = ChatV2Sectioning.groupByDay(items)
+            let groups = ChatSectioning.groupByDay(items)
             // Trailing rows (typing indicator / seen avatar row) belong
             // in data-space AFTER the latest message, so in the
             // rotated table they appear BELOW the latest bubble. In
             // rotated-snapshot space they go to section 0 as rows
             // BEFORE the latest message — i.e. prepended.
             var trailingRowsForLatestSection: [String] = []
-            if !typingUsers.isEmpty { trailingRowsForLatestSection.append(ChatV2TypingRowID) }
-            if showSeen { trailingRowsForLatestSection.append(ChatV2SeenRowID) }
+            if !typingUsers.isEmpty { trailingRowsForLatestSection.append(ChatTypingRowID) }
+            if showSeen { trailingRowsForLatestSection.append(ChatSeenRowID) }
 
             for (offset, group) in groups.reversed().enumerated() {
                 snap.appendSections([group.sectionID])
-                // `offset == 0` means this is the latest day section
-                // (rotated: visually bottom). Prepend the trailing
-                // synthetic rows here so they sit UNDER the newest
-                // bubble.
                 var rows = Array(group.messageIDs.reversed())
                 if offset == 0 {
                     rows = trailingRowsForLatestSection + rows
                 }
+                // Append the date pill at the END of the section
+                // (rotation-space bottom of section = visually TOP of
+                // the day's messages). Regular row — not a section
+                // footer — so the pill scrolls with content.
+                rows.append(chatDateRowID(for: group.sectionID))
                 snap.appendItems(rows, toSection: group.sectionID)
             }
             dataSource.apply(snap, animatingDifferences: animated)
@@ -419,41 +459,9 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             }
         }
 
-        func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
-            // Date pill as section FOOTER, not header. In the rotated
-            // table, footers render at the BOTTOM of a section in
-            // rotation space = TOP of the section visually. That's
-            // where the date separator belongs ("Today" above today's
-            // first message, not below the last).
-            let snap = dataSource.snapshot()
-            guard section < snap.sectionIdentifiers.count else { return nil }
-            let sectionID = snap.sectionIdentifiers[section]
-            let label = ChatV2Sectioning.label(for: sectionID)
-            let footer = UITableViewHeaderFooterView(reuseIdentifier: nil)
-            footer.backgroundConfiguration = .clear()
-            footer.contentConfiguration = UIHostingConfiguration {
-                HStack {
-                    Spacer()
-                    Text(label)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
-                        .background(.ultraThinMaterial, in: Capsule())
-                    Spacer()
-                }
-                .padding(.vertical, 6)
-                .rotationEffect(.degrees(180))
-            }
-            .margins(.all, 0)
-            return footer
-        }
-
         func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat { 0 }
 
-        func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
-            UITableView.automaticDimension
-        }
+        func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 0 }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             // Rotation-aware "at bottom" detection — visually at the
@@ -492,7 +500,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard let indexPath = tv.indexPathForRow(at: point) else { return }
             guard let cell = tv.cellForRow(at: indexPath) else { return }
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
-            if id == ChatV2TypingRowID || id == ChatV2SeenRowID { return }
+            if id == ChatTypingRowID || id == ChatSeenRowID { return }
+            if chatIsDateRow(id) { return }
             guard let msg = lastItems.first(where: { $0.id == id }) else { return }
             Haptics.impact(.medium)
             let frame = cell.convert(cell.bounds, to: nil)
@@ -505,7 +514,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             var urls: [URL] = []
             for ip in indexPaths {
                 guard let id = dataSource.itemIdentifier(for: ip) else { continue }
-                if id == ChatV2TypingRowID || id == ChatV2SeenRowID { continue }
+                if id == ChatTypingRowID || id == ChatSeenRowID { continue }
+                if chatIsDateRow(id) { continue }
                 guard let msg = lastItems.first(where: { $0.id == id }) else { continue }
                 if let atts = msg.attachments {
                     for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {

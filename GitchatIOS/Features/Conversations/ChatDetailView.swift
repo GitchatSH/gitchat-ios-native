@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 /// Host view for a single conversation. Owns navigation, sheets,
 /// alerts, drag-drop, and view-model wiring. The scrollable area +
-/// composer + menu overlay live inside `ChatView` (ChatV2/) — this
+/// composer + menu overlay live inside `ChatView` () — this
 /// view is the shell that surrounds them.
 ///
 /// Migration notes (vs. the pre-rewrite ChatDetailView):
@@ -17,7 +17,7 @@ import UniformTypeIdentifiers
 ///   dispatch.
 /// - Dropped inline `messageRow` / `seenByAvatars` / `messageActions`
 ///   / composer / reply bar / mention / clipboard chip / jump-to-bottom
-///   / blocked banner. These moved into ChatV2 pieces.
+///   / blocked banner. These moved into V2 components.
 struct ChatDetailView: View {
     @StateObject private var vm: ChatViewModel
     @EnvironmentObject var auth: AuthStore
@@ -633,7 +633,7 @@ struct ChatDetailView: View {
         socket.onMessageSent = { msg in
             guard msg.conversation_id == vm.conversation.id else { return }
             if vm.messages.contains(where: { $0.id == msg.id }) { return }
-            MessageBubble.seenIds.insert(msg.id)
+            ChatMessageView.seenIds.insert(msg.id)
             if let idx = vm.messages.firstIndex(where: {
                 $0.id.hasPrefix("local-") && $0.sender == msg.sender && $0.content == msg.content
             }) {

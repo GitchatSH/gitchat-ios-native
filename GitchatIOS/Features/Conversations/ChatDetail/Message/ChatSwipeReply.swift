@@ -35,7 +35,14 @@ struct ChatSwipeReply: ViewModifier {
                     )
                     .allowsHitTesting(false)
             }
-            .gesture(
+            // simultaneousGesture so the table's scroll pan still
+            // wins on vertical drags — .gesture() has default
+            // priority and can swallow early touch events, which on
+            // real devices shows up as "drag doesn't start until I
+            // tap a few times". simultaneous lets both observe; we
+            // still only engage the swipe when motion is predominantly
+            // horizontal.
+            .simultaneousGesture(
                 DragGesture(minimumDistance: 12, coordinateSpace: .local)
                     .onChanged { v in
                         let dx = v.translation.width

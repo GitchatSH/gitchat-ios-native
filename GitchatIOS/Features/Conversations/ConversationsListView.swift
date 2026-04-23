@@ -601,7 +601,7 @@ struct ConversationRow: View {
                 Text(RelativeTime.chatListStamp(conversation.last_message_at))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .instantTooltip(MessageBubble.fullTimestamp(conversation.last_message_at))
+                    .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
                 if displayedUnread > 0 {
                     let isMutedBadge = isMuted
                     Text("\(displayedUnread)")

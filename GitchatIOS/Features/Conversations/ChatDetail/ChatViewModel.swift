@@ -37,7 +37,7 @@ final class ChatViewModel: ObservableObject {
             if let cursors = cached.readCursors {
                 self.readCursors = cursors
             }
-            MessageBubble.markSeen(cached.messages.map(\.id))
+            ChatMessageView.markSeen(cached.messages.map(\.id))
         }
     }
 
@@ -87,7 +87,7 @@ final class ChatViewModel: ObservableObject {
                 // Mark the initial page as already-seen so bubbles
                 // don't all pop in on first entry — only newly arrived
                 // messages should animate in.
-                MessageBubble.markSeen(self.messages.map(\.id))
+                ChatMessageView.markSeen(self.messages.map(\.id))
             } else {
                 var existing = messages
                 let existingIds = Set(existing.map(\.id))
@@ -127,7 +127,7 @@ final class ChatViewModel: ObservableObject {
             let deduped = older.filter { !known.contains($0.id) }
             // Older paginated messages should appear immediately, not
             // pop in — mark them seen before they hit the UI.
-            MessageBubble.markSeen(deduped.map(\.id))
+            ChatMessageView.markSeen(deduped.map(\.id))
             messages.insert(contentsOf: deduped, at: 0)
             nextCursor = resp.nextCursor
             persistCache()
@@ -238,7 +238,7 @@ final class ChatViewModel: ObservableObject {
                     // between the optimistic append and this response —
                     // the diffable data source crashes on duplicate ids.
                     messages.removeAll { $0.id == msg.id && $0.id != localID }
-                    MessageBubble.seenIds.insert(msg.id)
+                    ChatMessageView.seenIds.insert(msg.id)
                     if let idx = messages.firstIndex(where: { $0.id == localID }) {
                         messages[idx] = msg
                     } else {
@@ -497,7 +497,7 @@ final class ChatViewModel: ObservableObject {
                 body: "",
                 attachmentURLs: urls
             )
-            MessageBubble.seenIds.insert(msg.id)
+            ChatMessageView.seenIds.insert(msg.id)
             if let idx = messages.firstIndex(where: { $0.id == localID }) {
                 messages[idx] = msg
             }
@@ -544,7 +544,7 @@ final class ChatViewModel: ObservableObject {
                 body: "",
                 attachmentURL: url
             )
-            MessageBubble.seenIds.insert(msg.id)
+            ChatMessageView.seenIds.insert(msg.id)
             if let idx = messages.firstIndex(where: { $0.id == localID }) {
                 messages[idx] = msg
             } else {
