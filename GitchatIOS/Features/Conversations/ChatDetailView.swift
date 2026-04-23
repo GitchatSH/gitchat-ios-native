@@ -199,16 +199,6 @@ struct ChatDetailView: View {
         }
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
-        .sheet(item: Binding<CropRoute?>(
-            get: { cropTarget.map(CropRoute.init) },
-            set: { cropTarget = $0?.index }
-        )) { route in
-            if route.index < pendingDropImages.count {
-                ImageCropSheet(image: pendingDropImages[route.index]) { cropped in
-                    pendingDropImages[route.index] = cropped
-                }
-            }
-        }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -570,6 +560,7 @@ struct ChatDetailView: View {
                     TextField("Add a message…", text: $dropCaption)
                         .textFieldStyle(.roundedBorder)
                     Button {
+                        cropTarget = nil
                         showDropConfirm = false
                         sendDroppedImages()
                     } label: {
@@ -588,9 +579,24 @@ struct ChatDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        cropTarget = nil
                         pendingDropImages = []
                         dropCaption = ""
                         showDropConfirm = false
+                    }
+                }
+            }
+            // Crop sheet lives inside the preview sheet — SwiftUI can't
+            // chain two .sheets attached to the same host view, and the
+            // sheet on chatBody would refuse to present while the drop
+            // preview was already on screen (tap Edit → nothing).
+            .sheet(item: Binding<CropRoute?>(
+                get: { cropTarget.map(CropRoute.init) },
+                set: { cropTarget = $0?.index }
+            )) { route in
+                if route.index < pendingDropImages.count {
+                    ImageCropSheet(image: pendingDropImages[route.index]) { cropped in
+                        pendingDropImages[route.index] = cropped
                     }
                 }
             }

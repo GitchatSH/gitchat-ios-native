@@ -23,11 +23,13 @@ struct CatalystDropModifier<Overlay: View>: ViewModifier {
     }
 
     func body(content: Content) -> some View {
+        // Order matters — `.onDrop` has to be the OUTER-most modifier
+        // or the overlay + animation modifiers wrap it and SwiftUI's
+        // Catalyst drag pipeline fails to register the drop zone.
+        // Overlay first (innermost), then onDrop on top.
         content
-            // contentShape makes the whole rect hit-testable for drop
-            // — default SwiftUI hit areas cover drawn content only, so
-            // drops over empty regions (the transparent chat background
-            // between messages) wouldn't register otherwise.
+            .overlay { if showsOverlay { dragOverlay } }
+            .animation(.easeInOut(duration: 0.15), value: isDragOver)
             .contentShape(Rectangle())
             .onDrop(
                 of: [
@@ -47,7 +49,5 @@ struct CatalystDropModifier<Overlay: View>: ViewModifier {
                 onDrop(providers)
                 return true
             }
-            .overlay { if showsOverlay { dragOverlay } }
-            .animation(.easeInOut(duration: 0.15), value: isDragOver)
     }
 }
