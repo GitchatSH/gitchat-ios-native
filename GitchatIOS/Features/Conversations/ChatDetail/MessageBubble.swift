@@ -102,13 +102,23 @@ struct MessageBubble: View {
             }
             if !isMe { Spacer(minLength: 40) }
         }
+        // Dramatic "rise + scale from composer" entry for first-time
+        // appear (seen-ids set prevents the effect firing on scroll
+        // recycle). Outgoing bubbles grow from bottom-trailing (where
+        // the composer's send button lives); incoming bubbles grow
+        // from bottom-leading.
         .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
+        .scaleEffect(
+            Self.seenIds.contains(message.id) || appeared ? 1 : 0.6,
+            anchor: isMe ? .bottomTrailing : .bottomLeading
+        )
+        .offset(y: Self.seenIds.contains(message.id) || appeared ? 0 : 36)
         .onAppear {
             if Self.seenIds.contains(message.id) {
                 appeared = true
             } else {
                 Self.seenIds.insert(message.id)
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.62)) {
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.72)) {
                     appeared = true
                 }
             }

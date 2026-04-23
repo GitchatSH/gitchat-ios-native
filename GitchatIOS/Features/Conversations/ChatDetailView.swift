@@ -134,6 +134,7 @@ struct ChatDetailView: View {
     var body: some View {
         chatBody
             .padding(.bottom, keyboard.height > 0 ? keyboard.height - safeAreaBottom : 0)
+            .animation(keyboard.lastChange.swiftUIAnimation, value: keyboard.height)
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .environment(\.chatTheme, .default)
     }
@@ -476,14 +477,21 @@ struct ChatDetailView: View {
                         }
                 }
             )
-            .onLongPressGesture(minimumDuration: 0.28) {
-                Haptics.impact(.medium)
-                menuTarget = MessageMenuTarget(
-                    message: msg,
-                    isMe: msg.sender == auth.login,
-                    sourceFrame: bubbleFrames[msg.id] ?? .zero
-                )
-            }
+            // highPriorityGesture so our long-press wins over
+            // `.textSelection(.enabled)` on the bubble body — otherwise
+            // iOS's text Copy menu fires first and our overlay never
+            // appears.
+            .highPriorityGesture(
+                LongPressGesture(minimumDuration: 0.28)
+                    .onEnded { _ in
+                        Haptics.impact(.medium)
+                        menuTarget = MessageMenuTarget(
+                            message: msg,
+                            isMe: msg.sender == auth.login,
+                            sourceFrame: bubbleFrames[msg.id] ?? .zero
+                        )
+                    }
+            )
             .swipeToReply(isMe: msg.sender == auth.login) {
                 vm.replyingTo = msg
                 vm.editingMessage = nil

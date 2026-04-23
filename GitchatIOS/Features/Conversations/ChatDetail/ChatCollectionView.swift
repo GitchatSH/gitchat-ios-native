@@ -114,7 +114,18 @@ struct ChatCollectionView<Cell: View>: UIViewRepresentable {
             }
         }
 
-        coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: false)
+        // Animate the apply only when the list grew by newly-appended
+        // rows (new message arrived) or when typing indicators toggle
+        // — those should slide/fade in. Other updates (reactions, read
+        // cursors, pin flips) route through reconfigureItems above,
+        // which we keep non-animated to avoid flicker.
+        let isAppendLocal: Bool = {
+            guard newIDs.count > prevIDs.count, !prevIDs.isEmpty else { return false }
+            return newIDs.prefix(prevIDs.count) == ArraySlice(prevIDs)
+        }()
+        let typingToggled = coord.lastTypingUsers != typingUsers
+        let animateApply = isAppendLocal || typingToggled
+        coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: animateApply)
 
         // If the pinned set changed while the item list stayed the same,
         // force the affected cells to reconfigure so the pin badge

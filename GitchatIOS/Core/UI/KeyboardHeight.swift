@@ -31,13 +31,15 @@ final class KeyboardObserver: ObservableObject {
             UIView.AnimationOptions(rawValue: curveRawValue << 16)
         }
 
-        /// SwiftUI spring tuned to feel close to the keyboard's curve.
-        /// Use for `withAnimation` when driving `@State` rather than
-        /// CALayer. Falls back to `.linear` when duration is 0 (instant
-        /// change — e.g. hardware keyboard attach).
+        /// SwiftUI animation matching the keyboard's private curve
+        /// (raw value 7 ≈ easeInOut). Use for `withAnimation` when
+        /// driving `@State` rather than CALayer.
         var swiftUIAnimation: Animation {
             guard duration > 0 else { return .linear(duration: 0) }
-            return .timingCurve(0.2, 0.8, 0.2, 1.0, duration: duration)
+            // Private curve 7 is keyboard-only but matches easeInOut in
+            // practice; 0.42/0/0.58/1 are the CSS easeInOut bezier
+            // control points, close to UIKit's easeInOut as well.
+            return .timingCurve(0.42, 0, 0.58, 1, duration: duration)
         }
     }
 
