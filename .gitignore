@@ -21,3 +21,6 @@ Package.resolved
 ## Generated project (regenerated via xcodegen)
 # Keep committed so cloners don't need xcodegen:
 # GitchatIOS.xcodeproj/
+
+## Per-developer Claude Code workspace notes
+.claude/
