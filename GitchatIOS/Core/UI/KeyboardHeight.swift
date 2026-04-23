@@ -44,14 +44,14 @@ final class KeyboardObserver: ObservableObject {
     private var bag: Set<AnyCancellable> = []
 
     init() {
-        let publisher = NotificationCenter.default
-            .publisher(for: UIResponder.keyboardWillChangeFrameNotification)
-            .merge(with: NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification))
-            .compactMap { Self.change(from: $0) }
-            .receive(on: DispatchQueue.main)
+        let center = NotificationCenter.default
+        let show = center.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+        let hide = center.publisher(for: UIResponder.keyboardWillHideNotification)
 
-        publisher
-            .sink { [weak self] change in
+        show.merge(with: hide)
+            .compactMap { note -> Change? in KeyboardObserver.change(from: note) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (change: Change) in
                 guard let self else { return }
                 self.lastChange = change
                 withAnimation(change.swiftUIAnimation) {
