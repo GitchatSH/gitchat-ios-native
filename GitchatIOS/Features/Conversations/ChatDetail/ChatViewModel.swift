@@ -561,21 +561,37 @@ final class ChatViewModel: ObservableObject {
     private static func compressIfImage(
         data: Data, filename: String, mimeType: String
     ) -> (Data, String, String) {
+        // Animated GIFs flatten to a single frame when rendered via
+        // UIImage, so we pass them through untouched. BE/CDN will serve
+        // them at original size; they're rarely large enough to need
+        // compression anyway.
+        if mimeType == "image/gif" {
+            return (data, filename, mimeType)
+        }
         guard mimeType.hasPrefix("image/"), let image = UIImage(data: data) else {
             return (data, filename, mimeType)
         }
-        let maxDim: CGFloat = 1600
-        let size = image.size
-        let scale = min(1, maxDim / max(size.width, size.height))
-        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        let resized = renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: newSize))
-        }
+        let resized = resizeForUpload(image)
         if let jpeg = resized.jpegData(compressionQuality: 0.75) {
             let base = (filename as NSString).deletingPathExtension
             return (jpeg, "\(base).jpg", "image/jpeg")
         }
         return (data, filename, mimeType)
+    }
+
+    /// Shared resize helper — used both by `compressIfImage` and by the
+    /// drop/paste path (which encodes UIImage → Data directly and would
+    /// otherwise skip the max-dim clamp in compressIfImage).
+    /// `UIGraphicsImageRenderer` respects `image.imageOrientation`, so
+    /// portrait photos stay portrait.
+    static func resizeForUpload(_ image: UIImage, maxDim: CGFloat = 1600) -> UIImage {
+        let size = image.size
+        let scale = min(1, maxDim / max(size.width, size.height))
+        guard scale < 1 else { return image }
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 }

@@ -47,6 +47,7 @@ struct ChatDetailView: View {
     @State private var dropCaption = ""
     @State private var cropTarget: Int?
     @State private var isDragOver = false
+    @StateObject private var clipboard = ClipboardWatcher()
 
     init(conversation: Conversation) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
@@ -178,6 +179,9 @@ struct ChatDetailView: View {
                 }
                 if !mentionSuggestions.isEmpty {
                     mentionSuggestionList
+                }
+                if let img = clipboard.pendingImage {
+                    clipboardChip(for: img)
                 }
                 composer
                     .overlay(alignment: .topTrailing) {
@@ -533,25 +537,31 @@ struct ChatDetailView: View {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], spacing: 8) {
                         ForEach(Array(pendingDropImages.enumerated()), id: \.offset) { i, img in
-                            ZStack(alignment: .topTrailing) {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(height: 150)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                Button {
-                                    cropTarget = i
-                                } label: {
-                                    Image(systemName: "crop")
-                                        .font(.caption.bold())
-                                        .foregroundStyle(.white)
-                                        .padding(6)
-                                        .background(Color.black.opacity(0.55), in: Circle())
+                            Button {
+                                cropTarget = i
+                            } label: {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(height: 150)
+                                        .clipped()
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "crop")
+                                            .font(.system(size: 11, weight: .semibold))
+                                        Text("Edit")
+                                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(Color.black.opacity(0.55), in: Capsule())
+                                    .padding(8)
+                                    .accessibilityLabel("Edit image")
                                 }
-                                .padding(6)
-                                .buttonStyle(.plain)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding()
@@ -629,8 +639,12 @@ struct ChatDetailView: View {
             vm.draft = caption
             Task { await vm.send() }
         }
+        // Resize to match the PhotosPicker path (compressIfImage runs
+        // 1600 max dim @ quality 0.75). Drop / paste used to skip this
+        // step and send photos at full device resolution.
         let items: [(Data, String, String)] = images.enumerated().compactMap { i, img in
-            guard let d = img.jpegData(compressionQuality: 0.9) else { return nil }
+            let resized = ChatViewModel.resizeForUpload(img)
+            guard let d = resized.jpegData(compressionQuality: 0.85) else { return nil }
             return (d, "image-\(i).jpg", "image/jpeg")
         }
         guard !items.isEmpty else { return }
@@ -1010,6 +1024,49 @@ struct ChatDetailView: View {
             .background(Color.clear)
             .modifier(GlassPill())
         #endif
+    }
+
+    /// Compact chip above the composer that surfaces an image sitting on
+    /// the pasteboard. Tap → route through the same crop/caption/send
+    /// flow drag-drop uses. X → dedup this image so it doesn't re-prompt.
+    private func clipboardChip(for image: UIImage) -> some View {
+        HStack(spacing: 10) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Image in clipboard")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("Tap to attach").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Paste") {
+                Haptics.impact(.light)
+                pendingDropImages = [image]
+                showDropConfirm = true
+                clipboard.consume()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            Button {
+                clipboard.dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss clipboard image")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .overlay(Divider(), alignment: .bottom)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private var composer: some View {
