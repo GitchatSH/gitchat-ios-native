@@ -268,9 +268,6 @@ struct ConversationsListView: View {
         }
         return base.sorted { a, b in
             if a.isPinned != b.isPinned { return a.isPinned }
-            let aMuted = vm.isLocallyMuted(a)
-            let bMuted = vm.isLocallyMuted(b)
-            if aMuted != bMuted { return !aMuted }
             return (a.last_message_at ?? "") > (b.last_message_at ?? "")
         }
     }
