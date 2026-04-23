@@ -10,13 +10,20 @@ struct MembersSheet: View {
     @State private var followingLogins: Set<String> = []
     @State private var pendingFollow: Set<String> = []
     @State private var followingLoaded = false
+    @State private var pendingKick: ConversationParticipant?
+    @State private var kicking: Set<String> = []
+    @State private var removedLogins: Set<String> = []
+
+    private var visible: [ConversationParticipant] {
+        participants.filter { !removedLogins.contains($0.login) }
+    }
 
     private var sorted: [ConversationParticipant] {
         // Online first (alpha within each bucket), offline after.
-        let online = participants
+        let online = visible
             .filter { presence.isOnline($0.login) }
             .sorted { $0.login.lowercased() < $1.login.lowercased() }
-        let offline = participants
+        let offline = visible
             .filter { !presence.isOnline($0.login) }
             .sorted { $0.login.lowercased() < $1.login.lowercased() }
         return online + offline
@@ -53,6 +60,15 @@ struct MembersSheet: View {
                     }
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if p.login != auth.login {
+                            Button(role: .destructive) {
+                                pendingKick = p
+                            } label: {
+                                Label("Remove", systemImage: "person.fill.xmark")
+                            }
+                        }
+                    }
                 }
                 .listStyle(.plain)
                 #if !targetEnvironment(macCatalyst)
@@ -92,6 +108,28 @@ struct MembersSheet: View {
             ) {
                 dismiss()
             }
+        }
+        .alert(item: $pendingKick) { member in
+            Alert(
+                title: Text("Remove @\(member.login)?"),
+                message: Text("They'll no longer receive messages from this group."),
+                primaryButton: .destructive(Text("Remove")) {
+                    Task { await kick(member) }
+                },
+                secondaryButton: .cancel()
+            )
+        }
+    }
+
+    private func kick(_ member: ConversationParticipant) async {
+        kicking.insert(member.login)
+        defer { kicking.remove(member.login) }
+        do {
+            try await APIClient.shared.kickMember(conversationId: conversationId, login: member.login)
+            removedLogins.insert(member.login)
+            ToastCenter.shared.show(.success, "Removed @\(member.login)")
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't remove", error.localizedDescription)
         }
     }
 

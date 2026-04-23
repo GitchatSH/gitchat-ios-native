@@ -37,6 +37,9 @@ struct ChatDetailView: View {
     @State private var showAddMember = false
     @State private var showLeaveConfirm = false
     @State private var showInviteLink = false
+    @State private var showGroupSettings = false
+    @State private var showDeleteGroupConfirm = false
+    @State private var deletingGroup = false
     @Environment(\.dismiss) private var dismiss
     @FocusState private var composerFocused: Bool
     @State private var pendingDropImages: [UIImage] = []
@@ -352,12 +355,14 @@ struct ChatDetailView: View {
                 Task { await vm.load() }
             }
         }
-        .sheet(isPresented: $showInviteLink) {
-            GroupInviteLinkSheet(
-                conversationId: vm.conversation.id,
-                groupName: vm.conversation.group_name
-            )
-        }
+        .modifier(GroupManagementSheets(
+            conversation: vm.conversation,
+            showInviteLink: $showInviteLink,
+            showGroupSettings: $showGroupSettings,
+            showDeleteConfirm: $showDeleteGroupConfirm,
+            onSettingsSaved: { Task { await vm.load() } },
+            onDeleteConfirmed: { Task { await disbandGroup() } }
+        ))
         .sheet(item: $reportingMessage) { msg in reportSheet(for: msg) }
         .alert("Thanks — we'll review it within 24 hours.", isPresented: $showReportConfirm) {
             Button("OK", role: .cancel) {}
@@ -702,9 +707,19 @@ struct ChatDetailView: View {
                     } label: {
                         Label("Invite link", systemImage: "link")
                     }
+                    Button {
+                        showGroupSettings = true
+                    } label: {
+                        Label("Edit group", systemImage: "pencil")
+                    }
                 } else if let other = vm.conversation.other_user {
                     NavigationLink(value: ProfileLoginRoute(login: other.login)) {
                         Label("View profile", systemImage: "person.crop.circle")
+                    }
+                    Button {
+                        Task { await convertToGroupAndAddMember() }
+                    } label: {
+                        Label("Add to conversation", systemImage: "person.crop.circle.badge.plus")
                     }
                 }
                 Button { showSearch = true } label: { Label("Search", systemImage: "magnifyingglass") }
@@ -723,6 +738,11 @@ struct ChatDetailView: View {
                         showLeaveConfirm = true
                     } label: {
                         Label("Leave group", systemImage: "rectangle.portrait.and.arrow.right")
+                    }
+                    Button(role: .destructive) {
+                        showDeleteGroupConfirm = true
+                    } label: {
+                        Label("Delete group", systemImage: "trash")
                     }
                 }
             } label: {
@@ -1129,6 +1149,32 @@ struct ChatDetailView: View {
         socket.onMessageUnpinned = { convId, msgId in
             guard convId == vm.conversation.id else { return }
             vm.pinnedIds.remove(msgId)
+        }
+    }
+
+    /// Promote the current DM to a group then show the add-member sheet
+    /// so the user can pick a third participant. BE returns the updated
+    /// Conversation; we re-hydrate via vm.load() so the header + ••• menu
+    /// switch into group mode.
+    private func convertToGroupAndAddMember() async {
+        do {
+            _ = try await APIClient.shared.convertToGroup(id: vm.conversation.id)
+            await vm.load()
+            showAddMember = true
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't convert", error.localizedDescription)
+        }
+    }
+
+    private func disbandGroup() async {
+        deletingGroup = true
+        defer { deletingGroup = false }
+        do {
+            try await APIClient.shared.disbandGroup(id: vm.conversation.id)
+            ToastCenter.shared.show(.success, "Group deleted")
+            dismiss()
+        } catch {
+            ToastCenter.shared.show(.error, "Couldn't delete", error.localizedDescription)
         }
     }
 
