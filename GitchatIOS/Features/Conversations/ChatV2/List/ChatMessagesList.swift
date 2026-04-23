@@ -160,20 +160,25 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // keyboard avoidance already shrinks the list's frame when the
         // keyboard opens, so we do NOT add a bottom contentInset here
         // (doing so double-counts and leaves a tall empty band below
-        // the last message). We still want the list to park on the
-        // latest message when the keyboard rises, so kick a
-        // scroll-to-bottom once — but only when the inset value
-        // actually changed upward.
-        if coord.lastBottomInset != bottomInset {
-            let opening = bottomInset > coord.lastBottomInset
-            coord.lastBottomInset = bottomInset
-            if opening {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak tv] in
+        // the last message).
+        //
+        // `keyboard.height` animates every frame during the
+        // interpolatingSpring so `bottomInset` changes on every tick.
+        // We only want to fire scroll-to-bottom on the hidden→shown
+        // TRANSITION, not every frame of the animation — otherwise
+        // the scheduled scrolls pile up and the list bounces like a
+        // spring. `keyboardWasOpen` is the edge detector.
+        let isOpen = bottomInset > 0.5
+        if coord.keyboardWasOpen != isOpen {
+            coord.keyboardWasOpen = isOpen
+            if isOpen {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak tv] in
                     guard let tv else { return }
                     coord.scrollToBottom(in: tv, animated: true)
                 }
             }
         }
+        coord.lastBottomInset = bottomInset
 
         // Pagination compensation — keep the current top-of-screen row
         // parked when older messages prepend.
@@ -240,6 +245,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         var lastReadCursors: [String: String] = [:]
         var lastPulsingId: String?
         var lastBottomInset: CGFloat = 0
+        var keyboardWasOpen: Bool = false
         var lastScrollToBottomToken: Int = 0
         var didInitialScroll = false
         var initialScrollAt: Date?

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Horizontal capsule with 8 quick emojis + a "more" chevron. Sits
 /// above the preview bubble inside `MessageMenuOverlay`. Emojis the
@@ -48,8 +49,13 @@ struct ReactionSelectionView: View {
     private func emojiButton(_ emoji: String) -> some View {
         let isSelected = currentReactions.contains(emoji)
         Button { onPick(emoji) } label: {
-            Text(emoji)
-                .font(.system(size: 26))
+            Text(verbatim: emoji)
+                // AppleColorEmoji explicitly so the glyph can't fall
+                // back to a custom app-level font (e.g. Geist) that
+                // has no emoji coverage and would render missing
+                // squares.
+                .font(Font(UIFont(name: "AppleColorEmoji", size: 26)
+                           ?? UIFont.systemFont(ofSize: 26)))
                 .frame(width: bubbleDiameter, height: bubbleDiameter)
                 .background(
                     Group {
