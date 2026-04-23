@@ -26,6 +26,7 @@
 		301A8A5BBE220BDAD5E67750 /* Geist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A624F25A8589989F02FE384 /* Geist-Regular.ttf */; };
 		30B5B529C093F9BC6611C3B4 /* MacReadableWidth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DBC8FEE623A8B5FB4BDFFBC /* MacReadableWidth.swift */; };
 		345DAB43FC963AC5DC04D6F6 /* ConversationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16BA9650859D21117E8FF1B /* ConversationsListView.swift */; };
+		354CA3C2BF0A5A320F72340D /* InvitePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5504187F7E16505485EECBE /* InvitePreviewSheet.swift */; };
 		373D74BE3BC0816A5C64EE10 /* MacEscapeToHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F09F948E748AEF5080DB1B /* MacEscapeToHome.swift */; };
 		37506F82CD9AC83736AEFDF5 /* ShareAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449D98B405970A2AF05994F1 /* ShareAPI.swift */; };
 		38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D5340BD447D966282E2E67D /* Haptics.swift */; };
@@ -58,6 +59,7 @@
 		79E4A5DE2ACFB58124D5BB7A /* ImageDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8B403BD6EAA7FADB23F9B5 /* ImageDownloader.swift */; };
 		80C07FFED87C334C9E6943FF /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500978A5175704DEC944236B /* NotificationService.swift */; };
 		84444B1C46F03AC10E764DAC /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F06688A6AEFA05D9DA56B8 /* CachedAsyncImage.swift */; };
+		85D7EE81B5791E46FB9D5E00 /* GroupInviteLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 169765DCCC813091D7683903 /* GroupInviteLinkSheet.swift */; };
 		875CBDD4A2B05627C889CFF4 /* OneSignalNotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		87F1CB4EFE6D24FE348C379A /* ConversationsCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CB898980AE4010FDBE8070 /* ConversationsCache.swift */; };
 		8AD5EE1720D14E153C09F5BA /* StoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07857501623E25CD298B606 /* StoreManager.swift */; };
@@ -71,6 +73,7 @@
 		A7396B793DDA8316A187E165 /* PresenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1257724417C399DFA806F4A /* PresenceStore.swift */; };
 		A834FFACC2EFD9215F4C6A3A /* ShareConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46DAB3DF885FFD1C9FC46733 /* ShareConfig.swift */; };
 		A9CB0EEA7EC214D19D530910 /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808AF0F70444427011FF450A /* PushManager.swift */; };
+		AB42B8891C75693B046A5BD6 /* APIClient+Invite.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53A491227A1B50663F174A3 /* APIClient+Invite.swift */; };
 		AB75B64F86D9214FFC78C723 /* AddMemberSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1215054ABAC62F54D09E67A9 /* AddMemberSheet.swift */; };
 		AB9FCA5C4BD98C40D7E5CC9C /* TypingIndicatorRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71BF468C5E19762E01C9A603 /* TypingIndicatorRow.swift */; };
 		AC3DF2D2EBA66464D53D71CC /* GitHubWebOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9078C15E5B9CC4441DCE26 /* GitHubWebOAuth.swift */; };
@@ -141,6 +144,7 @@
 		1171C3E5B7CAEFCD3F9C388C /* ExploreSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreSheet.swift; sourceTree = "<group>"; };
 		1215054ABAC62F54D09E67A9 /* AddMemberSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddMemberSheet.swift; sourceTree = "<group>"; };
 		1340F67554881C8FB0BC0BFA /* MacHover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacHover.swift; sourceTree = "<group>"; };
+		169765DCCC813091D7683903 /* GroupInviteLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupInviteLinkSheet.swift; sourceTree = "<group>"; };
 		170CC226995548D4A03863C3 /* SeenBySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeenBySheet.swift; sourceTree = "<group>"; };
 		17539A82EA8BDD61C6458F4F /* SyncingDotsLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncingDotsLabel.swift; sourceTree = "<group>"; };
 		1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MembersSheet.swift; sourceTree = "<group>"; };
@@ -216,8 +220,10 @@
 		DDDF70233C14FFDD5E7CB1A8 /* ChatDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailView.swift; sourceTree = "<group>"; };
 		DE08A0DE3086C45434C3F914 /* GitchatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitchatApp.swift; sourceTree = "<group>"; };
 		DE2F21B2C49829CF682C71EB /* MessageBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubble.swift; sourceTree = "<group>"; };
+		E53A491227A1B50663F174A3 /* APIClient+Invite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Invite.swift"; sourceTree = "<group>"; };
 		ED882894AD818DBFB0421E96 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		F5504187F7E16505485EECBE /* InvitePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvitePreviewSheet.swift; sourceTree = "<group>"; };
 		F7537B4250B26209B8C7F03C /* Geist-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-SemiBold.ttf"; sourceTree = "<group>"; };
 		F7E0D975F7A5F9F05AE4C937 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
@@ -388,6 +394,7 @@
 			isa = PBXGroup;
 			children = (
 				ED882894AD818DBFB0421E96 /* APIClient.swift */,
+				E53A491227A1B50663F174A3 /* APIClient+Invite.swift */,
 				B9A44DB5595F253E8FA0F678 /* AuthStore.swift */,
 			);
 			path = Networking;
@@ -510,6 +517,7 @@
 				4ED56669CED0DEE797EABF78 /* EmojiPickerSheet.swift */,
 				7A0AAC07BE23842F6B28DC04 /* ForwardSheet.swift */,
 				24DA1766BE87B16368E73F58 /* GlassPill.swift */,
+				169765DCCC813091D7683903 /* GroupInviteLinkSheet.swift */,
 				40DB657ADF1F6FC16C8A2BA9 /* ImageCropSheet.swift */,
 				DC7E871CD8B3B98D4064FC71 /* ImageViewerSheet.swift */,
 				1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */,
@@ -541,6 +549,7 @@
 				DDDF70233C14FFDD5E7CB1A8 /* ChatDetailView.swift */,
 				44CB898980AE4010FDBE8070 /* ConversationsCache.swift */,
 				A16BA9650859D21117E8FF1B /* ConversationsListView.swift */,
+				F5504187F7E16505485EECBE /* InvitePreviewSheet.swift */,
 				79D9DA88399CF4A4C8C4371F /* NewChatView.swift */,
 				D56E29712BD2BE0919147855 /* ChatDetail */,
 			);
@@ -708,6 +717,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AB42B8891C75693B046A5BD6 /* APIClient+Invite.swift in Sources */,
 				B089CE1EDCE2E0EB3376D18E /* APIClient.swift in Sources */,
 				AB75B64F86D9214FFC78C723 /* AddMemberSheet.swift in Sources */,
 				4F15046CCB7A9CA0952031AB /* AnalyticsTracker.swift in Sources */,
@@ -734,11 +744,13 @@
 				AC3DF2D2EBA66464D53D71CC /* GitHubWebOAuth.swift in Sources */,
 				D3A3045A0F089C628A6E343D /* GitchatApp.swift in Sources */,
 				1002899F9F99F440D42DC48F /* GlassPill.swift in Sources */,
+				85D7EE81B5791E46FB9D5E00 /* GroupInviteLinkSheet.swift in Sources */,
 				38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */,
 				3BB278E3A94069839823436D /* ImageCropSheet.swift in Sources */,
 				79E4A5DE2ACFB58124D5BB7A /* ImageDownloader.swift in Sources */,
 				C5707AE9DCD25A6E076EA2E8 /* ImageViewerSheet.swift in Sources */,
 				27D2E36C0F88847474346B66 /* InstantTooltip.swift in Sources */,
+				354CA3C2BF0A5A320F72340D /* InvitePreviewSheet.swift in Sources */,
 				C98522FBA2E4D5570269FF3C /* KeyboardHeight.swift in Sources */,
 				633B7848AFE04D7B0D1939B2 /* LinkGithubBanner.swift in Sources */,
 				54503540CFF2CBDF6CCAE91C /* LinkPreviewCard.swift in Sources */,

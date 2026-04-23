@@ -118,6 +118,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - fb1492200602416732
+          - CFBundleURLName: chat.git.invite
+            CFBundleURLSchemes:
+              - gitchat
         NSUserActivityTypes:
           - INSendMessageIntent
     settings:

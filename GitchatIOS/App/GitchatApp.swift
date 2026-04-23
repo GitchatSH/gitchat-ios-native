@@ -44,6 +44,9 @@ struct GitchatApp: App {
                 .onAppear { applyInterfaceStyle() }
                 .onChange(of: appearance) { _ in applyInterfaceStyle() }
                 .onOpenURL { url in
+                    // Gitchat-native deep links (invite etc.) short-circuit
+                    // the Facebook SDK handler.
+                    if AppRouter.shared.handleDeepLink(url) { return }
                     ApplicationDelegate.shared.application(
                         UIApplication.shared,
                         open: url,

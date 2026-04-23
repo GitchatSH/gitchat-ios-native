@@ -36,6 +36,7 @@ struct ChatDetailView: View {
     @State private var showMembers = false
     @State private var showAddMember = false
     @State private var showLeaveConfirm = false
+    @State private var showInviteLink = false
     @Environment(\.dismiss) private var dismiss
     @FocusState private var composerFocused: Bool
     @State private var pendingDropImages: [UIImage] = []
@@ -350,6 +351,12 @@ struct ChatDetailView: View {
             ) {
                 Task { await vm.load() }
             }
+        }
+        .sheet(isPresented: $showInviteLink) {
+            GroupInviteLinkSheet(
+                conversationId: vm.conversation.id,
+                groupName: vm.conversation.group_name
+            )
         }
         .sheet(item: $reportingMessage) { msg in reportSheet(for: msg) }
         .alert("Thanks — we'll review it within 24 hours.", isPresented: $showReportConfirm) {
@@ -689,6 +696,11 @@ struct ChatDetailView: View {
                         showAddMember = true
                     } label: {
                         Label("Add member", systemImage: "person.crop.circle.badge.plus")
+                    }
+                    Button {
+                        showInviteLink = true
+                    } label: {
+                        Label("Invite link", systemImage: "link")
                     }
                 } else if let other = vm.conversation.other_user {
                     NavigationLink(value: ProfileLoginRoute(login: other.login)) {
