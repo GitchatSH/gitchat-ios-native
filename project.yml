@@ -5,6 +5,27 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
   developmentLanguage: en
+schemes:
+  GitchatIOS:
+    build:
+      targets:
+        GitchatIOS: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+      preActions:
+        - name: Bump build number
+          settingsTarget: GitchatIOS
+          script: |
+            cd "$SRCROOT"
+            ./scripts/bump-build.sh >> /tmp/gitchat-bump.log 2>&1
 settings:
   base:
     DEVELOPMENT_TEAM: 9S5F8693FB
@@ -32,7 +53,6 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
-    scheme: {}
     sources:
       - path: GitchatIOS
     resources:
