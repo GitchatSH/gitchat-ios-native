@@ -156,20 +156,22 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             coord.reconfigure(ids: affected)
         }
 
-        // Keyboard / composer-driven bottom inset. Schedule a
-        // scroll-to-bottom after the keyboard settles so the list
-        // lands at the right place regardless of which phase we're in.
+        // Keyboard-driven scroll-to-bottom: ChatView's default SwiftUI
+        // keyboard avoidance already shrinks the list's frame when the
+        // keyboard opens, so we do NOT add a bottom contentInset here
+        // (doing so double-counts and leaves a tall empty band below
+        // the last message). We still want the list to park on the
+        // latest message when the keyboard rises, so kick a
+        // scroll-to-bottom once — but only when the inset value
+        // actually changed upward.
         if coord.lastBottomInset != bottomInset {
+            let opening = bottomInset > coord.lastBottomInset
             coord.lastBottomInset = bottomInset
-            tv.contentInset.bottom = bottomInset
-            tv.verticalScrollIndicatorInsets.bottom = bottomInset
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak tv] in
-                guard let tv else { return }
-                coord.scrollToBottom(in: tv, animated: true)
-            }
-            DispatchQueue.main.async { [weak tv] in
-                guard let tv else { return }
-                coord.scrollToBottom(in: tv, animated: false)
+            if opening {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak tv] in
+                    guard let tv else { return }
+                    coord.scrollToBottom(in: tv, animated: true)
+                }
             }
         }
 
@@ -275,7 +277,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 cell.contentConfiguration = UIHostingConfiguration {
                     TypingIndicatorRow(logins: logins)
                 }
-                .margins(.all, 0)
+                .margins(.horizontal, 12)
+                .margins(.vertical, 2)
                 return
             }
             if id == ChatV2SeenRowID {
@@ -289,7 +292,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     .padding(.trailing, 6)
                     .padding(.top, 2)
                 }
-                .margins(.all, 0)
+                .margins(.horizontal, 12)
+                .margins(.vertical, 2)
                 return
             }
             guard let msg = lastItems.first(where: { $0.id == id }) else { return }
@@ -298,10 +302,17 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // "show header" / "same sender as previous" without doing
             // another lookup.
             let idx = lastItems.firstIndex(where: { $0.id == id }) ?? indexPath.row
+            // Horizontal margin gives breathing room from the screen
+            // edges (ports the old ChatCollectionView's
+            // `section.contentInsets = .init(top: 12, leading: 12,
+            // bottom: 12, trailing: 12)`). Vertical margin 2 gives 4pt
+            // total between adjacent bubbles (ports
+            // `section.interGroupSpacing = 4`).
             cell.contentConfiguration = UIHostingConfiguration {
                 parent.cellBuilder(msg, idx)
             }
-            .margins(.all, 0)
+            .margins(.horizontal, 12)
+            .margins(.vertical, 2)
         }
 
         // MARK: Snapshot application
