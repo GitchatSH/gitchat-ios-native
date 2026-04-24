@@ -44,7 +44,10 @@ struct GitchatApp: App {
     var body: some Scene {
         WindowGroup {
             rootContent
-                .onAppear { applyInterfaceStyle() }
+                .onAppear {
+                    applyInterfaceStyle()
+                    hideCatalystTitle()
+                }
                 .onChange(of: appearance) { _ in applyInterfaceStyle() }
                 .onOpenURL { url in
                     // Gitchat-native deep links (invite etc.) short-circuit
@@ -106,6 +109,27 @@ struct GitchatApp: App {
         case "dark": return .dark
         default: return nil
         }
+    }
+
+    /// On Catalyst, the Mac window's titlebar shows the current
+    /// navigationTitle ("Settings", "Chats", etc). The titlebar row
+    /// itself can't be removed (it holds the traffic lights — macOS
+    /// chrome requirement). We make it as minimal as possible:
+    /// - Hide the title text.
+    /// - Use `.unifiedCompact` toolbar style so the bar is the
+    ///   smallest height Catalyst allows.
+    /// True transparent/overlay titlebar (traffic lights floating
+    /// over content) would require switching the project to
+    /// "Optimize Interface for Mac" mode.
+    private func hideCatalystTitle() {
+        #if targetEnvironment(macCatalyst)
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene else { continue }
+            windowScene.titlebar?.titleVisibility = .hidden
+            windowScene.titlebar?.toolbarStyle = .unifiedCompact
+            windowScene.titlebar?.autoHidesToolbarInFullScreen = true
+        }
+        #endif
     }
 
     /// Apply the stored appearance to every UIWindow's

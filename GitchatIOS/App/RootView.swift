@@ -18,7 +18,7 @@ struct RootView: View {
     var body: some View {
         Group {
             if auth.isAuthenticated {
-                MainTabView()
+                authedShell
                     .task {
                         socket.connect()
                         if let login = auth.login { socket.subscribeUser(login: login) }
@@ -69,6 +69,15 @@ struct RootView: View {
                 heartbeatTask?.cancel()
             }
         }
+    }
+
+    @ViewBuilder
+    private var authedShell: some View {
+        #if targetEnvironment(macCatalyst)
+        MacShellView()
+        #else
+        MainTabView()
+        #endif
     }
 
     private func wireGlobalMessageBanner() {

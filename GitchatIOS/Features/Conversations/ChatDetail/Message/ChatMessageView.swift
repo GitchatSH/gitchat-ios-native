@@ -280,7 +280,7 @@ struct ChatMessageView: View {
         let hasLink = ChatMessageText.firstURL(in: parsed.body) != nil
         let showInlineReply = (message.reply != nil) && !hideReplyPreview
         let hasText = !message.content.isEmpty
-        VStack(alignment: .leading, spacing: 0) {
+        let bubble = VStack(alignment: .leading, spacing: 0) {
             if let from = parsed.forwardedFrom {
                 HStack(spacing: 4) {
                     Image(systemName: "arrowshape.turn.up.right.fill")
@@ -302,10 +302,14 @@ struct ChatMessageView: View {
             if hasText {
                 Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
                     .tint(isMe ? .white : theme.replyAccent)
+                #if targetEnvironment(macCatalyst)
+                    .font(.scaledSystem(size: 17))
+                #endif
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, parsed.forwardedFrom == nil && !showInlineReply ? 8 : 6)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, parsed.forwardedFrom == nil && !showInlineReply ? 10 : 7)
                     .padding(.bottom, parsed.forwardedFrom == nil && !showInlineReply ? 0 : 2)
             }
             if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
@@ -314,9 +318,6 @@ struct ChatMessageView: View {
                     .padding(.bottom, 6)
             }
         }
-        #if targetEnvironment(macCatalyst)
-        .modifier(MacLinkBubbleWidthV2(hasLink: hasLink))
-        #endif
         .background(isMe ? theme.bubbleOutgoing : theme.bubbleIncoming)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .foregroundStyle(isMe ? theme.bubbleOutgoingText : theme.bubbleIncomingText)
@@ -329,6 +330,13 @@ struct ChatMessageView: View {
                     lineWidth: 1
                 )
         )
+        #if targetEnvironment(macCatalyst)
+        BubbleHugLayout(maxWidth: hasLink ? 312 : 560) {
+            bubble
+        }
+        #else
+        bubble
+        #endif
     }
 
     // MARK: Lifecycle
@@ -346,17 +354,33 @@ struct ChatMessageView: View {
 }
 
 #if targetEnvironment(macCatalyst)
-/// Clamps the text-bubble width on Catalyst when a link preview is
-/// present so the preview card stays readable (the bubble otherwise
-/// grows to fill the available space and the card stretches).
-private struct MacLinkBubbleWidthV2: ViewModifier {
-    let hasLink: Bool
-    func body(content: Content) -> some View {
-        if hasLink {
-            content.frame(maxWidth: 312, alignment: .leading)
-        } else {
-            content
-        }
+/// Clamps the text-bubble width on Catalyst so long lines stay
+/// readable while letting short bubbles hug their content.
+///
+/// SwiftUI's `.frame(maxWidth:)` is unreliable for this use case:
+/// in the UITableViewCell + UIHostingConfiguration context the
+/// cell proposes the full table width, and frame modifiers —
+/// especially with an `alignment:` argument — end up filling the
+/// proposed width instead of hugging. Using a custom `Layout`
+/// gives us direct control: we propose `maxWidth` to the subview
+/// (so long text wraps at the cap) and then report the subview's
+/// measured size (so short text hugs).
+private struct BubbleHugLayout: Layout {
+    let maxWidth: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+        let childProposal = ProposedViewSize(width: maxWidth, height: proposal.height)
+        let measured = subview.sizeThatFits(childProposal)
+        return CGSize(width: min(measured.width, maxWidth), height: measured.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let subview = subviews.first else { return }
+        subview.place(
+            at: bounds.origin,
+            proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
+        )
     }
 }
 #endif

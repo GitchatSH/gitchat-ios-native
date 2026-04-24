@@ -33,11 +33,14 @@ struct DiscoverTeamsList: View {
                         onJoin: { Task { await join(repo) } }
                     )
                     .listRowSeparator(.hidden)
+                    #if targetEnvironment(macCatalyst)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    #endif
+                    .hideMacScrollIndicators()
                 }
                 .listStyle(.plain)
-                #if !targetEnvironment(macCatalyst)
-                .scrollIndicators(.hidden)
-                #endif
+                .macRowListContainer()
+                .scrollIndicators(.hidden, axes: .vertical)
             }
         }
     }
@@ -132,11 +135,14 @@ struct DiscoverCommunitiesList: View {
                         onJoin: { Task { await join(repo) } }
                     )
                     .listRowSeparator(.hidden)
+                    #if targetEnvironment(macCatalyst)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    #endif
+                    .hideMacScrollIndicators()
                 }
                 .listStyle(.plain)
-                #if !targetEnvironment(macCatalyst)
-                .scrollIndicators(.hidden)
-                #endif
+                .macRowListContainer()
+                .scrollIndicators(.hidden, axes: .vertical)
             }
         }
     }
@@ -203,10 +209,10 @@ private struct DiscoverRepoRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            RepoAvatar(url: avatarUrl, size: 40)
+            RepoAvatar(url: avatarUrl, size: macRowAvatarSize)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(title).font(macRowTitleFont).lineLimit(1)
+                Text(subtitle).font(macRowSubtitleFont).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer(minLength: 8)
             Button(action: onJoin) {
@@ -214,7 +220,7 @@ private struct DiscoverRepoRow: View {
                     ProgressView().controlSize(.small).frame(width: 60, height: 28)
                 } else {
                     Text("Join")
-                        .font(.caption.bold())
+                        .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                 }
@@ -222,7 +228,12 @@ private struct DiscoverRepoRow: View {
             .buttonStyle(.bordered)
             .disabled(isJoining)
         }
+        #if targetEnvironment(macCatalyst)
+        .padding(.horizontal, macRowHorizontalPadding)
+        .padding(.vertical, macRowVerticalPadding)
+        #else
         .padding(.vertical, 4)
+        #endif
     }
 }
 

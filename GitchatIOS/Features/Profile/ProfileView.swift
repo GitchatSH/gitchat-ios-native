@@ -289,6 +289,7 @@ struct ProfileView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .macReadableWidth()
     }
 
     private var followButtonLabel: some View {
