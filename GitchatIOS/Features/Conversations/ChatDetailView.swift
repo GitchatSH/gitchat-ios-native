@@ -328,6 +328,7 @@ struct ChatDetailView: View {
         }
         a.onCopyText = { msg in
             UIPasteboard.general.string = msg.content
+            ClipboardWatcher.markSelfOriginWrite()
             ToastCenter.shared.show(.success, "Copied")
         }
         a.onCopyImage = { msg in
@@ -591,44 +592,48 @@ struct ChatDetailView: View {
         Task { await vm.uploadImagesAndSend(images: images, senderLogin: auth.login) }
     }
 
-    /// Copy an image message to the system pasteboard using a raw
-    /// bytes + UTI path rather than `UIPasteboard.general.image = img`.
+    /// Copy an image message to the system pasteboard using the raw
+    /// compressed bytes (PNG / JPEG / GIF / HEIC as-received) rather
+    /// than `UIPasteboard.general.image = img`.
     ///
-    /// Background: `UIPasteboard.general.image = img` serializes the
-    /// decoded `UIImage` through `NSItemProvider` for cross-process
-    /// handoff. On older / memory-constrained devices (or when the
-    /// original photo was huge — camera shots can easily be
-    /// 48MB+ decoded), that serialization path has been observed to
-    /// crash with out-of-memory or Obj-C exception signatures that
-    /// Swift can't catch. `UIPasteboard.setData(_:forPasteboardType:)`
-    /// takes the original compressed bytes directly, so iOS never
-    /// has to re-encode or cross-serialize a decoded bitmap — dozens
-    /// of megabytes of PNG become a few hundred KB of JPEG bytes
-    /// that copy cleanly everywhere.
+    /// Why not the `.image =` setter:
+    /// - It serialises the decoded `UIImage` through `NSItemProvider`
+    ///   for cross-process handoff. Camera-sized photos routinely
+    ///   produce 48MB+ decoded bitmaps; serialising that crashes
+    ///   memory-constrained devices with OOM / uncatchable Obj-C
+    ///   exceptions.
+    /// - `ImageCache.load()` returns a UIImage rebuilt by
+    ///   `UIGraphicsImageRenderer`; attaching that synthesised image
+    ///   to the pasteboard has been flaky compared to shipping the
+    ///   original bytes.
+    /// - Animated GIFs get silently flattened to the first frame
+    ///   via `UIImage` — raw-bytes path preserves the animation.
     ///
-    /// Also bypasses a second subtle footgun: when `img` came from
-    /// our `ImageCache.load()` path without a max pixel size, the
-    /// in-memory representation may have been forcibly redrawn by
-    /// `UIGraphicsImageRenderer` — attaching that synthesised image
-    /// to the pasteboard has been flaky compared to shipping the
-    /// original network bytes.
+    /// Where the bytes come from:
+    /// `ImageCache.rawData(for:)` is a memory-cached view of the
+    /// original network bytes. `ImageCache.load()` (the path that
+    /// populates every bubble's displayed image) stashes bytes into
+    /// that cache on every download, so anything the user has seen
+    /// in the chat is a 0-latency memory hit here. Cold miss falls
+    /// back to disk cache, then network. `setData(_:forPasteboardType:)`
+    /// never re-encodes a decoded bitmap.
     private static func copyImageToPasteboard(url: URL) async {
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            if let http = response as? HTTPURLResponse,
-               !(200..<300).contains(http.statusCode) {
-                throw URLError(.badServerResponse)
-            }
-            guard !data.isEmpty else { throw URLError(.zeroByteResource) }
-            let type = pasteboardUTI(for: data, url: url)
-            await MainActor.run {
-                UIPasteboard.general.setData(data, forPasteboardType: type)
-                ToastCenter.shared.show(.success, "Image copied")
-            }
-        } catch {
+        guard let data = await ImageCache.shared.rawData(for: url), !data.isEmpty else {
             await MainActor.run {
                 ToastCenter.shared.show(.error, "Couldn't copy image")
             }
+            return
+        }
+        let type = pasteboardUTI(for: data, url: url)
+        await MainActor.run {
+            UIPasteboard.general.setData(data, forPasteboardType: type)
+            // Tell every ClipboardWatcher in the app that this write
+            // came from us so their notification handlers skip the
+            // main-thread decode + PNG-hash path. Without this the
+            // second+ copy of the same image stalls ~200–500ms on
+            // memory-constrained devices.
+            ClipboardWatcher.markSelfOriginWrite()
+            ToastCenter.shared.show(.success, "Image copied")
         }
     }
 
