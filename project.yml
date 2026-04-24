@@ -45,6 +45,9 @@ packages:
   Mantis:
     url: https://github.com/guoyingtao/Mantis
     from: "2.20.0"
+  Toasts:
+    url: https://github.com/sunghyun-k/swiftui-toasts
+    from: "1.1.1"
 targets:
   GitchatIOS:
     type: application
@@ -70,6 +73,8 @@ targets:
         product: AppsFlyerLib
       - package: Mantis
         product: Mantis
+      - package: Toasts
+        product: Toasts
       - target: OneSignalNotificationServiceExtension
         embed: true
         codeSign: true
