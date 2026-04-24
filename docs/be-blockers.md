@@ -5,42 +5,15 @@ iOS feature that can't ship yet is #43 (in-app update notification) —
 #25 and #31 turned out to be fully covered by the swagger, the earlier
 404s were on wrong paths. Fully resolved blockers removed.
 
-## Issue #43 — In-app update notification (still blocked)
+## Issue #43 — In-app update notification (client shipped, BE pending)
 
-No `/app/version` endpoint in swagger. iOS client cannot ship #43 until
-BE adds it.
+iOS client is merged (see `Core/AppUpdate/`) and uses Apple's iTunes
+lookup API as a fallback for the soft prompt. The force-update gate
+(HTTP 426) and the OneSignal broadcast still need BE.
 
-Need:
+Full spec + response contract: [`be-app-update-endpoint.md`](./be-app-update-endpoint.md)
 
-```
-GET /api/v1/app/version?platform=ios
-```
-
-Response shape:
-
-```json
-{
-  "latestVersion": "1.4.2",
-  "latestBuild": 142,
-  "minimumSupportedVersion": "1.2.0",
-  "releaseNotes": "Faster message search, fixes for muted chats.",
-  "releasedAt": "2026-04-22T03:10:00Z",
-  "storeUrl": "https://apps.apple.com/app/id<APP_ID>",
-  "appStoreId": "<APP_ID>",
-  "isForceUpdate": false
-}
-```
-
-Also required:
-
-- Any API call from a client below `minimumSupportedVersion` should
-  return HTTP **426 Upgrade Required** so the client can flip into
-  force-update mode.
-- OneSignal broadcast on each new release with
-  `additionalData = { "type": "app_update", "version": "1.4.2" }` so
-  the client can re-check on tap.
-
-Also need from ops: the App Store numeric id for Gitchat (the `idNNNN`
+Still blocked on ops: the App Store numeric id for Gitchat (the `idNNNN`
 in the `apps.apple.com/app/idNNNN` URL). Used by
 `SKStoreProductViewController` so the update sheet opens inside the app
 instead of kicking the user out.
