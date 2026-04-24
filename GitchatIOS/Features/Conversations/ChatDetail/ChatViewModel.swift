@@ -240,45 +240,7 @@ final class ChatViewModel: ObservableObject {
                 )
                 OutboxStore.shared.enqueue(pending)
                 Haptics.impact(.light)
-
-                let convId = conversation.id
-                let localID = pending.localID
-                let messageBody = pending.content
-                let replyTo = pending.replyToID
-                Task.detached(priority: .userInitiated) {
-                    do {
-                        let msg = try await APIClient.shared.sendMessage(
-                            conversationId: convId,
-                            body: messageBody,
-                            replyTo: replyTo
-                        )
-                        await MainActor.run {
-                            ChatMessageView.seenIds.insert(msg.id)
-                            OutboxStore.shared.markDelivered(
-                                conversationID: convId,
-                                localID: localID
-                            )
-                            // Server message arrives in vm.messages via:
-                            //  (a) socket onMessageSent (ChatDetailView), or
-                            //  (b) the next vm.load() on re-entry.
-                            // No direct mutation of vm.messages here — vm
-                            // may be dead if user navigated away.
-                        }
-                    } catch {
-                        await MainActor.run {
-                            // Surface the failure as a toast (Task 3 adds the
-                            // persistent failed-bubble UX; until then this is
-                            // the only feedback the user gets).
-                            Haptics.error()
-                            ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
-                            OutboxStore.shared.markFailed(
-                                conversationID: convId,
-                                localID: localID,
-                                error: error.localizedDescription
-                            )
-                        }
-                    }
-                }
+                OutboxStore.runSend(for: pending)
             }
         } catch {
             self.error = error.localizedDescription

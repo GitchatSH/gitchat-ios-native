@@ -387,34 +387,7 @@ struct ChatDetailView: View {
                 conversationID: vm.conversation.id,
                 localID: message.id
             ) else { return }
-            OutboxStore.shared.retry(pending) { p in
-                let convId = p.conversationID
-                let localID = p.localID
-                let body = p.content
-                let replyTo = p.replyToID
-                Task.detached(priority: .userInitiated) {
-                    do {
-                        let msg = try await APIClient.shared.sendMessage(
-                            conversationId: convId, body: body, replyTo: replyTo
-                        )
-                        await MainActor.run {
-                            ChatMessageView.seenIds.insert(msg.id)
-                            OutboxStore.shared.markDelivered(
-                                conversationID: convId, localID: localID
-                            )
-                        }
-                    } catch {
-                        await MainActor.run {
-                            Haptics.error()
-                            ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
-                            OutboxStore.shared.markFailed(
-                                conversationID: convId, localID: localID,
-                                error: error.localizedDescription
-                            )
-                        }
-                    }
-                }
-            }
+            OutboxStore.shared.retry(pending)
         }
         a.onDiscardPending = { message in
             OutboxStore.shared.discard(

@@ -119,16 +119,46 @@ final class OutboxStore: ObservableObject {
         markDelivered(conversationID: conversationID, localID: localID)
     }
 
-    /// Flip a failed pending back to .sending, then re-fire the network call.
-    /// Caller-supplied `send` closure receives the pending and runs the
-    /// transport — this keeps OutboxStore decoupled from APIClient.
-    func retry(_ pendingMsg: PendingMessage,
-               send: @escaping (PendingMessage) -> Void) {
+    /// Flip a failed pending back to .sending and re-fire the send
+    /// pipeline.
+    func retry(_ pendingMsg: PendingMessage) {
         guard var list = pending[pendingMsg.conversationID],
               let idx = list.firstIndex(where: { $0.localID == pendingMsg.localID }) else { return }
         list[idx].state = .sending
         pending[pendingMsg.conversationID] = list
-        send(list[idx])
+        Self.runSend(for: list[idx])
+    }
+
+    /// Run the canonical send pipeline for an already-enqueued pending
+    /// message. `Task.detached` so it survives ChatDetailView dismissal.
+    /// Single source of truth shared by first-attempt sends and retries.
+    static func runSend(for pending: PendingMessage) {
+        let convId = pending.conversationID
+        let localID = pending.localID
+        let body = pending.content
+        let replyTo = pending.replyToID
+        Task.detached(priority: .userInitiated) {
+            do {
+                let msg = try await APIClient.shared.sendMessage(
+                    conversationId: convId, body: body, replyTo: replyTo
+                )
+                await MainActor.run {
+                    ChatMessageView.seenIds.insert(msg.id)
+                    OutboxStore.shared.markDelivered(
+                        conversationID: convId, localID: localID
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    Haptics.error()
+                    ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
+                    OutboxStore.shared.markFailed(
+                        conversationID: convId, localID: localID,
+                        error: error.localizedDescription
+                    )
+                }
+            }
+        }
     }
 
     // MARK: - Reads
@@ -288,43 +318,10 @@ Replace the entire contents of that `else` branch (everything between the `} els
                 )
                 OutboxStore.shared.enqueue(pending)
                 Haptics.impact(.light)
-
-                let convId = conversation.id
-                let localID = pending.localID
-                let messageBody = pending.content
-                let replyTo = pending.replyToID
-                Task.detached(priority: .userInitiated) {
-                    do {
-                        let msg = try await APIClient.shared.sendMessage(
-                            conversationId: convId,
-                            body: messageBody,
-                            replyTo: replyTo
-                        )
-                        await MainActor.run {
-                            ChatMessageView.seenIds.insert(msg.id)
-                            OutboxStore.shared.markDelivered(
-                                conversationID: convId,
-                                localID: localID
-                            )
-                            // Server message arrives in vm.messages via:
-                            //  (a) socket onMessageSent (ChatDetailView), or
-                            //  (b) the next vm.load() on re-entry.
-                            // No direct mutation of vm.messages here — vm
-                            // may be dead if user navigated away.
-                        }
-                    } catch {
-                        await MainActor.run {
-                            OutboxStore.shared.markFailed(
-                                conversationID: convId,
-                                localID: localID,
-                                error: error.localizedDescription
-                            )
-                        }
-                    }
-                }
+                OutboxStore.runSend(for: pending)
 ```
 
-The outer `do { ... } catch { ... }` at lines 169 / 252 stays untouched. Note the new code does not `throw` from the network path — failures are routed through `markFailed` instead, so the outer catch will only fire for synchronous errors (which there are none in the new branch). That's intentional: the toast on first-attempt failure is replaced by the persistent failed bubble + Retry UX in Task 3.
+The outer `do { ... } catch { ... }` stays untouched. `runSend` handles all network success/failure paths internally — the outer catch will only fire for synchronous errors (none in this branch).
 
 - [ ] **Step 3: Add OutboxStore observation to ChatDetailView**
 
@@ -613,32 +610,7 @@ Open `GitchatIOS/Features/Conversations/ChatDetailView.swift`. Find `private var
                 conversationID: vm.conversation.id,
                 localID: message.id
             ) else { return }
-            OutboxStore.shared.retry(pending) { p in
-                let convId = p.conversationID
-                let localID = p.localID
-                let body = p.content
-                let replyTo = p.replyToID
-                Task.detached(priority: .userInitiated) {
-                    do {
-                        let msg = try await APIClient.shared.sendMessage(
-                            conversationId: convId, body: body, replyTo: replyTo
-                        )
-                        await MainActor.run {
-                            ChatMessageView.seenIds.insert(msg.id)
-                            OutboxStore.shared.markDelivered(
-                                conversationID: convId, localID: localID
-                            )
-                        }
-                    } catch {
-                        await MainActor.run {
-                            OutboxStore.shared.markFailed(
-                                conversationID: convId, localID: localID,
-                                error: error.localizedDescription
-                            )
-                        }
-                    }
-                }
-            }
+            OutboxStore.shared.retry(pending)
         }
         a.onDiscardPending = { message in
             OutboxStore.shared.discard(
@@ -648,7 +620,7 @@ Open `GitchatIOS/Features/Conversations/ChatDetailView.swift`. Find `private var
         }
 ```
 
-Note: the retry's send pipeline is structurally identical to the one in `ChatViewModel.send()` from Task 2 Step 2. Duplication is intentional and small (the only callers are `send()` and `retry`); extracting to a helper would just relocate the closure plumbing without simplifying anything.
+`OutboxStore.retry(_:)` calls `OutboxStore.runSend(for:)` internally — no inline pipeline needed here.
 
 - [ ] **Step 5: Build**
 

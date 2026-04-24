@@ -72,16 +72,46 @@ final class OutboxStore: ObservableObject {
         markDelivered(conversationID: conversationID, localID: localID)
     }
 
-    /// Flip a failed pending back to .sending, then re-fire the network call.
-    /// Caller-supplied `send` closure receives the pending and runs the
-    /// transport — this keeps OutboxStore decoupled from APIClient.
-    func retry(_ pendingMsg: PendingMessage,
-               send: @escaping (PendingMessage) -> Void) {
+    /// Flip a failed pending back to .sending and re-fire the send
+    /// pipeline.
+    func retry(_ pendingMsg: PendingMessage) {
         guard var list = pending[pendingMsg.conversationID],
               let idx = list.firstIndex(where: { $0.localID == pendingMsg.localID }) else { return }
         list[idx].state = .sending
         pending[pendingMsg.conversationID] = list
-        send(list[idx])
+        Self.runSend(for: list[idx])
+    }
+
+    /// Run the canonical send pipeline for an already-enqueued pending
+    /// message. `Task.detached` so it survives ChatDetailView dismissal.
+    /// Single source of truth shared by first-attempt sends and retries.
+    static func runSend(for pending: PendingMessage) {
+        let convId = pending.conversationID
+        let localID = pending.localID
+        let body = pending.content
+        let replyTo = pending.replyToID
+        Task.detached(priority: .userInitiated) {
+            do {
+                let msg = try await APIClient.shared.sendMessage(
+                    conversationId: convId, body: body, replyTo: replyTo
+                )
+                await MainActor.run {
+                    ChatMessageView.seenIds.insert(msg.id)
+                    OutboxStore.shared.markDelivered(
+                        conversationID: convId, localID: localID
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    Haptics.error()
+                    ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
+                    OutboxStore.shared.markFailed(
+                        conversationID: convId, localID: localID,
+                        error: error.localizedDescription
+                    )
+                }
+            }
+        }
     }
 
     // MARK: - Reads
