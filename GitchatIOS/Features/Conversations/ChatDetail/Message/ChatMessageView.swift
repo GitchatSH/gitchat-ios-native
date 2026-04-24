@@ -113,9 +113,6 @@ struct ChatMessageView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            if let reply = message.reply, !hideReplyPreview {
-                ChatReplyPreview(reply: reply, isMe: isMe) { onReplyTap?() }
-            }
             bubble
                 .overlay(alignment: .topTrailing) { pinBadge }
                 .scaleEffect(isPulsing ? 1.08 : 1)
@@ -209,11 +206,58 @@ struct ChatMessageView: View {
                 legacySingleAttachment(url: url, urlString: s)
             }
 
-            // Text body.
-            if !message.content.isEmpty {
+            // Text body. Render the bubble when there's text OR
+            // when this is a reply (the inline quote lives inside
+            // the bubble as part of its content, not as a separate
+            // pre-bubble element).
+            if !message.content.isEmpty ||
+                (message.reply != nil && !hideReplyPreview) {
                 textBubble
             }
         }
+    }
+
+    /// Compact reply quote styled to live INSIDE the bubble (same
+    /// rounded container as the text). Mirrors the iMessage /
+    /// Telegram look where the quoted snippet reads as a nested
+    /// block, not a separate row above the bubble.
+    ///
+    /// The accent strip is an `.overlay` on the text VStack rather
+    /// than a sibling in an HStack — a bare `RoundedRectangle.frame(width: 3)`
+    /// (no height) expands vertically to fill whatever the parent
+    /// offers, which in the menu preview context was a lot, and
+    /// ballooned the quote block to an enormous square. Overlay
+    /// gets height from the text column, so the strip is always
+    /// exactly as tall as the content.
+    @ViewBuilder
+    private func inlineReplyQuote(for reply: ReplyPreview) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            if let login = reply.sender_login {
+                Text("@\(login)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isMe ? Color.white : theme.replyAccent)
+            }
+            Text(reply.body ?? "…")
+                .font(.system(size: 12))
+                .foregroundStyle(isMe ? Color.white.opacity(0.85) : .secondary)
+                .lineLimit(2)
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 10)
+        .padding(.vertical, 5)
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(isMe ? Color.white : theme.replyAccent)
+                .frame(width: 3)
+                .padding(.vertical, 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            isMe ? Color.white.opacity(0.18) : Color.black.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { onReplyTap?() }
     }
 
     @ViewBuilder
@@ -234,6 +278,8 @@ struct ChatMessageView: View {
     private var textBubble: some View {
         let parsed = ChatMessageText.parseForwarded(message.content)
         let hasLink = ChatMessageText.firstURL(in: parsed.body) != nil
+        let showInlineReply = (message.reply != nil) && !hideReplyPreview
+        let hasText = !message.content.isEmpty
         VStack(alignment: .leading, spacing: 0) {
             if let from = parsed.forwardedFrom {
                 HStack(spacing: 4) {
@@ -247,13 +293,21 @@ struct ChatMessageView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 4)
             }
-            Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
-                .tint(isMe ? .white : theme.replyAccent)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-                .padding(.horizontal, 12)
-                .padding(.vertical, parsed.forwardedFrom == nil ? 8 : 6)
-                .padding(.bottom, parsed.forwardedFrom == nil ? 0 : 2)
+            if showInlineReply, let reply = message.reply {
+                inlineReplyQuote(for: reply)
+                    .padding(.horizontal, 6)
+                    .padding(.top, parsed.forwardedFrom == nil ? 6 : 2)
+                    .padding(.bottom, hasText ? 2 : 6)
+            }
+            if hasText {
+                Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
+                    .tint(isMe ? .white : theme.replyAccent)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, parsed.forwardedFrom == nil && !showInlineReply ? 8 : 6)
+                    .padding(.bottom, parsed.forwardedFrom == nil && !showInlineReply ? 0 : 2)
+            }
             if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
                 LinkPreviewCard(url: linkURL, isMe: isMe)
                     .padding(.horizontal, 6)

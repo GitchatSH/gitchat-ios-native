@@ -17,6 +17,13 @@ extension NSNotification.Name {
     /// Posted when a recipient accepts a wave — fires on the sender's
     /// socket. The `object` is the new DM conversation id (String).
     static let gitchatWaveResponded = NSNotification.Name("gitchat.waveResponded")
+
+    /// Posted by ChatDetailView after a successful group-settings save.
+    /// Optimistic — we don't wait for BE's `conversation:updated` event
+    /// because it sometimes lags or doesn't fire, leaving the list with
+    /// a stale avatar / name until the next manual refresh.
+    /// `userInfo`: `id: String`, `name: String?`, `avatarUrl: String?`.
+    static let gitchatConversationMetadataChanged = NSNotification.Name("gitchat.conversationMetadataChanged")
 }
 
 @MainActor

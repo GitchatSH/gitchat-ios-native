@@ -862,6 +862,18 @@ private struct ChatDetailSheets: ViewModifier {
                 showDeleteConfirm: $showDeleteGroupConfirm,
                 onSettingsSaved: { newName, newAvatarUrl in
                     vm.applyLocalMetadata(name: newName, avatarUrl: newAvatarUrl)
+                    // Tell the list to patch its row too — BE's
+                    // conversation:updated sometimes lags, which leaves
+                    // the list showing a stale avatar for a long time.
+                    NotificationCenter.default.post(
+                        name: .gitchatConversationMetadataChanged,
+                        object: nil,
+                        userInfo: [
+                            "id": vm.conversation.id,
+                            "name": newName as Any,
+                            "avatarUrl": newAvatarUrl as Any,
+                        ]
+                    )
                     Task { await vm.load() }
                 },
                 onDeleteConfirmed: onDisbandGroup

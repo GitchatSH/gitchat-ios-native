@@ -11,7 +11,7 @@ struct GroupSettingsSheet: View {
     @State private var name: String
     @State private var showPicker = false
     @State private var photoItem: PhotosPickerItem?
-    @State private var pendingCropImage: UIImage?
+    @State private var cropWrapper: IdentifiableImage?
     @State private var uploadedAvatarUrl: String?
     @State private var previewAvatarImage: UIImage?
     @State private var saving = false
@@ -73,16 +73,14 @@ struct GroupSettingsSheet: View {
                 Task {
                     if let data = try? await item.loadTransferable(type: Data.self),
                        let img = UIImage(data: data) {
-                        pendingCropImage = img
+                        cropWrapper = IdentifiableImage(image: img)
                     }
+                    photoItem = nil
                 }
             }
-            .sheet(item: Binding<IdentifiableImage?>(
-                get: { pendingCropImage.map(IdentifiableImage.init) },
-                set: { if $0 == nil { pendingCropImage = nil } }
-            )) { wrapper in
+            .sheet(item: $cropWrapper) { wrapper in
                 ImageCropSheet(image: wrapper.image) { cropped in
-                    pendingCropImage = nil
+                    cropWrapper = nil
                     Task { await uploadAvatar(cropped) }
                 }
             }

@@ -49,6 +49,37 @@ final class ConversationsViewModel: ObservableObject {
         ConversationsCache.shared.store(conversations)
     }
 
+    /// Patch a row's group name + avatar in place after the user saves
+    /// group settings from inside the chat. BE emits
+    /// `conversation:updated` too, but not always reliably — without
+    /// this optimistic patch the list stays on the old avatar until a
+    /// cold reload.
+    func applyLocalMetadata(id: String, name: String?, avatarUrl: String?) {
+        guard let idx = conversations.firstIndex(where: { $0.id == id }) else { return }
+        let c = conversations[idx]
+        conversations[idx] = Conversation(
+            id: c.id,
+            type: c.type,
+            is_group: c.is_group,
+            group_name: name ?? c.group_name,
+            group_avatar_url: avatarUrl ?? c.group_avatar_url,
+            repo_full_name: c.repo_full_name,
+            participants: c.participants,
+            other_user: c.other_user,
+            last_message: c.last_message,
+            last_message_preview: c.last_message_preview,
+            last_message_text: c.last_message_text,
+            last_message_at: c.last_message_at,
+            unread_count: c.unread_count,
+            pinned: c.pinned,
+            pinned_at: c.pinned_at,
+            is_request: c.is_request,
+            updated_at: c.updated_at,
+            is_muted: c.is_muted
+        )
+        ConversationsCache.shared.store(conversations)
+    }
+
     func isLocallyMuted(_ convo: Conversation) -> Bool {
         if locallyMuted.contains(convo.id) { return true }
         if locallyUnmuted.contains(convo.id) { return false }
@@ -495,6 +526,13 @@ struct ConversationsListView: View {
             .onReceive(NotificationCenter.default.publisher(for: .gitchatMessageSent)) { note in
                 guard let msg = note.object as? Message else { return }
                 vm.applyIncomingMessage(msg)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .gitchatConversationMetadataChanged)) { note in
+                guard let info = note.userInfo,
+                      let id = info["id"] as? String else { return }
+                let name = info["name"] as? String
+                let avatarUrl = info["avatarUrl"] as? String
+                vm.applyLocalMetadata(id: id, name: name, avatarUrl: avatarUrl)
             }
             .onChange(of: scenePhase) { phase in
                 if phase == .active { Task { await vm.load() } }
