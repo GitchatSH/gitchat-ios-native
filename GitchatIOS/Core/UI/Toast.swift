@@ -1,5 +1,22 @@
 import SwiftUI
-import UIKit
+import Toasts
+
+/// Global toast surface.
+///
+/// Back when this was a homemade capsule the subtitle line could run
+/// past the screen edge (the capsule was `.fixedSize(horizontal: true)`
+/// which grows a fixed-height pill until it overflows). Now we bridge
+/// the existing `ToastCenter.shared.show(...)` call sites — scattered
+/// through services, view models, and async closures — to the
+/// `swiftui-toasts` library, which handles wrapping, safe area,
+/// swipe-to-dismiss, VoiceOver, and dark mode for us.
+///
+/// The old API is preserved verbatim so this swap is a zero-call-site
+/// change: `ToastCenter.shared.show(.success, "Title", "Subtitle")`
+/// still works. Title/subtitle collapse into the library's single
+/// `message` field (joined with a newline) because the library's
+/// built-in layout already gives correct hierarchy via line breaks
+/// and word wrapping — no need for our own two-line VStack.
 
 struct Toast: Identifiable, Equatable {
     enum Kind: Equatable {
@@ -10,14 +27,6 @@ struct Toast: Identifiable, Equatable {
             case .info: return "info.circle.fill"
             case .warning: return "exclamationmark.triangle.fill"
             case .error: return "xmark.octagon.fill"
-            }
-        }
-        var tint: Color {
-            switch self {
-            case .success: return .green
-            case .info: return .accentColor
-            case .warning: return .orange
-            case .error: return .red
             }
         }
     }
@@ -31,86 +40,64 @@ struct Toast: Identifiable, Equatable {
 @MainActor
 final class ToastCenter: ObservableObject {
     static let shared = ToastCenter()
-    @Published var current: Toast?
-    private var dismissTask: Task<Void, Never>?
+
+    /// Fresh envelope on every `show()` so publishing the same toast
+    /// twice in a row still fires `.onReceive` (a raw `Toast?` with
+    /// the same title/subtitle would be Equatable-equal and dedup'd).
+    struct Pending: Identifiable {
+        let id = UUID()
+        let toast: Toast
+    }
+
+    @Published var pending: Pending?
+
+    private init() {}
 
     func show(_ kind: Toast.Kind, _ title: String, _ subtitle: String? = nil) {
         Haptics.notify(kind)
-        dismissTask?.cancel()
-        let toast = Toast(kind: kind, title: title, subtitle: subtitle)
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-            current = toast
-        }
-        dismissTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    self?.current = nil
-                }
-            }
-        }
-    }
-
-    func dismiss() {
-        dismissTask?.cancel()
-        withAnimation(.easeInOut(duration: 0.2)) { current = nil }
+        pending = Pending(toast: Toast(kind: kind, title: title, subtitle: subtitle))
     }
 }
 
 struct ToastHostModifier: ViewModifier {
-    @StateObject private var center = ToastCenter.shared
-
     func body(content: Content) -> some View {
-        content.overlay(alignment: .top) {
-            if let t = center.current {
-                ToastView(toast: t)
-                    .padding(.top, 8)
-                    .frame(maxWidth: .infinity)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .onTapGesture { center.dismiss() }
-                    .zIndex(10_000)
+        // `.installToast` injects the library's `\.presentToast`
+        // environment value into its *content*. So the bridge view has
+        // to be nested inside `installToast` to read that environment —
+        // applying the modifier further out would leave the bridge
+        // reading a no-op default handler.
+        ToastBridge { content }
+            .installToast(position: .top)
+    }
+}
+
+private struct ToastBridge<Content: View>: View {
+    @ObservedObject private var center = ToastCenter.shared
+    @Environment(\.presentToast) private var presentToast
+    let content: () -> Content
+
+    init(@ViewBuilder _ content: @escaping () -> Content) {
+        self.content = content
+    }
+
+    var body: some View {
+        content()
+            .onReceive(center.$pending.compactMap { $0 }) { pending in
+                let t = pending.toast
+                let message: String
+                if let sub = t.subtitle, !sub.isEmpty {
+                    message = "\(t.title)\n\(sub)"
+                } else {
+                    message = t.title
+                }
+                presentToast(ToastValue(
+                    icon: Image(systemName: t.kind.systemImage),
+                    message: message
+                ))
             }
-        }
     }
 }
 
 extension View {
     func toastHost() -> some View { modifier(ToastHostModifier()) }
-}
-
-private struct ToastView: View {
-    let toast: Toast
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: toast.kind.systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(toast.kind.tint)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(toast.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color(.label))
-                if let sub = toast.subtitle {
-                    Text(sub)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .fixedSize(horizontal: true, vertical: false)
-        .background {
-            if #available(iOS 26.0, *) {
-                Capsule().fill(.clear).glassEffect(.regular, in: Capsule())
-            } else {
-                Capsule().fill(.ultraThinMaterial)
-            }
-        }
-        .overlay(
-            Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.15), radius: 18, y: 8)
-    }
 }

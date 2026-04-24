@@ -115,6 +115,7 @@
 		C98522FBA2E4D5570269FF3C /* KeyboardHeight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0581BC792D393D25DB425CB4 /* KeyboardHeight.swift */; };
 		CA8B93C79C92E071D59B9E7B /* DiscoverPeopleList.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2053D2F18EEE53949C1F3DB /* DiscoverPeopleList.swift */; };
 		CD8AD7132CAC90482CAD8C90 /* ChatDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDDF70233C14FFDD5E7CB1A8 /* ChatDetailView.swift */; };
+		D07D9355CDBC4951A47E0E49 /* Toasts in Frameworks */ = {isa = PBXBuildFile; productRef = F20AD11CCF1A774D37693A00 /* Toasts */; };
 		D217FFA3516672466F57300D /* SyncingDotsLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17539A82EA8BDD61C6458F4F /* SyncingDotsLabel.swift */; };
 		D2745DCC01B9FB447C2F6ABA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6C6D62D2207B8EF522F851 /* SettingsView.swift */; };
 		D27DD02D4AA56A1A5EC1F58D /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2D9E43399F860C5B165A48 /* ChatInputView.swift */; };
@@ -314,6 +315,7 @@
 				531DEE508D58C8A62DB94393 /* FacebookCore in Frameworks */,
 				4BC3E5401B7248FA52B0CB26 /* AppsFlyerLib in Frameworks */,
 				B0B18C5496F44AAAD9F81491 /* Mantis in Frameworks */,
+				D07D9355CDBC4951A47E0E49 /* Toasts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -738,6 +740,7 @@
 				47DE335175F71C2369260202 /* FacebookCore */,
 				BC2B90ECA96F101778114ECA /* AppsFlyerLib */,
 				A5170A9760C8770AB86AE021 /* Mantis */,
+				F20AD11CCF1A774D37693A00 /* Toasts */,
 			);
 			productName = GitchatIOS;
 			productReference = 653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */;
@@ -818,6 +821,7 @@
 				C401216859014DE114C8A811 /* XCRemoteSwiftPackageReference "Mantis" */,
 				54FDF3E780D095E7409D8D66 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */,
 				E1782BB53418C29B1B40C23D /* XCRemoteSwiftPackageReference "socket.io-client-swift" */,
+				B74B3AB90316F8D289FCA672 /* XCRemoteSwiftPackageReference "swiftui-toasts" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4B29051015B57A682F6F111B /* Products */;
@@ -1335,6 +1339,14 @@
 				minimumVersion = 17.0.0;
 			};
 		};
+		B74B3AB90316F8D289FCA672 /* XCRemoteSwiftPackageReference "swiftui-toasts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sunghyun-k/swiftui-toasts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.1.1;
+			};
+		};
 		C401216859014DE114C8A811 /* XCRemoteSwiftPackageReference "Mantis" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/guoyingtao/Mantis";
@@ -1393,6 +1405,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E1782BB53418C29B1B40C23D /* XCRemoteSwiftPackageReference "socket.io-client-swift" */;
 			productName = SocketIO;
+		};
+		F20AD11CCF1A774D37693A00 /* Toasts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B74B3AB90316F8D289FCA672 /* XCRemoteSwiftPackageReference "swiftui-toasts" */;
+			productName = Toasts;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
