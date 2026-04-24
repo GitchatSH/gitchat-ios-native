@@ -22,17 +22,33 @@ struct APIClient {
     static let shared = APIClient()
 
     let session: URLSession
+    let uploadSession: URLSession
     let decoder: JSONDecoder
     let encoder: JSONEncoder
 
     init() {
-        let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 30
-        cfg.httpAdditionalHeaders = [
+        let headers: [AnyHashable: Any] = [
             "User-Agent": Config.userAgent,
             "Accept": "application/json"
         ]
+
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 30
+        cfg.httpAdditionalHeaders = headers
         self.session = URLSession(configuration: cfg)
+
+        // Separate session for attachment uploads. Cellular upload of a
+        // 3–5 MB photo at ~1 Mbps takes 24–40 s; the 30 s request timeout
+        // above would abort mid-body. Resource timeout caps total wall
+        // clock (including retries), and waitsForConnectivity queues the
+        // task through brief offline blips instead of failing immediately.
+        let upCfg = URLSessionConfiguration.default
+        upCfg.timeoutIntervalForRequest = 60
+        upCfg.timeoutIntervalForResource = 300
+        upCfg.waitsForConnectivity = true
+        upCfg.httpAdditionalHeaders = headers
+        self.uploadSession = URLSession(configuration: upCfg)
+
         self.decoder = JSONDecoder()
         self.encoder = JSONEncoder()
     }
@@ -250,7 +266,7 @@ struct APIClient {
         append("\r\n--\(boundary)--\r\n")
         req.httpBody = body
 
-        let (respData, resp) = try await session.data(for: req)
+        let (respData, resp) = try await performUpload(req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError.http((resp as? HTTPURLResponse)?.statusCode ?? -1, String(data: respData, encoding: .utf8))
         }
@@ -259,6 +275,29 @@ struct APIClient {
         let w = try decoder.decode(Wrap.self, from: respData)
         if let url = w.data?.url ?? w.url { return url }
         throw APIError.decoding(NSError(domain: "upload", code: 0, userInfo: [NSLocalizedDescriptionKey: "no url in response"]))
+    }
+
+    /// Send an upload request with one automatic retry after 2 s for
+    /// transient transport errors (timed out, connection lost, briefly
+    /// offline). One retry only — the caller is responsible for surfacing
+    /// persistent failures to the user so they can pick a smaller image
+    /// or wait for better connectivity.
+    private func performUpload(_ req: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await uploadSession.data(for: req)
+        } catch let error as URLError where Self.isRetriableUploadError(error) {
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+            return try await uploadSession.data(for: req)
+        }
+    }
+
+    private static func isRetriableUploadError(_ error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut, .networkConnectionLost, .notConnectedToInternet:
+            return true
+        default:
+            return false
+        }
     }
 
     func sendMessage(
