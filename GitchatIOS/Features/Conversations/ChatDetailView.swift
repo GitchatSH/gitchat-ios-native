@@ -334,14 +334,7 @@ struct ChatDetailView: View {
             guard let urls = Self.imageAttachmentURLs(msg),
                   let first = urls.first,
                   let url = URL(string: first) else { return }
-            Task {
-                if let img = await ImageCache.shared.load(url) {
-                    UIPasteboard.general.image = img
-                    ToastCenter.shared.show(.success, "Image copied")
-                } else {
-                    ToastCenter.shared.show(.error, "Couldn't copy image")
-                }
-            }
+            Task { await Self.copyImageToPasteboard(url: url) }
         }
         a.onTogglePin = { msg in Task { await vm.togglePin(msg) } }
         a.onForward = { msg in showForward = msg }
@@ -596,6 +589,77 @@ struct ChatDetailView: View {
         }
         guard !images.isEmpty else { return }
         Task { await vm.uploadImagesAndSend(images: images, senderLogin: auth.login) }
+    }
+
+    /// Copy an image message to the system pasteboard using a raw
+    /// bytes + UTI path rather than `UIPasteboard.general.image = img`.
+    ///
+    /// Background: `UIPasteboard.general.image = img` serializes the
+    /// decoded `UIImage` through `NSItemProvider` for cross-process
+    /// handoff. On older / memory-constrained devices (or when the
+    /// original photo was huge — camera shots can easily be
+    /// 48MB+ decoded), that serialization path has been observed to
+    /// crash with out-of-memory or Obj-C exception signatures that
+    /// Swift can't catch. `UIPasteboard.setData(_:forPasteboardType:)`
+    /// takes the original compressed bytes directly, so iOS never
+    /// has to re-encode or cross-serialize a decoded bitmap — dozens
+    /// of megabytes of PNG become a few hundred KB of JPEG bytes
+    /// that copy cleanly everywhere.
+    ///
+    /// Also bypasses a second subtle footgun: when `img` came from
+    /// our `ImageCache.load()` path without a max pixel size, the
+    /// in-memory representation may have been forcibly redrawn by
+    /// `UIGraphicsImageRenderer` — attaching that synthesised image
+    /// to the pasteboard has been flaky compared to shipping the
+    /// original network bytes.
+    private static func copyImageToPasteboard(url: URL) async {
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            if let http = response as? HTTPURLResponse,
+               !(200..<300).contains(http.statusCode) {
+                throw URLError(.badServerResponse)
+            }
+            guard !data.isEmpty else { throw URLError(.zeroByteResource) }
+            let type = pasteboardUTI(for: data, url: url)
+            await MainActor.run {
+                UIPasteboard.general.setData(data, forPasteboardType: type)
+                ToastCenter.shared.show(.success, "Image copied")
+            }
+        } catch {
+            await MainActor.run {
+                ToastCenter.shared.show(.error, "Couldn't copy image")
+            }
+        }
+    }
+
+    /// Sniff the image format from magic bytes first, then fall back
+    /// to the URL's path extension. `public.image` is a safe generic
+    /// type accepted by receiving apps when the sniff finds nothing.
+    private static func pasteboardUTI(for data: Data, url: URL) -> String {
+        if data.count >= 12 {
+            let b = [UInt8](data.prefix(12))
+            if b.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return "public.png" }
+            if b.starts(with: [0xFF, 0xD8, 0xFF]) { return "public.jpeg" }
+            if b.starts(with: [0x47, 0x49, 0x46, 0x38]) { return "com.compuserve.gif" }
+            // RIFF....WEBP
+            if b.starts(with: [0x52, 0x49, 0x46, 0x46]) && b.count >= 12 &&
+               b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50 {
+                return "org.webmproject.webp"
+            }
+            // HEIC / HEIF: `....ftypheic` / `....ftypmif1` / `....ftypheix`
+            if b.count >= 12 && b[4] == 0x66 && b[5] == 0x74 && b[6] == 0x79 && b[7] == 0x70 {
+                return "public.heic"
+            }
+        }
+        switch url.pathExtension.lowercased() {
+        case "png": return "public.png"
+        case "jpg", "jpeg": return "public.jpeg"
+        case "gif": return "com.compuserve.gif"
+        case "webp": return "org.webmproject.webp"
+        case "heic": return "public.heic"
+        case "heif": return "public.heif"
+        default: return "public.image"
+        }
     }
 
     private static func imageAttachmentURLs(_ msg: Message) -> [String]? {
