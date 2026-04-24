@@ -102,6 +102,13 @@ struct ChatView: View {
                     composerStack
                 }
             }
+            #if targetEnvironment(macCatalyst)
+            // Detail column on Catalyst is wide — bubbles + composer
+            // hugging the edges reads as "unfinished layout". Inset
+            // them so content has breathing room while the background
+            // keeps extending edge-to-edge.
+            .padding(.horizontal, 16)
+            #endif
         }
         .overlay { menuOverlay }
         .environment(\.chatTheme, .default)
@@ -185,7 +192,7 @@ struct ChatView: View {
                     onAvatarTap: { actions.onAvatarTap(msg.sender) },
                     imageMatchedNS: imageZoomNamespace
                 )
-                .padding(.top, showHeader ? 14 : 2)
+                .padding(.top, showHeader ? 20 : 4)
                 .chatSwipeToReply(isMe: isMe, messageId: msg.id)
                 .onTapGesture(count: 2) { actions.onDoubleTapHeart(msg) }
                 if !cursors.isEmpty {

@@ -24,7 +24,7 @@ struct MacBottomNav: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 6)
-        .modifier(NavCapsuleBackground())
+        .macFloatingPill()
         .padding(.bottom, 12)
         .padding(.top, 8)
     }
@@ -110,27 +110,6 @@ struct MacBottomNav: View {
     private enum IconSource {
         case symbol(String)
         case asset(String)
-    }
-}
-
-/// Tahoe-style frosted capsule background for the nav strip. Uses
-/// `glassEffect` on iOS 26+ and falls back to `ultraThinMaterial`.
-private struct NavCapsuleBackground: ViewModifier {
-    private var shape: Capsule { Capsule(style: .continuous) }
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content
-                .glassEffect(.regular, in: shape)
-                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
-        } else {
-            content
-                .background(.ultraThinMaterial, in: shape)
-                .overlay(
-                    shape.stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                )
-                .shadow(color: .black.opacity(0.10), radius: 14, x: 0, y: 6)
-        }
     }
 }
 

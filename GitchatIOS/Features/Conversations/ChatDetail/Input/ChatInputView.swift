@@ -50,6 +50,21 @@ struct ChatInputView: View {
     }
 
     var body: some View {
+        #if targetEnvironment(macCatalyst)
+        // Whole composer as one Tahoe-style floating pill, matching
+        // `MacBottomNav` inner/outer padding so sidebar nav + detail
+        // composer sit level on the same horizontal row.
+        HStack(spacing: 4) {
+            attachButton
+            textField
+            sendButton
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
+        .macFloatingPill()
+        .padding(.bottom, 20)
+        .padding(.top, 8)
+        #else
         HStack(alignment: .bottom, spacing: 8) {
             attachButton
             textField
@@ -59,6 +74,7 @@ struct ChatInputView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        #endif
     }
 
     // MARK: Attach
@@ -70,7 +86,9 @@ struct ChatInputView: View {
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
+                #if !targetEnvironment(macCatalyst)
                 .modifier(GlassPill())
+                #endif
         }
         .disabled(isUploading)
     }
@@ -87,15 +105,22 @@ struct ChatInputView: View {
             }
         }()
         #if targetEnvironment(macCatalyst)
-        TextField(placeholder, text: $draft)
-            .focused($focused)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .frame(maxWidth: .infinity)
-            .background(Color.clear)
-            .modifier(GlassPill())
-            .onSubmit(onSubmitMacCatalyst)
-            .submitLabel(.send)
+        // UITextField wrapper — SwiftUI's `focusEffectDisabled()`
+        // doesn't suppress Catalyst's native focus ring, so we bridge
+        // to UIKit and set `focusEffect = nil` directly.
+        // Height pinned to the body line-height because UITextField's
+        // intrinsic size doesn't propagate through UIViewRepresentable
+        // and the capsule otherwise stretches to fill available space.
+        CatalystPlainTextField(
+            placeholder: placeholder,
+            text: $draft,
+            onSubmit: onSubmitMacCatalyst,
+            focusProxy: focusProxy
+        )
+        .frame(height: 22)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity)
         #else
         TextField(placeholder, text: $draft, axis: .vertical)
             .focused($focused)
@@ -141,3 +166,69 @@ struct ChatInputView: View {
         }
     }
 }
+
+#if targetEnvironment(macCatalyst)
+/// `UITextField` wrapper used on Catalyst. SwiftUI's
+/// `focusEffectDisabled()` doesn't suppress the native macOS focus
+/// ring that appears around `UITextField` on Catalyst, so we bridge to
+/// UIKit and set `focusEffect = nil` directly. Visual treatment
+/// (background, padding, shape) is owned by the outer pill — this
+/// field is transparent and unstyled.
+struct CatalystPlainTextField: UIViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    let onSubmit: () -> Void
+    let focusProxy: ChatInputView.FocusProxy
+
+    func makeUIView(context: Context) -> UITextField {
+        let tf = UITextField()
+        tf.placeholder = placeholder
+        tf.text = text
+        tf.borderStyle = .none
+        tf.backgroundColor = .clear
+        tf.focusEffect = nil
+        tf.returnKeyType = .send
+        tf.font = UIFont.preferredFont(forTextStyle: .body)
+        tf.delegate = context.coordinator
+        tf.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.textChanged(_:)),
+            for: .editingChanged
+        )
+        // Route the external focus proxy straight to first-responder
+        // calls on this field. No SwiftUI `@FocusState` in the loop.
+        focusProxy.setter = { [weak tf] focus in
+            guard let tf else { return }
+            if focus { tf.becomeFirstResponder() }
+            else { tf.resignFirstResponder() }
+        }
+        context.coordinator.ownedFocusProxy = focusProxy
+        return tf
+    }
+
+    func updateUIView(_ tf: UITextField, context: Context) {
+        if tf.text != text { tf.text = text }
+        if tf.placeholder != placeholder { tf.placeholder = placeholder }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: CatalystPlainTextField
+        weak var ownedFocusProxy: ChatInputView.FocusProxy?
+
+        init(_ parent: CatalystPlainTextField) { self.parent = parent }
+
+        deinit { ownedFocusProxy?.setter = nil }
+
+        @objc func textChanged(_ tf: UITextField) {
+            parent.text = tf.text ?? ""
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            parent.onSubmit()
+            return true
+        }
+    }
+}
+#endif
