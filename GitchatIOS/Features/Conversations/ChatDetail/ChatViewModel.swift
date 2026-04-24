@@ -266,6 +266,11 @@ final class ChatViewModel: ObservableObject {
                         }
                     } catch {
                         await MainActor.run {
+                            // Surface the failure as a toast (Task 3 adds the
+                            // persistent failed-bubble UX; until then this is
+                            // the only feedback the user gets).
+                            Haptics.error()
+                            ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
                             OutboxStore.shared.markFailed(
                                 conversationID: convId,
                                 localID: localID,

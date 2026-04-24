@@ -711,8 +711,11 @@ struct ChatDetailView: View {
         socket.subscribe(conversation: vm.conversation.id)
         socket.onMessageSent = { msg in
             guard msg.conversation_id == vm.conversation.id else { return }
-            if vm.messages.contains(where: { $0.id == msg.id }) { return }
-            ChatMessageView.seenIds.insert(msg.id)
+            // Dedup using the atomic Set insert: the only way a second
+            // callback for the same id can race past the .contains guard
+            // is if both fire close together off the socket queue. Set
+            // insert returns false on the second call, dropping it cleanly.
+            guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
             vm.messages.append(msg)
             if msg.sender != auth.login {
                 Task { try? await APIClient.shared.markRead(conversationId: vm.conversation.id) }
