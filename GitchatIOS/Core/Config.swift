@@ -1,14 +1,23 @@
 import Foundation
 
 enum Config {
-    // Default endpoints. Override locally without committing by either:
-    //   1. Xcode scheme env vars API_BASE_URL / WS_URL (user scheme under
-    //      xcuserdata/ is gitignored).
+    // Default endpoints. In DEBUG builds only, these can be overridden
+    // locally without committing config changes by either:
+    //   1. Xcode scheme env vars API_BASE_URL / WS_URL (user scheme
+    //      under xcuserdata/ is gitignored).
     //   2. Launch arguments -debug.apiBaseURL <url> / -debug.wsURL <url>
-    //      (useful for overriding at runtime without restarting Xcode).
-    //   3. UserDefaults keys "debug.apiBaseURL" / "debug.wsURL" (can be set
-    //      from a debug screen inside the app, survives relaunches).
+    //      (override without restarting Xcode — edit scheme args).
+    //   3. App-group UserDefaults keys "debug.apiBaseURL" /
+    //      "debug.wsURL" (can be set from a debug screen inside the
+    //      app and survives relaunches; shared via
+    //      `group.chat.git.share` so the share extension picks up the
+    //      same override).
     // Precedence: launch args > env var > UserDefaults > default.
+    //
+    // Override paths are `#if DEBUG`-gated so Release / TestFlight /
+    // App Store builds can never be pointed at an attacker-supplied
+    // URL via a written UserDefaults key. Defaults are unchanged for
+    // all users.
     static let apiBaseURL = resolveURL(
         envKey: "API_BASE_URL",
         argKey: "-debug.apiBaseURL",
@@ -22,12 +31,20 @@ enum Config {
         fallback: "https://ws-dev.gitchat.sh"
     )
 
+    /// Shared with the share extension so a single debug override
+    /// reaches both processes. Must match `ShareConfig.appGroup`.
+    private static let appGroupSuite = "group.chat.git.share"
+
+    /// `static let` caches the resolved URL after first access — the
+    /// override sources are read once per app launch. Restart the
+    /// app (or toggle the launch arg) to apply a changed override.
     private static func resolveURL(
         envKey: String,
         argKey: String,
         defaultsKey: String,
         fallback: String
     ) -> URL {
+        #if DEBUG
         let args = ProcessInfo.processInfo.arguments
         if let idx = args.firstIndex(of: argKey), idx + 1 < args.count,
            let url = URL(string: args[idx + 1]) {
@@ -37,10 +54,12 @@ enum Config {
            let url = URL(string: value) {
             return url
         }
-        if let value = UserDefaults.standard.string(forKey: defaultsKey),
+        if let defaults = UserDefaults(suiteName: appGroupSuite),
+           let value = defaults.string(forKey: defaultsKey),
            let url = URL(string: value) {
             return url
         }
+        #endif
         return URL(string: fallback)!
     }
     static let githubClientId = "Ov23lin5OyRE9J7Rvsrv"
