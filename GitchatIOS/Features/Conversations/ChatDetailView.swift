@@ -386,7 +386,12 @@ struct ChatDetailView: View {
             guard let pending = OutboxStore.shared.pending(
                 conversationID: vm.conversation.id,
                 localID: message.id
-            ) else { return }
+            ) else {
+                // Race: pending was discarded between menu render and tap.
+                // Surface a hint so the user isn't left wondering.
+                ToastCenter.shared.show(.info, "Already removed")
+                return
+            }
             OutboxStore.shared.retry(pending)
         }
         a.onDiscardPending = { message in

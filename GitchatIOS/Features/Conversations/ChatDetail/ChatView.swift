@@ -345,7 +345,10 @@ struct ChatView: View {
             ) {
                 switch pending.state {
                 case .sending:
-                    return []                // long-press is a no-op while sending
+                    // Allow Discard while still sending so a Task that hangs
+                    // (e.g., URLSession stuck on a stalled connection) isn't
+                    // a permanent dead-end for the user.
+                    return [.discard]
                 case .failed:
                     return [.retry, .discard]
                 }
