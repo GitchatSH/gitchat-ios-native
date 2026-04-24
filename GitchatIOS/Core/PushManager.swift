@@ -34,6 +34,11 @@ final class PushManager: ObservableObject {
             Task { @MainActor in self?.handle(clickedNotification: event) }
         })
         OneSignal.Notifications.addForegroundLifecycleListener(ForegroundListener())
+        // Mirror OneSignal subscription state to our backend. BE then
+        // targets pushes by subscription id (reliable across app
+        // updates) instead of by tag filter (fragile). See
+        // PushSubscriptionSync for the full story.
+        PushSubscriptionSync.shared.start()
         initialized = true
     }
 

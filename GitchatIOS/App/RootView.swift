@@ -54,6 +54,12 @@ struct RootView: View {
             // instead of waiting up to 30s for the next scheduled tick.
             if phase == .active, auth.isAuthenticated {
                 PresenceStore.shared.heartbeatNow()
+                // Re-sync the OneSignal subscription id to BE. The
+                // observer covers id changes, but on rare foreground
+                // resumes after the device has been asleep (or after
+                // an app update didn't fire the change event), this
+                // bumps last_seen_at and papers over any missed POST.
+                Task { await PushSubscriptionSync.shared.syncCurrent() }
             }
         }
         .onChange(of: auth.isAuthenticated) { isAuth in

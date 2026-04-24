@@ -27,6 +27,7 @@
 		2C8169E0DC4D00EE13E46120 /* Intents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA91A2CC0ACF49DD840C13FF /* Intents.framework */; };
 		301A8A5BBE220BDAD5E67750 /* Geist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A624F25A8589989F02FE384 /* Geist-Regular.ttf */; };
 		30B5B529C093F9BC6611C3B4 /* MacReadableWidth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DBC8FEE623A8B5FB4BDFFBC /* MacReadableWidth.swift */; };
+		3447209A70D5284522CAA6A1 /* PushSubscriptionSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C4210527E4A63652D48DEC /* PushSubscriptionSync.swift */; };
 		345DAB43FC963AC5DC04D6F6 /* ConversationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16BA9650859D21117E8FF1B /* ConversationsListView.swift */; };
 		354CA3C2BF0A5A320F72340D /* InvitePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5504187F7E16505485EECBE /* InvitePreviewSheet.swift */; };
 		373D74BE3BC0816A5C64EE10 /* MacEscapeToHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F09F948E748AEF5080DB1B /* MacEscapeToHome.swift */; };
@@ -135,6 +136,7 @@
 		F3B8B46B510DF9437DFD1CD5 /* WaveHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9567B10D8EBC391075BF9599 /* WaveHistory.swift */; };
 		F5AF3001990D0A2322055850 /* SafariSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E94D622A0735683786E43FF /* SafariSheet.swift */; };
 		F623D4C688766E4DEC3A5697 /* MessageMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1783963F200334C12032F6C9 /* MessageMenu.swift */; };
+		FB338CAF14AA0F064805BC36 /* APIClient+Push.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F1F6DCE80101D081778C6AE /* APIClient+Push.swift */; };
 		FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99301F77409640F810FB1F0D /* UpgradeView.swift */; };
 		FE6B859A2C4C03A1997BE21A /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = C572C41B826EC03433688B86 /* GoogleService-Info.plist */; };
 		FFC12D56CF9CA8BFAE363A20 /* ChatMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29DB6D36C8FCF7F2F666E797 /* ChatMessageView.swift */; };
@@ -220,11 +222,13 @@
 		4DBC8FEE623A8B5FB4BDFFBC /* MacReadableWidth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacReadableWidth.swift; sourceTree = "<group>"; };
 		4ED56669CED0DEE797EABF78 /* EmojiPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerSheet.swift; sourceTree = "<group>"; };
 		500978A5175704DEC944236B /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		52C4210527E4A63652D48DEC /* PushSubscriptionSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushSubscriptionSync.swift; sourceTree = "<group>"; };
 		59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCache.swift; sourceTree = "<group>"; };
 		5B23801FC790B492B964A84F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5B2D9E43399F860C5B165A48 /* ChatInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputView.swift; sourceTree = "<group>"; };
 		5DA6355A70C27DBE9EA3F912 /* ChatSkeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSkeleton.swift; sourceTree = "<group>"; };
 		5EAE1676E5FD6FD4A964A668 /* GroupSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupSettingsSheet.swift; sourceTree = "<group>"; };
+		5F1F6DCE80101D081778C6AE /* APIClient+Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Push.swift"; sourceTree = "<group>"; };
 		627F4895536B968BBC4A02DD /* ChatSectioning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSectioning.swift; sourceTree = "<group>"; };
 		653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GitchatIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E57C30BA465BAC85D5F1F79 /* Geist-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Black.ttf"; sourceTree = "<group>"; };
@@ -499,6 +503,7 @@
 				B339A4FABDFD26D236D1E5CF /* APIClient+Discover.swift */,
 				3EACA3D0C53F605D0326E854 /* APIClient+Group.swift */,
 				E53A491227A1B50663F174A3 /* APIClient+Invite.swift */,
+				5F1F6DCE80101D081778C6AE /* APIClient+Push.swift */,
 				B9A44DB5595F253E8FA0F678 /* AuthStore.swift */,
 			);
 			path = Networking;
@@ -550,6 +555,7 @@
 				CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */,
 				D1257724417C399DFA806F4A /* PresenceStore.swift */,
 				808AF0F70444427011FF450A /* PushManager.swift */,
+				52C4210527E4A63652D48DEC /* PushSubscriptionSync.swift */,
 				9567B10D8EBC391075BF9599 /* WaveHistory.swift */,
 				B2EE5CBC6E98EC1E0991565A /* Analytics */,
 				9F15F5366DF09B87DCD6B465 /* Models */,
@@ -881,6 +887,7 @@
 				7E0C8192B9A0E77104D32979 /* APIClient+Discover.swift in Sources */,
 				71F8801C2050BB23D7543EF6 /* APIClient+Group.swift in Sources */,
 				AB42B8891C75693B046A5BD6 /* APIClient+Invite.swift in Sources */,
+				FB338CAF14AA0F064805BC36 /* APIClient+Push.swift in Sources */,
 				B089CE1EDCE2E0EB3376D18E /* APIClient.swift in Sources */,
 				AB75B64F86D9214FFC78C723 /* AddMemberSheet.swift in Sources */,
 				4F15046CCB7A9CA0952031AB /* AnalyticsTracker.swift in Sources */,
@@ -963,6 +970,7 @@
 				A7396B793DDA8316A187E165 /* PresenceStore.swift in Sources */,
 				2A4E2644658850573AD267CD /* ProfileView.swift in Sources */,
 				A9CB0EEA7EC214D19D530910 /* PushManager.swift in Sources */,
+				3447209A70D5284522CAA6A1 /* PushSubscriptionSync.swift in Sources */,
 				BE388086BFB6A3B03531A9A3 /* ReactionSelectionView.swift in Sources */,
 				F12E71059065072ADB4108CA /* ReactorsSheet.swift in Sources */,
 				2A9935280A2FA6DB2275A27D /* RelativeTime.swift in Sources */,
