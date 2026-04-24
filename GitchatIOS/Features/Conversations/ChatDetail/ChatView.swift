@@ -307,27 +307,27 @@ struct ChatView: View {
                 onAction: { action in dispatch(action, for: t.message) },
                 onDismiss: { menuTarget = nil },
                 preview: {
-                    // Keep `showHeader: true` so normal messages still
-                    // show their avatar + sender name in the lifted
-                    // bubble. `hideReplyPreview: true` drops only the
-                    // inline reply quote — that brings reply-message
-                    // previews down to the same height as normal-
-                    // message previews. The "Reply" action in the
-                    // menu's action list still lets the user jump to
-                    // the quoted message.
-                    ChatMessageView(
-                        message: t.message,
-                        isMe: t.isMe,
-                        myLogin: myLogin,
-                        resolvedAvatar: resolveAvatar(t.message),
-                        showHeader: true,
-                        isPinned: vm.pinnedIds.contains(t.message.id),
-                        hideReplyPreview: true
-                    )
+                    repliedPreviewContent(for: t)
                 }
             )
             .zIndex(100)
         }
+    }
+
+    /// Lifted bubble for the long-press menu. Since the inline reply
+    /// quote now lives INSIDE the bubble (see `ChatMessageView`'s
+    /// `textBubble`), a reply message is already a self-contained
+    /// unit — we just render the same bubble the chat shows.
+    @ViewBuilder
+    private func repliedPreviewContent(for t: MessageMenuTarget) -> some View {
+        ChatMessageView(
+            message: t.message,
+            isMe: t.isMe,
+            myLogin: myLogin,
+            resolvedAvatar: resolveAvatar(t.message),
+            showHeader: true,
+            isPinned: vm.pinnedIds.contains(t.message.id)
+        )
     }
 
     private func visibleActions(for target: MessageMenuTarget) -> [MessageMenuAction] {
