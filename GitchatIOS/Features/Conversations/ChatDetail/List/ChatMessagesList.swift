@@ -116,21 +116,24 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // renders upright. Same for section headers.
         tv.transform = CGAffineTransform(rotationAngle: .pi)
 
-        // Context-menu trigger. On touch-first platforms (iOS, iPadOS)
-        // the natural gesture is a long-press. On Mac Catalyst, users
-        // expect right-click (secondary mouse button) instead of
-        // holding — holding feels distinctly non-Mac — so we attach a
-        // tap recognizer with `buttonMaskRequired = .secondary` and
-        // skip the long-press entirely.
-        #if targetEnvironment(macCatalyst)
-        let rc = UITapGestureRecognizer(
-            target: context.coordinator,
-            action: #selector(Coordinator.handleSecondaryClick(_:))
-        )
-        rc.buttonMaskRequired = .secondary
-        rc.cancelsTouchesInView = false
-        tv.addGestureRecognizer(rc)
-        #else
+        // Context-menu trigger.
+        //
+        // iOS / iPadOS: long-press — our own UILongPressGestureRecognizer
+        // because the default system threshold (~0.5s) feels sluggish
+        // next to Messages / Telegram. 0.28s matches their cadence.
+        //
+        // Mac Catalyst: right-click. Previously we used a
+        // UITapGestureRecognizer with `buttonMaskRequired = .secondary`,
+        // but that combination is unreliable on Catalyst — depending on
+        // build target and OS version the recognizer either never fires
+        // or loses out to the table view's internal selection gesture.
+        // Switch to the UIKit-standard path:
+        // `UITableViewDelegate.contextMenuConfigurationForRowAt` fires
+        // on right-click out of the box, with no gesture-recognizer
+        // collisions. We fire the custom SwiftUI overlay as a side
+        // effect and return nil so the system doesn't present its own
+        // dim/lift menu UI — we already have our own.
+        #if !targetEnvironment(macCatalyst)
         let lp = UILongPressGestureRecognizer(
             target: context.coordinator,
             action: #selector(Coordinator.handleLongPress(_:))
@@ -751,12 +754,20 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             presentMenu(at: point, in: tv, withHaptic: true)
         }
 
-        @objc fileprivate func handleSecondaryClick(_ gr: UITapGestureRecognizer) {
-            guard gr.state == .ended, let tv = table else { return }
-            let point = gr.location(in: tv)
-            // No haptic on Mac — a mouse right-click never buzzes.
-            presentMenu(at: point, in: tv, withHaptic: false)
+        #if targetEnvironment(macCatalyst)
+        /// Catalyst right-click path. Returning `nil` suppresses the
+        /// system's default dim-and-lift menu UI — our SwiftUI overlay
+        /// is the one the user actually sees. No haptic: a mouse
+        /// right-click never buzzes.
+        func tableView(
+            _ tableView: UITableView,
+            contextMenuConfigurationForRowAt indexPath: IndexPath,
+            point: CGPoint
+        ) -> UIContextMenuConfiguration? {
+            presentMenu(at: point, in: tableView, withHaptic: false)
+            return nil
         }
+        #endif
 
         private func presentMenu(at point: CGPoint, in tv: UITableView, withHaptic haptic: Bool) {
             guard let indexPath = tv.indexPathForRow(at: point) else { return }
