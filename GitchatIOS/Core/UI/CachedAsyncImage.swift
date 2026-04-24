@@ -17,8 +17,19 @@ final class ImageCache {
     // memory warning. nonisolated(unsafe) so we can read/write from any
     // thread guarded by the lock.
     private nonisolated(unsafe) var storage: [String: UIImage] = [:]
+    /// Raw compressed bytes (PNG / JPEG / GIF / HEIC as-received from
+    /// the network) keyed by absolute URL string. Populated alongside
+    /// the decoded-UIImage cache so consumers that need the original
+    /// format — e.g. the pasteboard copy path, where re-serialising
+    /// a decoded bitmap used to crash memory-constrained devices —
+    /// get a 0-latency hit without triggering a second download.
+    /// Lives on the same `storageLock` as the UIImage cache.
+    private nonisolated(unsafe) var rawBytes: [String: Data] = [:]
     private let storageLock = NSLock()
     private var inflight: [String: Task<UIImage?, Never>] = [:]
+    /// Dedupe concurrent raw-byte fetches for the same URL so two
+    /// quick pasteboard-copy taps don't race two downloads.
+    private var inflightData: [String: Task<Data?, Never>] = [:]
     private nonisolated static let diskQueue = DispatchQueue(
         label: "chat.git.ImageCache.disk", qos: .utility, attributes: .concurrent
     )
@@ -39,6 +50,15 @@ final class ImageCache {
         let hash = SHA256.hash(data: Data(key.utf8))
         let name = hash.map { String(format: "%02x", $0) }.joined()
         return diskDirectory.appendingPathComponent("\(name).jpg")
+    }
+
+    /// File name for the raw-bytes cache. Intentionally a different
+    /// extension so it can't collide with the decoded-JPEG cache
+    /// above (which stores lossy re-encodes of the displayed image).
+    private nonisolated static func rawDataFile(for url: URL) -> URL {
+        let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
+        let name = hash.map { String(format: "%02x", $0) }.joined()
+        return diskDirectory.appendingPathComponent("\(name).bin")
     }
 
     private init() {
@@ -94,9 +114,60 @@ final class ImageCache {
         }
     }
 
+    /// Stash the original compressed bytes for a URL. Called from the
+    /// shared `load()` download path so every decoded image also
+    /// populates the raw-bytes cache for free.
+    nonisolated func storeRawData(_ data: Data, for url: URL) {
+        let key = url.absoluteString
+        storageLock.lock(); rawBytes[key] = data; storageLock.unlock()
+        let file = Self.rawDataFile(for: url)
+        Self.diskQueue.async {
+            try? data.write(to: file, options: .atomic)
+        }
+    }
+
+    /// Fetch the original compressed bytes for an image URL. Memory
+    /// hit is free (no network, no decode). Disk hit is fast. Cold
+    /// misses fall through to a regular HTTP GET and populate both
+    /// caches on the way back so the second copy is instant.
+    nonisolated func rawData(for url: URL) async -> Data? {
+        let key = url.absoluteString
+        storageLock.lock()
+        if let mem = rawBytes[key] { storageLock.unlock(); return mem }
+        storageLock.unlock()
+        if let disk = try? Data(contentsOf: Self.rawDataFile(for: url)), !disk.isEmpty {
+            storageLock.lock(); rawBytes[key] = disk; storageLock.unlock()
+            return disk
+        }
+        return await withInflightDataTask(key: key, url: url)
+    }
+
+    /// Private helper — hops onto the main actor for `inflightData`
+    /// access (MainActor-isolated dictionary) so callers can stay
+    /// nonisolated.
+    @MainActor
+    private func withInflightDataTask(key: String, url: URL) async -> Data? {
+        if let task = inflightData[key] { return await task.value }
+        let task = Task<Data?, Never> { [weak self] in
+            defer {
+                Task { @MainActor [weak self] in self?.inflightData[key] = nil }
+            }
+            guard let (data, resp) = try? await URLSession.shared.data(from: url),
+                  let http = resp as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode),
+                  !data.isEmpty
+            else { return nil }
+            self?.storeRawData(data, for: url)
+            return data
+        }
+        inflightData[key] = task
+        return await task.value
+    }
+
     func purge() {
         storageLock.lock(); defer { storageLock.unlock() }
         storage.removeAll(keepingCapacity: false)
+        rawBytes.removeAll(keepingCapacity: false)
     }
 
     /// Fire-and-forget cache warming for URLs about to scroll into
@@ -137,6 +208,10 @@ final class ImageCache {
                   let http = resp as? HTTPURLResponse,
                   (200..<300).contains(http.statusCode)
             else { return nil }
+            // Free hit for the raw-bytes cache. Anything that was
+            // displayed in a chat bubble is now instantly available
+            // for the pasteboard copy path without a second download.
+            self?.storeRawData(data, for: url)
             let processed: UIImage?
             if let maxPixelSize {
                 // Use ImageIO to downsample directly from the source data
