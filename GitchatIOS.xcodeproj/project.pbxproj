@@ -97,6 +97,7 @@
 		AB42B8891C75693B046A5BD6 /* APIClient+Invite.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53A491227A1B50663F174A3 /* APIClient+Invite.swift */; };
 		AB75B64F86D9214FFC78C723 /* AddMemberSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1215054ABAC62F54D09E67A9 /* AddMemberSheet.swift */; };
 		AB9FCA5C4BD98C40D7E5CC9C /* TypingIndicatorRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71BF468C5E19762E01C9A603 /* TypingIndicatorRow.swift */; };
+		ABF5F71B9D4C812CB89D3113 /* MacFloatingPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27684CA51AC1C530A7CB3348 /* MacFloatingPill.swift */; };
 		AC3DF2D2EBA66464D53D71CC /* GitHubWebOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9078C15E5B9CC4441DCE26 /* GitHubWebOAuth.swift */; };
 		AECA351FBDBD09565E295CA7 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1AC72B0B806B50EB64E82E8 /* Config.swift */; };
 		AF15E9E4378F8ABF7A0478E4 /* ChatMessagesList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA9859CC82C63F864B8F8D8 /* ChatMessagesList.swift */; };
@@ -206,6 +207,7 @@
 		242AC390D468D5CCF42A810D /* JumpToBottomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JumpToBottomButton.swift; sourceTree = "<group>"; };
 		24DA1766BE87B16368E73F58 /* GlassPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPill.swift; sourceTree = "<group>"; };
 		2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		27684CA51AC1C530A7CB3348 /* MacFloatingPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacFloatingPill.swift; sourceTree = "<group>"; };
 		29DB6D36C8FCF7F2F666E797 /* ChatMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageView.swift; sourceTree = "<group>"; };
 		2AFC776F8EAF46612FBA12D7 /* InstantTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantTooltip.swift; sourceTree = "<group>"; };
 		2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactorsSheet.swift; sourceTree = "<group>"; };
@@ -458,6 +460,7 @@
 				DD43FE561D7FEFCB9BF2702C /* LinkPreviewCard.swift */,
 				DE8E6059D989F62927E22A1A /* MacBottomNav.swift */,
 				73F09F948E748AEF5080DB1B /* MacEscapeToHome.swift */,
+				27684CA51AC1C530A7CB3348 /* MacFloatingPill.swift */,
 				1340F67554881C8FB0BC0BFA /* MacHover.swift */,
 				4DBC8FEE623A8B5FB4BDFFBC /* MacReadableWidth.swift */,
 				C604A613990DF65BB8BC063D /* MacRowStyle.swift */,
@@ -969,6 +972,7 @@
 				54503540CFF2CBDF6CCAE91C /* LinkPreviewCard.swift in Sources */,
 				B1B30DC0148E5897B1F64CE0 /* MacBottomNav.swift in Sources */,
 				373D74BE3BC0816A5C64EE10 /* MacEscapeToHome.swift in Sources */,
+				ABF5F71B9D4C812CB89D3113 /* MacFloatingPill.swift in Sources */,
 				050786142A446599066C62D0 /* MacHover.swift in Sources */,
 				30B5B529C093F9BC6611C3B4 /* MacReadableWidth.swift in Sources */,
 				DD38B1F3D490770FC0AF8C67 /* MacRowStyle.swift in Sources */,

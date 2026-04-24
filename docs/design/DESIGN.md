@@ -2,6 +2,8 @@
 
 Tài liệu nguồn (single source of truth) cho design rules của Gitchat trên cả **iOS** và **Mac Catalyst**. Khi anything trong UI thay đổi, update file này trước khi code.
 
+> 📌 File này chỉ chứa **rule hiện tại** (spec, HIG, pattern đã chốt). Công việc đang làm / roadmap / follow-up → `docs/design/PLANS.md`.
+
 ---
 
 ## 1. Nguyên tắc nền tảng — Apple HIG
@@ -309,22 +311,10 @@ Examples CẦN override (đã có pattern):
 
 ---
 
-## 7. Mobile parity roadmap
-
-Hiện trạng: `MacRowStyle` áp dụng **chỉ Catalyst**. Mobile giữ values cũ.
-
-Khi sync sang Mobile (session sau):
-1. Trong từng helper của `MacRowStyle.swift`, đổi iOS fallback values → match Catalyst values (avatar 44, subtitle `.subheadline`, meta `.footnote`)
-2. Test kỹ trên iPhone vì:
-   - Mobile chat list dùng avatar 50pt cho Telegram-feel — đổi 44 có thể "lạ"
-   - Caption/meta `.footnote` (13pt) trên iPhone screen có thể chiếm chỗ hơn `.caption2` (11pt)
-3. Update doc này: bỏ Section 2.5 "iOS fallback", merge vào main spec
-
----
-
-## 8. Change log
+## 7. Change log
 
 | Date | Change | Author |
 |---|---|---|
 | 2026-04-24 | Initial — Catalyst row spec, bottom nav pill, Apple HIG rules | @nakamoto-hiru |
 | 2026-04-24 | Add §5.3 state-driven detail routing (fix stale ProfileView after tab switch); Esc now backs out profile → conversation | @nakamoto-hiru |
+| 2026-04-24 | Tách work notes / roadmap sang `PLANS.md` — DESIGN.md thuần spec | @nakamoto-hiru |
