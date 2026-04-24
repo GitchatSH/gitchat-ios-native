@@ -66,6 +66,7 @@ struct ChatDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var router = AppRouter.shared
     @ObservedObject private var blocks = BlockStore.shared
+    @ObservedObject private var outbox = OutboxStore.shared
     /// Namespace for the iOS 18+ zoom transition between an
     /// attachment tile and the full-screen image viewer pushed via
     /// `navigationDestination(item:)`.
@@ -78,7 +79,7 @@ struct ChatDetailView: View {
     // MARK: - Derived state
 
     private var visibleMessages: [Message] {
-        vm.messages.filter { !blocks.isBlocked($0.sender) }
+        vm.visibleMessages.filter { !blocks.isBlocked($0.sender) }
     }
 
     /// For 1:1 chats, returns the other user's login if they are
@@ -712,15 +713,9 @@ struct ChatDetailView: View {
             guard msg.conversation_id == vm.conversation.id else { return }
             if vm.messages.contains(where: { $0.id == msg.id }) { return }
             ChatMessageView.seenIds.insert(msg.id)
-            if let idx = vm.messages.firstIndex(where: {
-                $0.id.hasPrefix("local-") && $0.sender == msg.sender && $0.content == msg.content
-            }) {
-                vm.messages[idx] = msg
-            } else {
-                vm.messages.append(msg)
-                if msg.sender != auth.login {
-                    Task { try? await APIClient.shared.markRead(conversationId: vm.conversation.id) }
-                }
+            vm.messages.append(msg)
+            if msg.sender != auth.login {
+                Task { try? await APIClient.shared.markRead(conversationId: vm.conversation.id) }
             }
         }
         socket.onTyping = { convId, login, typing in
