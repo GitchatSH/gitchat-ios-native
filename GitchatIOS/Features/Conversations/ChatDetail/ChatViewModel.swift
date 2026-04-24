@@ -438,15 +438,46 @@ final class ChatViewModel: ObservableObject {
 
     func uploadAndSendMany(items: [(Data, String, String)], senderLogin: String?) async {
         guard !items.isEmpty else { return }
+        var compressed: [(Data, String, String)] = []
+        compressed.reserveCapacity(items.count)
+        for item in items {
+            compressed.append(
+                await Self.compressIfImageOffMain(data: item.0, filename: item.1, mimeType: item.2)
+            )
+        }
+        await sendEncodedAttachments(compressed, senderLogin: senderLogin)
+    }
+
+    /// UIImage entry point for drop/paste/picker flows. Encodes each image
+    /// exactly once, off MainActor, then hands off to the shared upload
+    /// pipeline. Avoids the previous pattern where the caller would
+    /// `jpegData(...)` on MainActor and `uploadAndSendMany` would then
+    /// decode + re-encode via `compressIfImage`.
+    func uploadImagesAndSend(images: [UIImage], senderLogin: String?) async {
+        guard !images.isEmpty else { return }
+        var encoded: [(Data, String, String)] = []
+        encoded.reserveCapacity(images.count)
+        for (i, img) in images.enumerated() {
+            if let tuple = await Self.encodeForUploadOffMain(image: img, filename: "image-\(i).jpg") {
+                encoded.append(tuple)
+            }
+        }
+        await sendEncodedAttachments(encoded, senderLogin: senderLogin)
+    }
+
+    private func sendEncodedAttachments(
+        _ encoded: [(Data, String, String)],
+        senderLogin: String?
+    ) async {
+        guard !encoded.isEmpty else { return }
         AnalyticsTracker.trackMessageSent(
             conversationId: conversation.id,
             isGroup: conversation.isGroup,
             hasAttachment: true
         )
-        let compressed = items.map { Self.compressIfImage(data: $0.0, filename: $0.1, mimeType: $0.2) }
         var localURLs: [URL] = []
         var localAttachments: [MessageAttachment] = []
-        for (data, filename, _) in compressed {
+        for (data, filename, _) in encoded {
             let tmpURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent("\(UUID().uuidString)-\(filename)")
             try? data.write(to: tmpURL)
@@ -477,7 +508,7 @@ final class ChatViewModel: ObservableObject {
 
         do {
             let urls = try await withThrowingTaskGroup(of: (Int, String).self) { group -> [String] in
-                for (i, tuple) in compressed.enumerated() {
+                for (i, tuple) in encoded.enumerated() {
                     group.addTask {
                         let url = try await APIClient.shared.uploadAttachment(
                             data: tuple.0,
@@ -488,7 +519,7 @@ final class ChatViewModel: ObservableObject {
                         return (i, url)
                     }
                 }
-                var result = Array(repeating: "", count: compressed.count)
+                var result = Array(repeating: "", count: encoded.count)
                 for try await (i, url) in group { result[i] = url }
                 return result
             }
@@ -509,7 +540,7 @@ final class ChatViewModel: ObservableObject {
     }
 
     func uploadAndSend(data: Data, filename: String, mimeType: String, senderLogin: String?) async {
-        let (compressed, usedFilename, usedMime) = Self.compressIfImage(
+        let (compressed, usedFilename, usedMime) = await Self.compressIfImageOffMain(
             data: data, filename: filename, mimeType: mimeType
         )
         let tmpURL = FileManager.default.temporaryDirectory
@@ -558,7 +589,7 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    private static func compressIfImage(
+    nonisolated private static func compressIfImage(
         data: Data, filename: String, mimeType: String
     ) -> (Data, String, String) {
         // Animated GIFs flatten to a single frame when rendered via
@@ -584,7 +615,7 @@ final class ChatViewModel: ObservableObject {
     /// otherwise skip the max-dim clamp in compressIfImage).
     /// `UIGraphicsImageRenderer` respects `image.imageOrientation`, so
     /// portrait photos stay portrait.
-    static func resizeForUpload(_ image: UIImage, maxDim: CGFloat = 1600) -> UIImage {
+    nonisolated static func resizeForUpload(_ image: UIImage, maxDim: CGFloat = 1600) -> UIImage {
         let size = image.size
         let scale = min(1, maxDim / max(size.width, size.height))
         guard scale < 1 else { return image }
@@ -593,5 +624,31 @@ final class ChatViewModel: ObservableObject {
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: newSize))
         }
+    }
+
+    /// Async wrapper that runs `compressIfImage` on a utility-priority
+    /// detached task so `UIImage.jpegData` and `UIGraphicsImageRenderer`
+    /// don't block MainActor while the user is still looking at the chat.
+    nonisolated static func compressIfImageOffMain(
+        data: Data, filename: String, mimeType: String
+    ) async -> (Data, String, String) {
+        await Task.detached(priority: .utility) {
+            compressIfImage(data: data, filename: filename, mimeType: mimeType)
+        }.value
+    }
+
+    /// Async wrapper for the drop/paste path that takes an in-memory
+    /// UIImage, resizes it, and encodes a single JPEG — all off MainActor.
+    /// Avoids the previous "encode twice" pattern where the drop handler
+    /// would JPEG-encode before calling `uploadAndSendMany`, which then
+    /// decoded and re-encoded via `compressIfImage`.
+    nonisolated static func encodeForUploadOffMain(
+        image: UIImage, filename: String
+    ) async -> (Data, String, String)? {
+        await Task.detached(priority: .utility) {
+            let resized = resizeForUpload(image)
+            guard let jpeg = resized.jpegData(compressionQuality: 0.75) else { return nil }
+            return (jpeg, filename, "image/jpeg")
+        }.value
     }
 }

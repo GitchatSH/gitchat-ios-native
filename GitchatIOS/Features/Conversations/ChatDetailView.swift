@@ -594,13 +594,8 @@ struct ChatDetailView: View {
             vm.draft = caption
             Task { await vm.send() }
         }
-        let items: [(Data, String, String)] = images.enumerated().compactMap { i, img in
-            let resized = ChatViewModel.resizeForUpload(img)
-            guard let d = resized.jpegData(compressionQuality: 0.85) else { return nil }
-            return (d, "image-\(i).jpg", "image/jpeg")
-        }
-        guard !items.isEmpty else { return }
-        Task { await vm.uploadAndSendMany(items: items, senderLogin: auth.login) }
+        guard !images.isEmpty else { return }
+        Task { await vm.uploadImagesAndSend(images: images, senderLogin: auth.login) }
     }
 
     private static func imageAttachmentURLs(_ msg: Message) -> [String]? {
