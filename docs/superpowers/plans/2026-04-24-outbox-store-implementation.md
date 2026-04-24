@@ -154,7 +154,31 @@ final class OutboxStore: ObservableObject {
 }
 ```
 
-- [ ] **Step 2: Verify the project still compiles**
+- [ ] **Step 2: Regenerate the Xcode project so the new file is part of the target**
+
+The project uses XcodeGen (`project.yml`). When a file is added under `GitchatIOS/`, the generated `GitchatIOS.xcodeproj/project.pbxproj` must be regenerated — otherwise `xcodebuild` will silently skip the new file (it'll compile everything else and report `BUILD SUCCEEDED`, but the new file is never included in the target). SourceKit will also flag the file with "Cannot find type X in scope" until the project is regenerated.
+
+If `xcodegen` is not installed:
+
+```bash
+brew install xcodegen
+```
+
+Then from `/Users/ethanmiller/Documents/Companies/Lab3/Gitstar/gitchat-ios-native`:
+
+```bash
+xcodegen generate
+```
+
+Expected output ends with `Created project at .../GitchatIOS.xcodeproj`. Confirm `OutboxStore.swift` is now referenced in the pbxproj:
+
+```bash
+grep -c "OutboxStore" GitchatIOS.xcodeproj/project.pbxproj
+```
+
+Expected: `4` (one in PBXBuildFile, one in PBXFileReference, one in the group, one in Sources build phase).
+
+- [ ] **Step 3: Verify the project compiles AND that OutboxStore was actually compiled**
 
 Run from `/Users/ethanmiller/Documents/Companies/Lab3/Gitstar/gitchat-ios-native`:
 
@@ -168,20 +192,29 @@ xcodebuild \
   build 2>&1 | tail -30
 ```
 
-Expected: `** BUILD SUCCEEDED **` in the last few lines. No new errors. (XcodeGen auto-discovers files under `GitchatIOS/`, so the project file does not need regeneration for an additive file.)
+Expected: `** BUILD SUCCEEDED **`. Then verify the object file exists (proves OutboxStore was actually compiled, not silently skipped):
+
+```bash
+find ~/Library/Developer/Xcode/DerivedData/GitchatIOS-* -name "OutboxStore.o" -path "*Objects-normal*" | head -1
+```
+
+Expected: a path printed. If empty, the file was NOT included in the target — go back to Step 2.
 
 If build fails with "Cannot find 'Message' in scope", confirm `Message` is declared in `GitchatIOS/Core/Models/Models.swift:137` and that no module boundary is being crossed (it isn't — single app target). The new file should not need any imports beyond `Foundation` and `Combine`.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit (file + regenerated project together)**
 
 ```bash
-git add GitchatIOS/Core/OutboxStore.swift
+git add GitchatIOS/Core/OutboxStore.swift GitchatIOS.xcodeproj/project.pbxproj
 git commit -m "$(cat <<'EOF'
 feat(ios): add OutboxStore for view-lifetime-independent pending sends (#60)
 
 New @MainActor singleton holding in-flight optimistic messages keyed by
 conversationID. Lifetime is the app session, so a ChatViewModel that gets
 torn down on back-nav doesn't take its pending messages with it.
+
+Includes the regenerated pbxproj so xcodebuild actually includes the new
+file in the target.
 
 No callers wired yet — that lands in the next commit.
 
