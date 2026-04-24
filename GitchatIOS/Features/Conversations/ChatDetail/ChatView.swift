@@ -73,6 +73,8 @@ struct ChatView: View {
         var onClipboardPaste: (UIImage) -> Void = { _ in }
         var onClipboardDismiss: () -> Void = {}
         var onMacCatalystSubmit: () -> Void = {}
+        var onRetryPending: (Message) -> Void = { _ in }
+        var onDiscardPending: (Message) -> Void = { _ in }
     }
 
     let actions: Actions
@@ -332,6 +334,25 @@ struct ChatView: View {
 
     private func visibleActions(for target: MessageMenuTarget) -> [MessageMenuAction] {
         let msg = target.message
+
+        // Pending local messages get a reduced action set — server-side
+        // operations (Reply, Pin, Forward, Edit, etc.) would 404 because
+        // the message has no server id yet.
+        if msg.id.hasPrefix("local-") {
+            if let pending = OutboxStore.shared.pending(
+                conversationID: vm.conversation.id,
+                localID: msg.id
+            ) {
+                switch pending.state {
+                case .sending:
+                    return []                // long-press is a no-op while sending
+                case .failed:
+                    return [.retry, .discard]
+                }
+            }
+            return []                        // unknown local- id (race) → no actions
+        }
+
         let hasText = !msg.content.isEmpty
         let hasImage = (msg.attachments ?? []).contains { ($0.type == "image") || ($0.mime_type?.hasPrefix("image/") == true) }
             || (msg.attachment_url != nil)
@@ -374,6 +395,8 @@ struct ChatView: View {
         case .unsend: actions.onUnsend(msg)
         case .delete: actions.onDelete(msg)
         case .report: actions.onReport(msg)
+        case .retry: actions.onRetryPending(msg)
+        case .discard: actions.onDiscardPending(msg)
         }
     }
 

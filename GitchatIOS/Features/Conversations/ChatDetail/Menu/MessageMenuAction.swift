@@ -21,6 +21,8 @@ enum MessageMenuAction: Hashable {
     case unsend
     case delete
     case report
+    case retry
+    case discard
 
     func title(seenCount: Int = 0) -> String {
         switch self {
@@ -35,6 +37,8 @@ enum MessageMenuAction: Hashable {
         case .unsend: return "Unsend"
         case .delete: return "Delete"
         case .report: return "Report"
+        case .retry: return "Retry"
+        case .discard: return "Discard"
         }
     }
 
@@ -51,12 +55,14 @@ enum MessageMenuAction: Hashable {
         case .unsend: return "arrow.uturn.backward"
         case .delete: return "trash"
         case .report: return "flag"
+        case .retry: return "arrow.clockwise"
+        case .discard: return "trash"
         }
     }
 
     var isDestructive: Bool {
         switch self {
-        case .delete, .report, .unsend: return true
+        case .delete, .report, .unsend, .discard: return true
         default: return false
         }
     }
