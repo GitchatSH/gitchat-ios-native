@@ -138,14 +138,38 @@ final class ActiveConversationTracker: @unchecked Sendable {
 private final class ForegroundListener: NSObject, OSNotificationLifecycleListener {
     func onWillDisplay(event: OSNotificationWillDisplayEvent) {
         let data = event.notification.additionalData as? [String: Any] ?? [:]
-        guard let convoId = data["conversation_id"] as? String, !convoId.isEmpty else { return }
+        let type = (data["type"] as? String) ?? ""
+        let convoId = (data["conversation_id"] as? String) ?? ""
+
+        // @mentions break through: a direct address must not be swallowed by
+        // in-app UX, even while foreground or in a muted chat.
+        if type == "mention" {
+            return
+        }
+
+        // Non-chat pushes (follow, post_like, wave, etc.) have no
+        // conversation_id and no in-app toast path — let OneSignal display.
+        if convoId.isEmpty {
+            return
+        }
+
+        // Belt-and-suspenders: BE filters muted recipients before pushing,
+        // but cover the narrow window where a mute happens after BE fires.
+        if MutedConversationsStore.contains(convoId) {
+            event.preventDefault()
+            return
+        }
+
+        // User is already looking at this chat — WS updates it live.
         if ActiveConversationTracker.shared.id == convoId {
             event.preventDefault()
             return
         }
-        // Mute kills chatter only — @mentions still break through.
-        let type = (data["type"] as? String) ?? ""
-        if type != "mention" && MutedConversationsStore.contains(convoId) {
+
+        // Foreground on any other screen: `wireGlobalMessageBanner` in
+        // `RootView` shows an in-app toast via `ToastCenter` when the WS
+        // message arrives. Suppress the OS banner to avoid doubling up.
+        if UIApplication.shared.applicationState == .active {
             event.preventDefault()
         }
     }
