@@ -3,9 +3,15 @@
 This document is the handoff spec for the backend work that powers
 the iOS in-app update flow (GitHub issue #43). The iOS client work is
 already merged under `Core/AppUpdate/`. Until the endpoint below ships,
-the client falls back to Apple's public iTunes lookup API, which is
-enough for the soft-prompt path but **cannot** drive the force-update
-gate (no `minimumSupportedVersion` is exposed there).
+the client falls back to Apple's public iTunes lookup API directly,
+which is enough for the soft-prompt path but **cannot** drive the
+force-update gate (iTunes has no `minimumSupportedVersion` concept).
+
+**tl;dr of this spec:** BE is mostly a pass-through for the App Store.
+Auto-fetch `latestVersion` / `releaseNotes` / `storeUrl` / `appStoreId`
+from iTunes lookup (cache 1h). The only manual pieces are
+`minimumSupportedVersion` and `isForceUpdate`, which are policy calls
+only the BE team can make.
 
 ## 1. `GET /api/v1/app/version`
 
@@ -28,38 +34,79 @@ Future values: `android`, `macos`. Return 400 for unknown platforms.
   "minimumSupportedVersion": "1.2.0",
   "releaseNotes": "Faster message search, fixes for muted chats.",
   "releasedAt": "2026-04-22T03:10:00Z",
-  "storeUrl": "https://apps.apple.com/app/id<APP_ID>",
-  "appStoreId": "<APP_ID>",
+  "storeUrl": "https://apps.apple.com/app/id6748491234",
+  "appStoreId": "6748491234",
   "isForceUpdate": false
 }
 ```
 
-**Field semantics**
+### Where each field comes from
 
-| field                     | type    | required | notes |
-| ------------------------- | ------- | -------- | ----- |
-| `latestVersion`           | string  | yes      | SemVer `major.minor.patch`. Drives the "new version available" banner. |
-| `latestBuild`             | int     | no       | `CFBundleVersion` / `versionCode`. Tiebreaker when `latestVersion` is the same across builds (hotfix re-release). |
-| `minimumSupportedVersion` | string  | yes      | SemVer. Clients below this value are blocked by the full-screen force-update cover. See "426 gate" below. |
-| `releaseNotes`            | string  | no       | Short plain-text. Rendered inside both the banner and the force-update view. Keep under ~140 chars for the banner line; longer text is fine for the force-update scrollable body. |
-| `releasedAt`              | ISO8601 | no       | Informational — not used by the gate logic, but useful for QA. |
-| `storeUrl`                | string  | yes      | Full App Store URL. Used as a fallback when `SKStoreProductViewController` fails to load the product. |
-| `appStoreId`              | string  | yes      | Numeric App Store id (no `id` prefix). Required for `SKStoreProductViewController` and the `itms-beta://` deep-link. |
-| `isForceUpdate`           | bool    | yes      | Secondary force flag. Set `true` to force-update the entire supported range (e.g. urgent rollout). Independent from `minimumSupportedVersion` — ANY force path trips the full-screen gate. |
+The response merges **two sources**: data auto-fetched from Apple's
+public store, and a small policy row managed by the BE team. Keep the
+two separate so nobody has to remember to bump `latestVersion` every
+release (Apple already knows).
 
-**Caching**
+| field                     | source                           | required | notes |
+| ------------------------- | -------------------------------- | -------- | ----- |
+| `latestVersion`           | **auto — iTunes lookup**         | yes      | SemVer. Lifted from `results[0].version`. |
+| `latestBuild`             | auto — App Store Connect API     | no       | `CFBundleVersion` tiebreak. Skip for v1 — not exposed by iTunes lookup, and the client works without it. |
+| `releaseNotes`            | **auto — iTunes lookup**         | no       | `results[0].releaseNotes`. This is the same "What's New" copy the team already writes in App Store Connect, so no separate CMS needed. |
+| `releasedAt`              | auto — iTunes lookup             | no       | `results[0].currentVersionReleaseDate`. Informational. |
+| `storeUrl`                | **auto — iTunes lookup**         | yes      | `results[0].trackViewUrl`. |
+| `appStoreId`              | **auto — iTunes lookup**         | yes      | `results[0].trackId`. Unblocks the ops ticket that was asking for this number manually. |
+| `minimumSupportedVersion` | **manual — policy row**          | yes      | Policy decision: "which client versions am I willing to still serve?". Changes only when BE ships a breaking contract change. |
+| `isForceUpdate`           | **manual — policy row**          | yes      | Emergency override — forces the entire supported range to update (e.g. security hotfix) without having to bump `minimumSupportedVersion`. |
 
-OK to cache server-side. Clients cache-bust via `?t=<random>` only when
-they need a fresh check (push tap); normal cadence is fine with a short
-CDN TTL (~60s) since the client itself throttles to 1×/hour.
+### Suggested implementation
 
-**Invariants**
+**Auto-fetch worker** — hit `https://itunes.apple.com/lookup?bundleId=chat.git`
+on a 1-hour cron (or a lazy read-through cache with 1h TTL). Cache the
+parsed record keyed by platform. iTunes has 1–2h of propagation delay
+after App Store "Available for Sale" flips — acceptable for our banner
+cadence.
+
+**Policy table** — one row per platform:
+
+```sql
+app_version_policy (
+  platform                   text primary key,
+  minimum_supported_version  text not null,
+  is_force_update            boolean not null default false,
+  force_update_reason        text,
+  updated_by                 text,
+  updated_at                 timestamptz
+)
+```
+
+Endpoint handler = merge iTunes cache + policy row → response. If the
+iTunes cache is empty (cold boot, network hiccup), return 503 so the
+client keeps its last known state; do NOT return an empty
+`latestVersion` — that would tell the client "you're up to date" which
+is wrong.
+
+**Fallback if BE team prefers fully manual** — acceptable but not
+recommended. Skip the iTunes worker, put all 4 auto fields into the
+policy row, and accept the ops tax of bumping on every release. Doc
+the workflow in the release checklist so it doesn't get forgotten.
+
+### Caching
+
+OK to cache the endpoint response behind a CDN (TTL ~60s). Clients
+already throttle to 1×/hour so the load is trivial; the low CDN TTL
+just makes admin policy flips visible quickly.
+
+### Invariants
 
 - `minimumSupportedVersion` must be **monotonically non-decreasing**.
   Decreasing it mid-flight resurrects already-gated clients into the
   app without re-validating they can speak the current contract. BE
   should reject admin writes that lower it.
-- `minimumSupportedVersion <= latestVersion` always.
+- `minimumSupportedVersion <= latestVersion` always. If the iTunes
+  auto-fetch would ever produce a response violating this (shouldn't
+  happen, but possible during a weird rollout), clamp
+  `latestVersion = minimumSupportedVersion` for the response rather
+  than serving the inconsistent pair.
 
 ## 2. HTTP 426 Upgrade Required gate
 
@@ -109,8 +156,9 @@ can no longer talk to us" — not for transient issues.
 
 ## 3. OneSignal broadcast on release
 
-When a new release is published (after the store build goes live),
-send a OneSignal notification to all users with:
+When a new release is detected on the store (the iTunes auto-fetch
+sees `latestVersion` change) OR when the release workflow publishes
+manually, send a OneSignal notification to all users with:
 
 ```json
 {
@@ -123,6 +171,10 @@ send a OneSignal notification to all users with:
 }
 ```
 
+Firing it off the auto-fetch change is the simplest: the worker
+compares the freshly-fetched `latestVersion` against the last-known
+value in Redis; on mismatch, dispatch the broadcast. No manual step.
+
 The iOS push handler (`Core/PushManager.swift`) routes
 `type == "app_update"` to `AppUpdateChecker.checkNow()`, which bypasses
 the 1×/hour throttle and re-fetches the manifest.
@@ -132,11 +184,13 @@ user opens the app, the banner appears.
 
 ## 4. Admin UI / release workflow (optional but recommended)
 
-Because `minimumSupportedVersion` is a foot-gun (lowering it breaks
-the gate; raising it strands users), wrap writes in a small admin
-surface:
+With `latestVersion` auto-fetched, the only knobs BE team touches are
+`minimumSupportedVersion` and `isForceUpdate` — both are foot-guns, so
+wrap writes in a small admin surface:
 
-- Show current `latestVersion` / `minimumSupportedVersion`.
+- Show current policy row alongside the auto-fetched store state
+  (`latestVersion`, `releasedAt`, `appStoreId`) so admins see the
+  whole picture in one place.
 - Enforce non-decreasing `minimumSupportedVersion` at the DB + API
   layer, not just client-side.
 - Require a reason field for force-update flips, logged to audit.
@@ -148,15 +202,20 @@ surface:
 Client-side work is already in `Core/AppUpdate/` and wired into
 `RootView` + `PushManager` + `APIClient`. BE side is done when:
 
-- [ ] `GET /api/v1/app/version?platform=ios` returns the shape above
-  and is accessible without auth.
-- [ ] Clients below `minimumSupportedVersion` get 426 on any API call.
-- [ ] Publishing a new release fires the OneSignal broadcast with
-  `type=app_update`.
-- [ ] `minimumSupportedVersion` can only increase (BE guard).
-- [ ] `appStoreId` is known and returned in both the manifest and the
-  426 body (ops blocker: we still need the numeric id from the App
-  Store Connect record).
+- [ ] Worker fetches iTunes lookup for `bundleId=chat.git` on a 1h
+  cadence and caches `version`, `releaseNotes`, `trackViewUrl`,
+  `trackId`, `currentVersionReleaseDate`.
+- [ ] `app_version_policy` table exists with a row per platform for
+  `minimum_supported_version` + `is_force_update`.
+- [ ] `GET /api/v1/app/version?platform=ios` returns the merged shape
+  above, accessible without auth.
+- [ ] Endpoint returns 503 (not an empty `latestVersion`) when the
+  iTunes cache is cold.
+- [ ] Clients below `minimumSupportedVersion` get 426 on any API call,
+  with the body shape shown in §2.
+- [ ] `minimum_supported_version` can only increase (DB + API guard).
+- [ ] OneSignal broadcast fires when the worker detects a new
+  `latestVersion`, with `additionalData.type = "app_update"`.
 
 ## References
 
