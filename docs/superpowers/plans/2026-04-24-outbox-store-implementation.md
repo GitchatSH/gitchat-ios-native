@@ -633,7 +633,7 @@ Open `GitchatIOS/Features/Conversations/ChatDetailView.swift`. Find `private var
             }
         }
         a.onDiscardPending = { message in
-            OutboxStore.shared.remove(
+            OutboxStore.shared.discard(
                 conversationID: vm.conversation.id,
                 localID: message.id
             )

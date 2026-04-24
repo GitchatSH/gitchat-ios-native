@@ -16,6 +16,10 @@ final class OutboxStore: ObservableObject {
     static let shared = OutboxStore()
     private init() {}
 
+    /// Hoisted to avoid per-call allocation — `toMessage` is invoked
+    /// from `ChatViewModel.visibleMessages` on every SwiftUI re-render.
+    private static let iso8601: ISO8601DateFormatter = ISO8601DateFormatter()
+
     struct PendingMessage: Identifiable, Equatable {
         let localID: String          // "local-<UUID>"
         let conversationID: String
@@ -60,7 +64,11 @@ final class OutboxStore: ObservableObject {
         pending[conversationID] = list
     }
 
-    func remove(conversationID: String, localID: String) {
+    /// User-initiated discard of a `.failed` pending. Same wire effect as
+    /// `markDelivered` (entry leaves the store), but the distinct name lets
+    /// call sites express intent ("the user threw it away" vs "the server
+    /// confirmed it").
+    func discard(conversationID: String, localID: String) {
         markDelivered(conversationID: conversationID, localID: localID)
     }
 
@@ -96,7 +104,7 @@ final class OutboxStore: ObservableObject {
             sender: p.senderLogin,
             sender_avatar: p.senderAvatar,
             content: p.content,
-            created_at: ISO8601DateFormatter().string(from: p.createdAt),
+            created_at: Self.iso8601.string(from: p.createdAt),
             edited_at: nil,
             reactions: nil,
             attachment_url: nil,
