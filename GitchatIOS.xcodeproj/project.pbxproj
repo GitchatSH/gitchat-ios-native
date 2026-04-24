@@ -36,6 +36,7 @@
 		37A90D301655300DDA2E6111 /* ChatReplyPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 099A525B70EFC8BB24EDBA38 /* ChatReplyPreview.swift */; };
 		38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D5340BD447D966282E2E67D /* Haptics.swift */; };
 		3909D707CE694EBAD50CE7FC /* SeenAvatarWithTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BD8099D1B297E089FD9BEDE /* SeenAvatarWithTooltip.swift */; };
+		3A3E0B7B4AE4F296C6F0A4CD /* OutboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC596A700FC14EB6D8CF986 /* OutboxStore.swift */; };
 		3BA9299D99680C847870AF56 /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 94DB191CAB3D64BF34D900B3 /* FirebaseCrashlytics */; };
 		3BB278E3A94069839823436D /* ImageCropSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40DB657ADF1F6FC16C8A2BA9 /* ImageCropSheet.swift */; };
 		42CD53F46D0C85A66271982E /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 37D9D440E2615CB0D8C2247A /* OneSignalFramework */; };
@@ -186,6 +187,7 @@
 		099A525B70EFC8BB24EDBA38 /* ChatReplyPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReplyPreview.swift; sourceTree = "<group>"; };
 		0A64D83F5578E057CF2F6A03 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		0CF7DF98BCEDFE64BF28D976 /* ChatSwipeReply.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSwipeReply.swift; sourceTree = "<group>"; };
+		0DC596A700FC14EB6D8CF986 /* OutboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxStore.swift; sourceTree = "<group>"; };
 		0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
 		0EF0AE1C58D76C8FBB0F123A /* DiscoverSubTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverSubTab.swift; sourceTree = "<group>"; };
 		0FAC444597FF8A45EB8294EC /* ChatBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBackground.swift; sourceTree = "<group>"; };
@@ -565,6 +567,7 @@
 				96C7DB031D380DE22F80C960 /* BlockStore.swift */,
 				D1AC72B0B806B50EB64E82E8 /* Config.swift */,
 				CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */,
+				0DC596A700FC14EB6D8CF986 /* OutboxStore.swift */,
 				D1257724417C399DFA806F4A /* PresenceStore.swift */,
 				808AF0F70444427011FF450A /* PushManager.swift */,
 				52C4210527E4A63652D48DEC /* PushSubscriptionSync.swift */,
@@ -981,6 +984,7 @@
 				C157BC035592D85E4685543B /* MutedConversationsStore.swift in Sources */,
 				D6F22BEEE3B7B425EE371B5A /* NewChatView.swift in Sources */,
 				20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */,
+				3A3E0B7B4AE4F296C6F0A4CD /* OutboxStore.swift in Sources */,
 				EC901521FFF8953EEB00DC9B /* PeekHostWindow.swift in Sources */,
 				4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */,
 				A7396B793DDA8316A187E165 /* PresenceStore.swift in Sources */,

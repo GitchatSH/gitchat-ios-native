@@ -41,6 +41,25 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Render-time merge (pending + server)
+
+    /// Server-confirmed messages merged with currently-pending sends from
+    /// the global outbox. Re-evaluated every render. Used by the message
+    /// list rendering path; non-render reads (search, pinned list, scroll
+    /// targeting) stay on `messages` because those operate on
+    /// server-confirmed messages only.
+    ///
+    /// `created_at` is an ISO8601 string; lexicographic `<` sorts these
+    /// chronologically.
+    var visibleMessages: [Message] {
+        let pending = OutboxStore.shared.pendingFor(conversation.id)
+            .map(OutboxStore.shared.toMessage)
+        guard !pending.isEmpty else { return messages }
+        return (messages + pending).sorted {
+            ($0.created_at ?? "") < ($1.created_at ?? "")
+        }
+    }
+
     private func saveDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
@@ -209,45 +228,19 @@ final class ChatViewModel: ObservableObject {
                 }
                 editingMessage = nil
             } else {
-                // Optimistic insert so the bubble pops up the instant
-                // the user taps send. We keep a local id and swap it for
-                // the real one once the server responds.
-                let localID = "local-\(UUID().uuidString)"
-                let optimistic = Message(
-                    id: localID,
-                    conversation_id: conversation.id,
-                    sender: AuthStore.shared.login ?? "me",
-                    sender_avatar: nil,
+                let pending = OutboxStore.PendingMessage(
+                    localID: "local-\(UUID().uuidString)",
+                    conversationID: conversation.id,
+                    senderLogin: AuthStore.shared.login ?? "me",
+                    senderAvatar: nil,
                     content: body,
-                    created_at: ISO8601DateFormatter().string(from: Date()),
-                    edited_at: nil,
-                    reactions: nil,
-                    attachment_url: nil,
-                    type: "user",
-                    reply_to_id: replyId
+                    replyToID: replyId,
+                    createdAt: Date(),
+                    state: .sending
                 )
-                messages.append(optimistic)
+                OutboxStore.shared.enqueue(pending)
                 Haptics.impact(.light)
-                do {
-                    let msg = try await APIClient.shared.sendMessage(
-                        conversationId: conversation.id,
-                        body: body,
-                        replyTo: replyId
-                    )
-                    // Purge any duplicate the socket may have inserted
-                    // between the optimistic append and this response —
-                    // the diffable data source crashes on duplicate ids.
-                    messages.removeAll { $0.id == msg.id && $0.id != localID }
-                    ChatMessageView.seenIds.insert(msg.id)
-                    if let idx = messages.firstIndex(where: { $0.id == localID }) {
-                        messages[idx] = msg
-                    } else {
-                        messages.append(msg)
-                    }
-                } catch {
-                    messages.removeAll { $0.id == localID }
-                    throw error
-                }
+                OutboxStore.runSend(for: pending)
             }
         } catch {
             self.error = error.localizedDescription
