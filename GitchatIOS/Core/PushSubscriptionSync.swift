@@ -64,6 +64,17 @@ final class PushSubscriptionSync: NSObject, OSPushSubscriptionObserver {
             // APNs token. The observer will fire later with the id.
             return
         }
+        if OneSignal.User.pushSubscription.optedIn == false {
+            // Subscription exists but the user has notifications
+            // turned off in Settings (or has called optOut). Drop
+            // any BE row so we don't waste OneSignal quota firing
+            // at a silenced device. If the user re-enables later,
+            // the observer fires with optedIn=true and we POST
+            // again. Handles the force-quit-between-toggle case
+            // that the observer itself wouldn't cover.
+            await unregisterAndClearCache(currentId)
+            return
+        }
         await register(currentId)
     }
 
@@ -83,8 +94,24 @@ final class PushSubscriptionSync: NSObject, OSPushSubscriptionObserver {
     nonisolated func onPushSubscriptionDidChange(state: OSPushSubscriptionChangedState) {
         let previousId = state.previous.id
         let currentId = state.current.id
+        let optedIn = state.current.optedIn
         Task { @MainActor [weak self] in
             guard let self else { return }
+
+            // User turned notifications off in Settings (or explicitly
+            // opted out). Drop whichever id BE might be holding so the
+            // device stops receiving targeted push payloads. When the
+            // user re-enables, the observer will fire again with
+            // optedIn=true and we'll POST the id back — no user action
+            // needed, no prompt shown.
+            if optedIn == false {
+                let idToDrop = currentId?.isEmpty == false ? currentId : previousId
+                if let idToDrop, !idToDrop.isEmpty {
+                    await self.unregisterAndClearCache(idToDrop)
+                }
+                return
+            }
+
             // If OneSignal rotated to a new id (iOS APNs token
             // refresh after update / reinstall), tombstone the old
             // row on BE so we don't accumulate orphan rows per
@@ -111,5 +138,10 @@ final class PushSubscriptionSync: NSObject, OSPushSubscriptionObserver {
             // tick will retry. Logging here would be noisy for
             // transient offline states.
         }
+    }
+
+    private func unregisterAndClearCache(_ subscriptionId: String) async {
+        _ = try? await APIClient.shared.unregisterPushSubscription(subscriptionId: subscriptionId)
+        UserDefaults.standard.removeObject(forKey: lastRegisteredIdKey)
     }
 }
