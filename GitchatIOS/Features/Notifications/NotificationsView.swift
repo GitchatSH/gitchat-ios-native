@@ -116,16 +116,16 @@ struct NotificationsView: View {
                                 HStack(spacing: 12) {
                                     AvatarView(
                                         url: "https://github.com/\(n.actor_login).png",
-                                        size: 40,
+                                        size: macRowAvatarSize,
                                         login: n.actor_login
                                     )
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        notifLabel(n).font(.subheadline)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        notifLabel(n).font(macRowTitleFont)
                                         if let preview = n.metadata?.preview {
-                                            Text(preview).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                            Text(preview).font(macRowSubtitleFont).foregroundStyle(.secondary).lineLimit(2)
                                         }
                                         Text(RelativeTime.format(n.created_at))
-                                            .font(.caption2)
+                                            .font(macRowMetaFont)
                                             .foregroundStyle(.tertiary)
                                     }
                                     Spacer()
@@ -134,9 +134,17 @@ struct NotificationsView: View {
                                     }
                                 }
                                 .contentShape(Rectangle())
+                                #if targetEnvironment(macCatalyst)
+                                .padding(.horizontal, macRowHorizontalPadding)
+                                .padding(.vertical, macRowVerticalPadding)
+                                #endif
                             }
                             .buttonStyle(.plain)
                             .listRowSeparator(.hidden)
+                            #if targetEnvironment(macCatalyst)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            #endif
+                            .hideMacScrollIndicators()
                             .listRowBackground(
                                 vm.isRead(n)
                                     ? Color.clear
@@ -144,9 +152,8 @@ struct NotificationsView: View {
                             )
                         }
                         .listStyle(.plain)
-                        #if !targetEnvironment(macCatalyst)
-                        .scrollIndicators(.hidden)
-                        #endif
+                        .macRowListContainer()
+                        .scrollIndicators(.hidden, axes: .vertical)
                         .refreshable { await vm.load() }
                     }
                 }

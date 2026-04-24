@@ -81,6 +81,34 @@ extension Font {
     }
 }
 
+// MARK: - App font scale (user preference)
+
+/// Reads the `gitchat.pref.fontScale` slider value from `UserDefaults`.
+/// Font helpers multiply their size by this so the Settings slider
+/// has a real visual effect, independent of the SwiftUI
+/// `dynamicTypeSize` environment which is unreliable on Catalyst
+/// with custom fonts.
+enum AppFontScale {
+    static var current: CGFloat {
+        let raw = UserDefaults.standard.double(forKey: "gitchat.pref.fontScale")
+        return raw > 0 ? CGFloat(raw) : 1.0
+    }
+}
+
+extension Font {
+    /// Drop-in replacement for `.system(size:weight:design:)` that
+    /// multiplies the size by the user's font-scale preference.
+    /// Prefer this over `.system(size:)` in product UI so the
+    /// Settings slider actually affects the text.
+    static func scaledSystem(
+        size: CGFloat,
+        weight: Font.Weight = .regular,
+        design: Font.Design = .default
+    ) -> Font {
+        .system(size: size * AppFontScale.current, weight: weight, design: design)
+    }
+}
+
 struct SignInView: View {
     @StateObject private var vm = SignInViewModel()
     @Environment(\.colorScheme) private var colorScheme

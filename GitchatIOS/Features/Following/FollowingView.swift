@@ -49,6 +49,9 @@ struct FollowingView: View {
     @State private var filter = ""
     @State private var showExplore = false
     @ObservedObject private var presence = PresenceStore.shared
+    #if targetEnvironment(macCatalyst)
+    @ObservedObject private var router = AppRouter.shared
+    #endif
 
     /// Smart ordering for the single friends list:
     /// 1. Online friends first, sorted by display name (case-insensitive).
@@ -144,26 +147,50 @@ struct FollowingView: View {
                     )
                 } else {
                     List(filtered) { u in
-                        NavigationLink {
-                            ProfileView(login: u.login)
-                        } label: {
+                        rowLink(for: u) {
                             HStack(spacing: 12) {
-                                AvatarView(url: u.avatar_url, size: 40, login: u.login)
-                                VStack(alignment: .leading) {
-                                    Text(u.name ?? u.login).font(.headline)
-                                    Text("@\(u.login)").font(.caption).foregroundStyle(.secondary)
+                                AvatarView(url: u.avatar_url, size: macRowAvatarSize, login: u.login)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(u.name ?? u.login).font(macRowTitleFont)
+                                    Text("@\(u.login)").font(macRowSubtitleFont).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                             }
+                            #if targetEnvironment(macCatalyst)
+                            .padding(.horizontal, macRowHorizontalPadding)
+                            .padding(.vertical, macRowVerticalPadding)
+                            .contentShape(Rectangle())
+                            #endif
                         }
                         .listRowSeparator(.hidden)
+                        #if targetEnvironment(macCatalyst)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                        #endif
+                        .hideMacScrollIndicators()
                     }
                     .listStyle(.plain)
-                    #if !targetEnvironment(macCatalyst)
-            .scrollIndicators(.hidden)
-            #endif
+                    .macRowListContainer()
+                    .scrollIndicators(.hidden, axes: .vertical)
                     .refreshable { await vm.load() }
                 }
         }
+    }
+
+    /// Catalyst routes profile taps through `AppRouter.selectedProfile`
+    /// so the detail panel can render them. A plain `NavigationLink`
+    /// would push into `NavigationSplitView`'s own detail stack, which
+    /// outlives tab switches and leaves a stale profile stranded.
+    @ViewBuilder
+    private func rowLink<Label: View>(for user: FriendUser, @ViewBuilder label: () -> Label) -> some View {
+        #if targetEnvironment(macCatalyst)
+        Button {
+            router.selectedProfile = user.login
+        } label: {
+            label()
+        }
+        .buttonStyle(.plain)
+        #else
+        NavigationLink { ProfileView(login: user.login) } label: { label() }
+        #endif
     }
 }

@@ -10,13 +10,13 @@ struct InstantTooltip: ViewModifier {
             .overlay(alignment: .top) {
                 if hovering && !text.isEmpty {
                     Text(text)
-                        .font(.caption2)
+                        .font(.subheadline)
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 4))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Color.black.opacity(0.82), in: RoundedRectangle(cornerRadius: 6))
                         .fixedSize()
-                        .offset(y: -26)
+                        .offset(y: -34)
                         .allowsHitTesting(false)
                         .transition(.opacity)
                         .zIndex(999)

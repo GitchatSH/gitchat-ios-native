@@ -17,6 +17,15 @@ final class ConversationsViewModel: ObservableObject {
         locallyRead.insert(id)
     }
 
+    /// Sum of unread counts across all conversations, treating ones the
+    /// user has tapped locally as already read so the badge updates the
+    /// instant they open a chat.
+    var totalUnreadCount: Int {
+        conversations.reduce(0) { acc, c in
+            acc + (locallyRead.contains(c.id) ? 0 : c.unreadCount)
+        }
+    }
+
     /// Patch a conversation row's preview + timestamp in-place so the
     /// list reflects a just-arrived message without waiting for a full
     /// `listConversations()` refetch. Used by the socket `message:sent`
@@ -247,7 +256,6 @@ struct ConversationsListView: View {
     @State private var filter = ""
     @State private var path = NavigationPath()
     @State private var confirmDelete: Conversation?
-    @State private var selectedConvo: Conversation? = nil
     @State private var tappedConvoId: String?
     /// Row currently in the 0.32s "press-in squeeze" before the peek
     /// fires — Telegram's pre-activation feedback (`ContextControllerSourceNode.swift`).
@@ -272,25 +280,11 @@ struct ConversationsListView: View {
         }
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
-        selectedConvo = convo
+        router.selectedConversation = convo
         #else
         path.append(convo)
         #endif
     }
-
-    #if targetEnvironment(macCatalyst)
-    @ViewBuilder
-    private var macSidebar: some View {
-        if #available(iOS 17.0, *) {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
-                .toolbar(removing: .sidebarToggle)
-        } else {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
-        }
-    }
-    #endif
 
     private var filtered: [Conversation] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -361,28 +355,7 @@ struct ConversationsListView: View {
     @ViewBuilder
     private var coreBody: some View {
         #if targetEnvironment(macCatalyst)
-        NavigationSplitView(columnVisibility: .constant(.all)) {
-            macSidebar
-        } detail: {
-            if let convo = selectedConvo {
-                NavigationStack {
-                    ChatDetailView(conversation: convo)
-                }
-                .id(convo.id)
-            } else {
-                ContentUnavailableCompat(
-                    title: "Select a conversation",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: "Pick a chat from the sidebar to start reading."
-                )
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
-        .background(
-            Button("") { selectedConvo = nil }
-                .keyboardShortcut(.escape, modifiers: [])
-                .hidden()
-        )
+        sidebar
         #else
         NavigationStack(path: $path) {
             sidebar
@@ -393,12 +366,46 @@ struct ConversationsListView: View {
         #endif
     }
 
+    /// On Catalyst, a row is "active" when its conversation is the
+    /// one currently shown in the sticky detail panel. Highlights the
+    /// row so the user can see which chat is loaded on the right.
+    private func isActiveRow(_ convo: Conversation) -> Bool {
+        #if targetEnvironment(macCatalyst)
+        return router.selectedConversation?.id == convo.id
+        #else
+        return false
+        #endif
+    }
+
+    @ViewBuilder
+    private func rowBackground(for convo: Conversation) -> some View {
+        let fill: Color? = {
+            if isActiveRow(convo) { return Color("AccentColor") }
+            if convo.isPinned { return Color("AccentColor").opacity(0.08) }
+            return nil
+        }()
+
+        if let fill {
+            #if targetEnvironment(macCatalyst)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(fill)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+            #else
+            fill
+            #endif
+        } else {
+            Color.clear
+        }
+    }
+
     @ViewBuilder
     private func conversationListRow(_ convo: Conversation) -> some View {
         ConversationRow(
             conversation: convo,
             isLocallyRead: vm.locallyRead.contains(convo.id),
-            isMuted: vm.isLocallyMuted(convo)
+            isMuted: vm.isLocallyMuted(convo),
+            isActive: isActiveRow(convo)
         )
         .contentShape(Rectangle())
         // Telegram-style press: 0.12s delay, then 0.20s squeeze
@@ -429,14 +436,14 @@ struct ConversationsListView: View {
         }
         .macHover()
         .listRowSeparator(.hidden)
+        #if targetEnvironment(macCatalyst)
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        #else
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        #endif
         .scaleEffect(tappedConvoId == convo.id ? 0.97 : 1)
         .opacity(tappedConvoId == convo.id ? 0.7 : 1)
-        .listRowBackground(
-            convo.isPinned
-                ? Color("AccentColor").opacity(0.08)
-                : Color.clear
-        )
+        .listRowBackground(rowBackground(for: convo))
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 Task { await vm.togglePin(convo) }
@@ -481,9 +488,11 @@ struct ConversationsListView: View {
                 } else {
                     List(filtered) { convo in
                         conversationListRow(convo)
+                            .hideMacScrollIndicators()
                     }
                     .listStyle(.plain)
-                    .scrollIndicators(.hidden)
+                    .macRowListContainer()
+                    .scrollIndicators(.hidden, axes: .vertical)
                     .refreshable { await vm.load() }
                     .animation(.spring(response: 0.45, dampingFraction: 0.82), value: vm.conversations.map(\.id))
                 }
@@ -593,6 +602,31 @@ struct ConversationRow: View {
     let conversation: Conversation
     var isLocallyRead: Bool = false
     var isMuted: Bool = false
+    /// On Catalyst, `true` when this row is the conversation showing
+    /// in the sticky detail panel. Flips text/icon colors to white
+    /// for contrast against the accent-color background.
+    var isActive: Bool = false
+
+    private var primaryTextColor: Color { isActive ? .white : .primary }
+    private var secondaryTextColor: Color { isActive ? .white.opacity(0.85) : .secondary }
+
+    /// Avatar diameter — 44pt on Catalyst (Apple list standard),
+    /// 50pt on iOS for the Telegram-feeling chat-list look.
+    private var avatarSize: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 44
+        #else
+        return 50
+        #endif
+    }
+
+    private var metaFont: Font {
+        #if targetEnvironment(macCatalyst)
+        return .footnote
+        #else
+        return .caption2
+        #endif
+    }
 
     private var displayedUnread: Int {
         isLocallyRead ? 0 : conversation.unreadCount
@@ -640,12 +674,12 @@ struct ConversationRow: View {
             if conversation.isGroup && !conversation.participantsOrEmpty.isEmpty {
                 GroupAvatarCluster(
                     participants: Array(conversation.participantsOrEmpty.prefix(3)),
-                    size: 50
+                    size: avatarSize
                 )
             } else {
                 AvatarView(
                     url: conversation.displayAvatarURL,
-                    size: 50,
+                    size: avatarSize,
                     login: conversation.other_user?.login
                 )
             }
@@ -653,20 +687,21 @@ struct ConversationRow: View {
                 HStack(spacing: 6) {
                     Text(conversation.displayTitle)
                         .font(.headline)
+                        .foregroundStyle(primaryTextColor)
                         .lineLimit(1)
                     if conversation.isPinned {
-                        Image(systemName: "pin.fill").font(.caption2).foregroundStyle(.secondary)
+                        Image(systemName: "pin.fill").font(.caption2).foregroundStyle(secondaryTextColor)
                             .instantTooltip("Pinned")
                     }
                     if isMuted {
-                        Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(.secondary)
+                        Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(secondaryTextColor)
                             .instantTooltip("Muted")
                     }
                 }
                 if let sender = lastSenderLogin {
                     Text(sender)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryTextColor)
                         .lineLimit(1)
                 }
                 HStack(alignment: .top, spacing: 6) {
@@ -681,29 +716,43 @@ struct ConversationRow: View {
                     }
                     Text(previewWithoutPhotoEmoji)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryTextColor)
                         .lineLimit(2)
                 }
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 6) {
                 Text(RelativeTime.chatListStamp(conversation.last_message_at))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(metaFont)
+                    .foregroundStyle(secondaryTextColor)
                     .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
                 if displayedUnread > 0 {
                     let isMutedBadge = isMuted
                     Text("\(displayedUnread)")
                         .font(.caption2.bold())
                         .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(isMutedBadge ? Color(.systemGray3) : Color("AccentColor"), in: .capsule)
-                        .foregroundStyle(isMutedBadge ? Color(.label) : .white)
+                        .background(
+                            isActive
+                                ? Color.white
+                                : (isMutedBadge ? Color(.systemGray3) : Color("AccentColor")),
+                            in: .capsule
+                        )
+                        .foregroundStyle(
+                            isActive
+                                ? Color("AccentColor")
+                                : (isMutedBadge ? Color(.label) : .white)
+                        )
                 } else {
                     Color.clear.frame(width: 1, height: 18)
                 }
             }
         }
+        #if targetEnvironment(macCatalyst)
+        .padding(.horizontal, macRowHorizontalPadding)
+        .padding(.vertical, macRowVerticalPadding)
+        #else
         .padding(.vertical, 4)
+        #endif
     }
 }
 

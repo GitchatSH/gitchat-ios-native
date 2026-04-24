@@ -7,7 +7,31 @@ final class AppRouter: ObservableObject {
     static let shared = AppRouter()
 
     /// Which root tab is selected.
-    @Published var selectedTab: Int = 0
+    @Published var selectedTab: Int = 0 {
+        didSet {
+            // Profile browsing is transient — clear it whenever the user
+            // jumps to a different tab so the detail panel snaps back to
+            // the sticky chat (or placeholder) for that context.
+            if oldValue != selectedTab { selectedProfile = nil }
+        }
+    }
+
+    /// Conversation currently shown in the Catalyst split-view detail
+    /// panel. Persists across tab switches so opening Discover/Activity
+    /// doesn't blank the chat the user was reading.
+    @Published var selectedConversation: Conversation? = nil {
+        didSet {
+            // Picking a new chat means "show me this conversation" —
+            // drop any profile we were previewing so the chat actually
+            // appears in the detail panel.
+            if selectedConversation != nil { selectedProfile = nil }
+        }
+    }
+
+    /// Profile login currently previewed in the Catalyst detail panel.
+    /// Takes priority over `selectedConversation` while set; cleared on
+    /// tab switch or when a conversation is picked.
+    @Published var selectedProfile: String? = nil
 
     /// Pending conversation id to push onto the Chats tab on next tick.
     @Published var pendingConversationId: String?
