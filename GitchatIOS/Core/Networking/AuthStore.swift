@@ -46,7 +46,14 @@ final class AuthStore: ObservableObject {
         } else {
             AnalyticsTracker.trackLogin(method: method)
         }
-        Task { await PushManager.shared.requestPermission() }
+        Task {
+            await PushManager.shared.requestPermission()
+            // Once permission is resolved, sync whatever subscription
+            // OneSignal has to BE. If the SDK hasn't produced an id
+            // yet, the OSPushSubscriptionObserver fire will cover it
+            // later — this call is just the eager path.
+            await PushSubscriptionSync.shared.syncCurrent()
+        }
     }
 
     func clearNeedsGithubLink() {
@@ -55,6 +62,11 @@ final class AuthStore: ObservableObject {
     }
 
     func signOut() {
+        // Unregister the push subscription BEFORE clearing the auth
+        // token — the DELETE endpoint needs the Bearer header to
+        // authenticate the owner. After tokenKey is wiped the call
+        // would 401.
+        Task { await PushSubscriptionSync.shared.onSignOut() }
         delete(tokenKey)
         delete(loginKey)
         delete(needsGithubKey)
