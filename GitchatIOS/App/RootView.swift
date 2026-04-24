@@ -1,5 +1,6 @@
 import SwiftUI
 import StoreKit
+import UIKit
 
 private struct InviteCodeRoute: Identifiable {
     let code: String
@@ -11,9 +12,11 @@ struct RootView: View {
     @EnvironmentObject var socket: SocketClient
     @StateObject private var push = PushManager.shared
     @StateObject private var router = AppRouter.shared
+    @StateObject private var updater = AppUpdateChecker.shared
     @Environment(\.requestReview) private var requestReview
     @Environment(\.scenePhase) private var scenePhase
     @State private var heartbeatTask: Task<Void, Never>?
+    @State private var updateSheetInfo: AppUpdateChecker.VersionInfo?
 
     var body: some View {
         Group {
@@ -55,6 +58,34 @@ struct RootView: View {
             if phase == .active, auth.isAuthenticated {
                 PresenceStore.shared.heartbeatNow()
             }
+            if phase == .active {
+                Task { await updater.check() }
+            }
+        }
+        .task { await updater.check() }
+        .overlay(alignment: .top) {
+            if case .updateAvailable(let info) = updater.state {
+                UpdateBanner(
+                    info: info,
+                    onUpdate: { openUpdate(info) },
+                    onSnooze: { updater.snoozeCurrent() }
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(9_000)
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.85), value: updater.state)
+        .fullScreenCover(isPresented: Binding(
+            get: { if case .forceUpdateRequired = updater.state { return true } else { return false } },
+            set: { _ in }
+        )) {
+            if case .forceUpdateRequired(let info) = updater.state {
+                ForceUpdateView(info: info, onUpdate: { openUpdate(info) })
+            }
+        }
+        .sheet(item: $updateSheetInfo) { info in
+            AppStoreSheet(appStoreId: info.appStoreId)
+                .ignoresSafeArea()
         }
         .onChange(of: auth.isAuthenticated) { isAuth in
             if isAuth {
@@ -68,6 +99,19 @@ struct RootView: View {
                 socket.disconnect()
                 heartbeatTask?.cancel()
             }
+        }
+    }
+
+    /// Route an "update now" tap to the right destination. In-app
+    /// App Store sheet when we're running a store build; external
+    /// TestFlight/Safari deep-link for beta/sim builds (SKStoreProduct
+    /// can't render those).
+    private func openUpdate(_ info: AppUpdateChecker.VersionInfo) {
+        switch UpdateSheetRouter.destination(for: info) {
+        case .inAppSheet:
+            updateSheetInfo = info
+        case .external(let url):
+            UIApplication.shared.open(url)
         }
     }
 

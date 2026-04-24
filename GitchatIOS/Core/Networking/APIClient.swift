@@ -6,6 +6,10 @@ enum APIError: LocalizedError {
     case http(Int, String?)
     case decoding(Error)
     case transport(Error)
+    /// Server signaled the running client is too old to keep talking
+    /// to it (HTTP 426 Upgrade Required). Callers must not retry —
+    /// the in-app force-update gate takes over.
+    case upgradeRequired
 
     var errorDescription: String? {
         switch self {
@@ -14,6 +18,7 @@ enum APIError: LocalizedError {
         case .http(let code, let msg): return "HTTP \(code)\(msg.map { ": \($0)" } ?? "")"
         case .decoding(let e): return "Decoding error: \(e.localizedDescription)"
         case .transport(let e): return e.localizedDescription
+        case .upgradeRequired: return "This version of the app is no longer supported. Please update."
         }
     }
 }
@@ -70,6 +75,10 @@ struct APIClient {
             throw APIError.transport(error)
         }
         guard let http = resp as? HTTPURLResponse else { throw APIError.http(-1, nil) }
+        if http.statusCode == 426 {
+            await AppUpdateChecker.shared.forceFromGate()
+            throw APIError.upgradeRequired
+        }
         guard (200..<300).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8)
             throw APIError.http(http.statusCode, text)
@@ -251,6 +260,10 @@ struct APIClient {
         req.httpBody = body
 
         let (respData, resp) = try await session.data(for: req)
+        if let http = resp as? HTTPURLResponse, http.statusCode == 426 {
+            await AppUpdateChecker.shared.forceFromGate()
+            throw APIError.upgradeRequired
+        }
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError.http((resp as? HTTPURLResponse)?.statusCode ?? -1, String(data: respData, encoding: .utf8))
         }

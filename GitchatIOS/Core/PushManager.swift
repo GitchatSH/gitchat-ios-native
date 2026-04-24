@@ -81,6 +81,11 @@ final class PushManager: ObservableObject {
             if let login = additional["actor_login"] as? String, !login.isEmpty {
                 AppRouter.shared.openProfile(login: login)
             }
+        case "app_update":
+            // BE broadcasts this when a new release is published. Tapping
+            // the push force-rechecks the manifest; the state transition
+            // drives RootView's banner / force-update cover.
+            Task { await AppUpdateChecker.shared.checkNow() }
         case "wave":
             // Tapping a wave push auto-accepts — BE creates the DM and
             // we jump straight in. On failure (expired / 404 / 409) fall
