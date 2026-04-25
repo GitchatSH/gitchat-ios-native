@@ -35,26 +35,7 @@ final class ConversationsViewModel: ObservableObject {
               let idx = conversations.firstIndex(where: { $0.id == cid }) else { return }
         let c = conversations[idx]
         let preview = msg.content.isEmpty ? c.last_message_preview : msg.content
-        conversations[idx] = Conversation(
-            id: c.id,
-            type: c.type,
-            is_group: c.is_group,
-            group_name: c.group_name,
-            group_avatar_url: c.group_avatar_url,
-            repo_full_name: c.repo_full_name,
-            participants: c.participants,
-            other_user: c.other_user,
-            last_message: msg,
-            last_message_preview: preview,
-            last_message_text: msg.content.isEmpty ? c.last_message_text : msg.content,
-            last_message_at: msg.created_at ?? c.last_message_at,
-            unread_count: c.unread_count,
-            pinned: c.pinned,
-            pinned_at: c.pinned_at,
-            is_request: c.is_request,
-            updated_at: c.updated_at,
-            is_muted: c.is_muted
-        )
+        conversations[idx] = c.withLastMessage(msg, preview: preview)
         ConversationsCache.shared.store(conversations)
     }
 

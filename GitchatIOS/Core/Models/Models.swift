@@ -75,6 +75,29 @@ struct Conversation: Codable, Identifiable, Hashable {
         if isGroup { return group_avatar_url }
         return other_user?.avatar_url ?? participantsOrEmpty.first?.avatar_url
     }
+
+    func withLastMessage(_ msg: Message, preview: String? = nil) -> Conversation {
+        Conversation(
+            id: id,
+            type: type,
+            is_group: is_group,
+            group_name: group_name,
+            group_avatar_url: group_avatar_url,
+            repo_full_name: repo_full_name,
+            participants: participants,
+            other_user: other_user,
+            last_message: msg,
+            last_message_preview: preview ?? (msg.content.isEmpty ? last_message_preview : msg.content),
+            last_message_text: msg.content.isEmpty ? last_message_text : msg.content,
+            last_message_at: msg.created_at ?? last_message_at,
+            unread_count: unread_count,
+            pinned: pinned,
+            pinned_at: pinned_at,
+            is_request: is_request,
+            updated_at: updated_at,
+            is_muted: is_muted
+        )
+    }
 }
 
 struct ConversationListResponse: Decodable {
