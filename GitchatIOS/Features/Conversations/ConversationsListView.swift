@@ -1143,7 +1143,7 @@ struct ConversationHoldPreview: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             if conversation.isGroup {
                 GroupAvatarView(
                     name: conversation.group_name ?? conversation.displayTitle,
@@ -1192,7 +1192,7 @@ struct ConversationHoldPreview: View {
 
     private var messageColumn: some View {
         ScrollView {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 ForEach(messages, id: \.id) { msg in
                     previewBubble(for: msg)
                 }
