@@ -464,8 +464,6 @@ struct ConversationsListView: View {
         #else
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         #endif
-        .scaleEffect(tappedConvoId == convo.id ? 0.97 : 1)
-        .opacity(tappedConvoId == convo.id ? 0.7 : 1)
         .listRowBackground(rowBackground(for: convo))
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
