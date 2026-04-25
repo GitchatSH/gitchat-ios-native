@@ -96,6 +96,8 @@ struct ChatView: View {
     /// reset to 0 when the user scrolls back to the bottom.
     @State private var newWhileScrolledUp: Int = 0
     @State private var newMentionsWhileScrolledUp: Int = 0
+    /// IDs of messages containing @mention that arrived while scrolled up (for jump-to-mention).
+    @State private var pendingMentionIds: [String] = []
 
     // MARK: Body
 
@@ -127,6 +129,7 @@ struct ChatView: View {
             if atBottom {
                 newWhileScrolledUp = 0
                 newMentionsWhileScrolledUp = 0
+                pendingMentionIds.removeAll()
             }
         }
         // Track new messages arriving while scrolled up.
@@ -139,6 +142,7 @@ struct ChatView: View {
             newWhileScrolledUp += 1
             if let login = myLogin, newest.content.localizedCaseInsensitiveContains("@\(login)") {
                 newMentionsWhileScrolledUp += 1
+                pendingMentionIds.append(newest.id)
             }
         }
     }
@@ -371,7 +375,13 @@ struct ChatView: View {
                 unreadCount: jumpUnreadCount,
                 mentionCount: jumpMentionCount,
                 onJumpToBottom: { scrollToBottomToken &+= 1 },
-                onJumpToMention: { scrollToBottomToken &+= 1 }
+                onJumpToMention: {
+                    if let firstMention = pendingMentionIds.first {
+                        pendingJumpId = firstMention
+                    } else {
+                        scrollToBottomToken &+= 1
+                    }
+                }
             )
             .padding(.trailing, 6)
             .offset(y: -52)
