@@ -12,6 +12,9 @@ final class ConversationsViewModel: ObservableObject {
     @Published var locallyRead: Set<String> = []
     @Published var locallyMuted: Set<String> = []
     @Published var locallyUnmuted: Set<String> = []
+    @Published var isLoadingMore = false
+    private var nextCursor: String?
+    private var loadTask: Task<Void, Never>?
 
     func markLocallyRead(_ id: String) {
         locallyRead.insert(id)
@@ -168,35 +171,66 @@ final class ConversationsViewModel: ObservableObject {
         return ordered
     }
 
-    func load() async {
-        if conversations.isEmpty { isLoading = true }
-        isSyncing = true
-        let started = Date()
-        defer { isLoading = false }
-        do {
-            let resp = try await APIClient.shared.listConversations()
-            // Dedupe group/channel conversations whose repo_full_name
-            // collides case-insensitively. Backend stores both
-            // `open-acp/openacp` and `Open-ACP/OpenACP` as separate
-            // rows; on the client we keep the one with the most
-            // recent activity so the user sees a single chat.
-            let deduped = Self.dedupeChannels(resp.conversations)
-            self.conversations = deduped
-            ConversationsCache.shared.store(deduped)
-            syncMutedStore()
-            for convo in deduped {
-                MessageCache.shared.prefetch(conversationId: convo.id)
+    func load(reset: Bool = true) async {
+        loadTask?.cancel()
+        let task = Task { @MainActor in
+            if reset {
+                if conversations.isEmpty { isLoading = true }
+                isSyncing = true
             }
-        } catch {
-            self.error = error.localizedDescription
+            let started = Date()
+            defer {
+                if reset { isLoading = false }
+            }
+            do {
+                let cursor = reset ? nil : nextCursor
+                let resp = try await APIClient.shared.listConversations(cursor: cursor)
+                guard !Task.isCancelled else { return }
+
+                if reset {
+                    let deduped = Self.dedupeChannels(resp.conversations)
+                    self.conversations = deduped
+                    self.locallyRead.removeAll()
+                    // Keep locallyMuted/locallyUnmuted — syncMutedStore() reconciles them
+                } else {
+                    let existingIds = Set(conversations.map(\.id))
+                    let newConvos = resp.conversations.filter { !existingIds.contains($0.id) }
+                    let merged = conversations + newConvos
+                    self.conversations = Self.dedupeChannels(merged)
+                }
+
+                self.nextCursor = resp.nextCursor
+                ConversationsCache.shared.store(conversations)
+                syncMutedStore()
+                for convo in resp.conversations {
+                    MessageCache.shared.prefetch(conversationId: convo.id)
+                }
+            } catch {
+                if !Task.isCancelled {
+                    self.error = error.localizedDescription
+                }
+            }
+            if reset {
+                let elapsed = Date().timeIntervalSince(started)
+                if elapsed < 2 {
+                    try? await Task.sleep(nanoseconds: UInt64((2 - elapsed) * 1_000_000_000))
+                }
+                isSyncing = false
+            }
+            isLoadingMore = false
         }
-        // Keep the syncing indicator on screen for at least 2s so the
-        // user has time to notice the sync happened.
-        let elapsed = Date().timeIntervalSince(started)
-        if elapsed < 2 {
-            try? await Task.sleep(nanoseconds: UInt64((2 - elapsed) * 1_000_000_000))
+        loadTask = task
+        await task.value
+    }
+
+    func loadMoreIfNeeded(current: Conversation) {
+        guard !isLoadingMore, nextCursor != nil else { return }
+        let thresholdIndex = conversations.index(conversations.endIndex, offsetBy: -5, limitedBy: conversations.startIndex) ?? conversations.startIndex
+        if let currentIndex = conversations.firstIndex(where: { $0.id == current.id }),
+           currentIndex >= thresholdIndex {
+            isLoadingMore = true
+            Task { await load(reset: false) }
         }
-        isSyncing = false
     }
 
     func togglePin(_ convo: Conversation) async {
@@ -465,6 +499,9 @@ struct ConversationsListView: View {
             }
             .tint(Color(.systemBlue))
         }
+        .onAppear {
+            vm.loadMoreIfNeeded(current: convo)
+        }
     }
 
     private var sidebar: some View {
@@ -484,15 +521,26 @@ struct ConversationsListView: View {
                         description: "Try a different search."
                     )
                 } else {
-                    List(filtered) { convo in
-                        conversationListRow(convo)
-                            .hideMacScrollIndicators()
+                    List {
+                        ForEach(filtered) { convo in
+                            conversationListRow(convo)
+                                .hideMacScrollIndicators()
+                        }
+                        if vm.isLoadingMore {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                Spacer()
+                            }
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                        }
                     }
                     .listStyle(.plain)
                     .macRowListContainer()
                     .scrollIndicators(.hidden, axes: .vertical)
                     .refreshable { await vm.load() }
-                    .animation(.spring(response: 0.45, dampingFraction: 0.82), value: vm.conversations.map(\.id))
+                    .animation(vm.isLoadingMore ? .none : .spring(response: 0.45, dampingFraction: 0.82), value: vm.conversations.map(\.id))
                 }
             }
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search chats")
