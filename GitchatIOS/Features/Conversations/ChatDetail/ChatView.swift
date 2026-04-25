@@ -300,22 +300,18 @@ struct ChatView: View {
             )
         }
         .overlay(alignment: .topTrailing) {
-            // Animation scoped to just the jump button — previously
-            // `.animation(_:value:)` was attached to the whole
-            // composerStack, which re-rendered every subview on each
-            // `isAtBottom` flip and rippled layout changes down into
-            // the list mid-scroll.
-            ZStack {
-                if !isAtBottom {
-                    JumpToBottomButton {
-                        scrollToBottomToken &+= 1
-                    }
-                    .padding(.trailing, 6)
-                    .offset(y: -52)
-                    .transition(.scale(scale: 0.4).combined(with: .opacity))
-                }
-            }
-            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAtBottom)
+            // Jump-button stack: @mention + scroll-to-bottom with
+            // unread badge. Animation is scoped here so the composer
+            // doesn't re-render on every isAtBottom flip.
+            JumpButtonStack(
+                isAtBottom: isAtBottom,
+                unreadCount: jumpUnreadCount,
+                mentionCount: jumpMentionCount,
+                onJumpToBottom: { scrollToBottomToken &+= 1 },
+                onJumpToMention: { scrollToBottomToken &+= 1 }
+            )
+            .padding(.trailing, 6)
+            .offset(y: -52)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
@@ -324,6 +320,29 @@ struct ChatView: View {
         if vm.editingMessage != nil { return .editing }
         if vm.replyingTo != nil { return .replying }
         return .message
+    }
+
+    // MARK: Jump button computed counts
+
+    /// My read cursor (or fallback). Messages newer than this are "unread".
+    private var myReadAt: String? {
+        vm.readCursors[myLogin ?? ""] ?? vm.otherReadAt
+    }
+
+    /// Number of unread messages below the viewport.
+    private var jumpUnreadCount: Int {
+        guard let readAt = myReadAt else { return 0 }
+        return visibleMessages.filter { ($0.created_at ?? "") > readAt }.count
+    }
+
+    /// Number of unread messages that @-mention the current user.
+    private var jumpMentionCount: Int {
+        guard let login = myLogin, let readAt = myReadAt else { return 0 }
+        let needle = "@\(login)"
+        return visibleMessages.filter { msg in
+            (msg.created_at ?? "") > readAt &&
+            msg.content.localizedCaseInsensitiveContains(needle)
+        }.count
     }
 
     // MARK: Menu overlay
