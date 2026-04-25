@@ -169,6 +169,15 @@ struct ChatView: View {
             let showHeader = prev?.sender != msg.sender || (prev?.type ?? "user") != "user"
             let isMe = msg.sender == myLogin
             let cursors = seenCursorLogins(msg, idx)
+            // Tail on the last message in a same-sender group. In the
+            // rotated table, idx-1 is the NEWER message (visually below).
+            // Show tail when the next visual message has a different sender.
+            let showTail: Bool = {
+                guard idx > 0 else { return true } // newest message always has tail
+                let next = visibleMessages[idx - 1]
+                if let t = next.type, t != "user" { return true }
+                return next.sender != msg.sender
+            }()
             // Explicit VStack(spacing: 0) — without it, the two
             // sibling views (bubble + optional seen-by row) get
             // wrapped in a TupleView that UIHostingConfiguration
@@ -192,7 +201,8 @@ struct ChatView: View {
                     onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
                     onPinTap: { actions.onPinBadgeTap(msg) },
                     onAvatarTap: { actions.onAvatarTap(msg.sender) },
-                    imageMatchedNS: imageZoomNamespace
+                    imageMatchedNS: imageZoomNamespace,
+                    showTail: showTail
                 )
                 .padding(.top, showHeader ? 20 : 4)
                 .chatSwipeToReply(isMe: isMe, messageId: msg.id)

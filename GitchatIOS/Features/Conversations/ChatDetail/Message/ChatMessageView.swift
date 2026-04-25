@@ -46,6 +46,10 @@ struct ChatMessageView: View {
     /// preview (the menu's actions already let the user navigate to
     /// the quoted message via "Reply").
     var hideReplyPreview: Bool = false
+    /// When true, a decorative tail is drawn at the bottom corner of the
+    /// bubble (outgoing → trailing, incoming → leading). Shown on the
+    /// last message in a same-sender group.
+    var showTail: Bool = false
 
     // MARK: Local state
 
@@ -319,10 +323,10 @@ struct ChatMessageView: View {
             }
         }
         .background(isMe ? theme.bubbleOutgoing : theme.bubbleIncoming)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .clipShape(bubbleClipShape)
         .foregroundStyle(isMe ? theme.bubbleOutgoingText : theme.bubbleIncomingText)
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
+            bubbleClipShape
                 .strokeBorder(
                     parsed.forwardedFrom != nil
                         ? (isMe ? Color.white.opacity(0.3) : Color.secondary.opacity(0.3))
@@ -330,6 +334,15 @@ struct ChatMessageView: View {
                     lineWidth: 1
                 )
         )
+        .overlay(alignment: isMe ? .bottomTrailing : .bottomLeading) {
+            if showTail {
+                BubbleTailOverlay(
+                    isOutgoing: isMe,
+                    color: isMe ? theme.bubbleOutgoing : theme.bubbleIncoming
+                )
+                .offset(x: isMe ? 6 : -6, y: 0)
+            }
+        }
         #if targetEnvironment(macCatalyst)
         BubbleHugLayout(maxWidth: hasLink ? 312 : bubbleMaxWidth) {
             bubble
@@ -338,6 +351,28 @@ struct ChatMessageView: View {
         bubble
             .frame(maxWidth: hasLink ? 312 : bubbleMaxWidth, alignment: isMe ? .trailing : .leading)
         #endif
+    }
+
+    // MARK: Bubble clip shape
+
+    /// When `showTail` is true, the bottom corner on the tail side uses
+    /// a tighter 4pt radius so the decorative tail connects flush.
+    /// Uses `UnevenRoundedRectangle` (iOS 16.4+).
+    private var bubbleClipShape: UnevenRoundedRectangle {
+        if showTail {
+            return UnevenRoundedRectangle(
+                topLeadingRadius: 20,
+                bottomLeadingRadius: isMe ? 20 : 4,
+                bottomTrailingRadius: isMe ? 4 : 20,
+                topTrailingRadius: 20
+            )
+        }
+        return UnevenRoundedRectangle(
+            topLeadingRadius: 20,
+            bottomLeadingRadius: 20,
+            bottomTrailingRadius: 20,
+            topTrailingRadius: 20
+        )
     }
 
     // MARK: Bubble max-width (responsive)
