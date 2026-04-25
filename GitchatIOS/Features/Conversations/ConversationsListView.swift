@@ -745,11 +745,32 @@ struct ConversationRow: View {
                             .instantTooltip("Muted")
                     }
                 }
-                if let sender = lastSenderLogin {
-                    Text(sender)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(secondaryTextColor)
-                        .lineLimit(1)
+                if let sender = lastSenderLogin, !isOutgoing {
+                    HStack(spacing: 4) {
+                        if let avatarURL = conversation.last_message?.sender_avatar,
+                           let url = URL(string: avatarURL) {
+                            CachedAsyncImage(
+                                url: url,
+                                contentMode: .fill,
+                                maxPixelSize: 60
+                            )
+                            .frame(width: 20, height: 20)
+                            .clipShape(Circle())
+                        } else {
+                            Circle()
+                                .fill(Color(.systemGray4))
+                                .frame(width: 20, height: 20)
+                                .overlay {
+                                    Text(String(sender.prefix(1)).uppercased())
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                }
+                        }
+                        Text(sender)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(secondaryTextColor)
+                            .lineLimit(1)
+                    }
                 }
                 HStack(alignment: .top, spacing: 6) {
                     if let draft = draftStore.draft(for: conversation.id) {
