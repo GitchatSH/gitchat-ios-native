@@ -18,7 +18,16 @@ final class OutboxStore: ObservableObject {
 
     /// Hoisted to avoid per-call allocation — `toMessage` is invoked
     /// from `ChatViewModel.visibleMessages` on every SwiftUI re-render.
-    private static let iso8601: ISO8601DateFormatter = ISO8601DateFormatter()
+    /// Includes fractional seconds so the `created_at` strings sort
+    /// lex-consistently with the BE's millisecond-precision timestamps —
+    /// otherwise a pending bubble (sec precision, "...:18Z") and a server
+    /// bubble (ms precision, "...:18.636Z") at the same second would
+    /// compare in the wrong order ('.' < 'Z' in ASCII).
+    private static let iso8601: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
 
     struct PendingMessage: Identifiable, Equatable {
         let localID: String          // "local-<UUID>"
@@ -119,13 +128,39 @@ final class OutboxStore: ObservableObject {
                 body: pending.content,
                 replyTo: pending.replyToID
             )
+            // Keep the bubble in its typed-order position across the
+            // pending→server transition: re-stamp `created_at` with the
+            // pending's client tap time (matching ms-precision format).
+            // BE INSERT time can be ~hundreds of ms later than the user's
+            // tap, which would otherwise cause the bubble to "jump" out of
+            // tap-order when it's sorted alongside still-pending siblings.
+            // On next vm.load() the BE time replaces this — but by then
+            // all sends in the burst have completed, so chain order = BE
+            // order = tap order; no visible re-sort.
+            let stamped = Message(
+                id: msg.id,
+                conversation_id: msg.conversation_id,
+                sender: msg.sender,
+                sender_avatar: msg.sender_avatar,
+                content: msg.content,
+                created_at: Self.iso8601.string(from: pending.createdAt),
+                edited_at: msg.edited_at,
+                reactions: msg.reactions,
+                attachment_url: msg.attachment_url,
+                type: msg.type,
+                reply_to_id: msg.reply_to_id,
+                reply: msg.reply,
+                attachments: msg.attachments,
+                unsent_at: msg.unsent_at,
+                reactionRows: msg.reactionRows
+            )
             markDelivered(conversationID: convId, localID: localID)
             // Hand off to the active view (if any). The handler dedupes via
             // its own atomic `seenIds.insert(...).inserted` against any
             // socket arrival of the same id. Do NOT pre-insert into
             // `ChatMessageView.seenIds` here — that would defeat the
             // handler's dedup and the bubble would never render.
-            deliveryHandlers[convId]?(msg)
+            deliveryHandlers[convId]?(stamped)
         } catch {
             Haptics.error()
             ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
