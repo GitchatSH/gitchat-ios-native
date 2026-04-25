@@ -12,6 +12,9 @@ let ChatTypingRowID: String = "__v2_typing__"
 /// outgoing message in a DM.
 let ChatSeenRowID: String = "__v2_seen__"
 
+/// Stable identifier for the "N unread messages" divider row.
+let ChatUnreadDividerID: String = "__v2_unread__"
+
 /// Prefix for synthetic date-pill rows. Using a regular row instead
 /// of a section footer avoids UITableView `.plain` style's
 /// sticky-footer behaviour, which pinned "Today" mid-screen as the
@@ -70,6 +73,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     let onReply: (Message) -> Void
     let swipeState: ChatSwipeState
     var onFirstVisibleDateChanged: ((Date?) -> Void)?
+    var unreadCount: Int = 0
+    var myReadAt: String? = nil
     let cellBuilder: (Message, Int) -> Cell
 
     // MARK: UIViewRepresentable plumbing
@@ -217,8 +222,11 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // work and can briefly disturb the scroll.
         let typingToggled = coord.lastTypingUsers != typingUsers
         let seenToggled = coord.lastShowSeen != showSeen
+        let unreadChanged = coord.lastUnreadCount != unreadCount || coord.lastMyReadAt != myReadAt
         let itemsChanged = coord.lastItems.map(\.id) != newIDs
-        if itemsChanged || typingToggled || seenToggled {
+        if itemsChanged || typingToggled || seenToggled || unreadChanged {
+            coord.lastUnreadCount = unreadCount
+            coord.lastMyReadAt = myReadAt
             let animate = isAppend || typingToggled
             coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: animate)
         } else {
@@ -282,9 +290,17 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         if !coord.didInitialScroll && !items.isEmpty {
             coord.didInitialScroll = true
             coord.initialScrollAt = Date()
-            DispatchQueue.main.async { [weak tv] in
-                guard let tv else { return }
-                tv.setContentOffset(.zero, animated: false)
+            // If there's an unread divider, scroll to it so the user
+            // lands right at the boundary between read and unread.
+            // Otherwise park at (0,0) as before.
+            let hasUnread = unreadCount > 0 && myReadAt != nil
+            DispatchQueue.main.async { [weak tv, weak coord] in
+                guard let tv, let coord else { return }
+                if hasUnread {
+                    coord.scrollTo(id: ChatUnreadDividerID, in: tv, animated: false)
+                } else {
+                    tv.setContentOffset(.zero, animated: false)
+                }
             }
         }
         _ = (wasNearBottom, prevHeight, prevOffset, isPrepend)
@@ -324,6 +340,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         var lastBottomInset: CGFloat = 0
         var keyboardWasOpen: Bool = false
         var lastScrollToBottomToken: Int = 0
+        var lastUnreadCount: Int = 0
+        var lastMyReadAt: String?
         var didInitialScroll = false
         var initialScrollAt: Date?
         private var loadingMore = false
@@ -423,6 +441,15 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 .margins(.vertical, 2)
                 return
             }
+            if id == ChatUnreadDividerID {
+                let count = parent.unreadCount
+                cell.contentConfiguration = UIHostingConfiguration {
+                    UnreadDividerRow(count: count)
+                        .rotationEffect(.degrees(180))
+                }
+                .margins(.all, 0)
+                return
+            }
             guard let msg = lastItems.first(where: { $0.id == id }) else { return }
             let idx = lastItems.firstIndex(where: { $0.id == id }) ?? indexPath.row
             let swipeState = parent.swipeState
@@ -478,11 +505,41 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             if !typingUsers.isEmpty { trailingRowsForLatestSection.append(ChatTypingRowID) }
             if showSeen { trailingRowsForLatestSection.append(ChatSeenRowID) }
 
+            // Determine where the unread divider belongs. In data
+            // space, items are oldest-first; in snapshot space (after
+            // reversal) they are newest-first. We want the divider
+            // between the last-read message and the first unread one.
+            // A message is "read" when its created_at <= myReadAt.
+            let unreadDividerMsgId: String? = {
+                guard parent.unreadCount > 0, let readAt = parent.myReadAt else { return nil }
+                // items (lastItems) are oldest-first. Walk from the
+                // END (newest) toward the START (oldest) and find the
+                // first message whose created_at <= readAt — that's
+                // the last read message. The divider goes just after
+                // it in the original array (= just before it in the
+                // reversed snapshot rows).
+                for msg in lastItems.reversed() {
+                    if (msg.created_at ?? "") <= readAt {
+                        return msg.id
+                    }
+                }
+                return nil
+            }()
+
             for (offset, group) in groups.reversed().enumerated() {
                 snap.appendSections([group.sectionID])
                 var rows = Array(group.messageIDs.reversed())
                 if offset == 0 {
                     rows = trailingRowsForLatestSection + rows
+                }
+                // Insert unread divider if it belongs in this section.
+                // In the reversed rows array, find the last-read
+                // message id and insert the divider AFTER it (visually
+                // above — because of rotation, "after" in the array =
+                // "above" on screen).
+                if let targetId = unreadDividerMsgId,
+                   let idx = rows.firstIndex(of: targetId) {
+                    rows.insert(ChatUnreadDividerID, at: idx)
                 }
                 // Append the date pill at the END of the section
                 // (rotation-space bottom of section = visually TOP of
@@ -588,7 +645,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             var foundDate: Date?
             for path in visiblePaths.reversed() {
                 guard let id = dataSource.itemIdentifier(for: path) else { continue }
-                if id == ChatTypingRowID || id == ChatSeenRowID || chatIsDateRow(id) { continue }
+                if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID || chatIsDateRow(id) { continue }
                 if let msg = lastItems.first(where: { $0.id == id }),
                    let raw = msg.created_at,
                    let d = isoFormatter.date(from: raw) {
@@ -637,7 +694,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     return
                 }
                 // Skip synthetic rows.
-                if id == ChatTypingRowID || id == ChatSeenRowID || chatIsDateRow(id) {
+                if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID || chatIsDateRow(id) {
                     gr.state = .cancelled
                     return
                 }
@@ -817,7 +874,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard let indexPath = tv.indexPathForRow(at: point) else { return }
             guard let cell = tv.cellForRow(at: indexPath) else { return }
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
-            if id == ChatTypingRowID || id == ChatSeenRowID { return }
+            if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { return }
             if chatIsDateRow(id) { return }
             guard let msg = lastItems.first(where: { $0.id == id }) else { return }
             if haptic { Haptics.impact(.medium) }
@@ -831,7 +888,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             var urls: [URL] = []
             for ip in indexPaths {
                 guard let id = dataSource.itemIdentifier(for: ip) else { continue }
-                if id == ChatTypingRowID || id == ChatSeenRowID { continue }
+                if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { continue }
                 if chatIsDateRow(id) { continue }
                 guard let msg = lastItems.first(where: { $0.id == id }) else { continue }
                 if let atts = msg.attachments {
@@ -860,6 +917,24 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard !urls.isEmpty else { return }
             ImageCache.shared.cancelPrefetch(urls: urls, maxPixelSize: 800)
         }
+    }
+}
+
+// MARK: - Unread divider row
+
+struct UnreadDividerRow: View {
+    let count: Int
+    var body: some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(Color("AccentColor").opacity(0.2)).frame(height: 1)
+            Text("\(count) tin chưa đọc")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(Color("AccentColor"))
+                .fixedSize()
+            Rectangle().fill(Color("AccentColor").opacity(0.2)).frame(height: 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 }
 

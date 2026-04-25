@@ -150,6 +150,11 @@ struct ChatView: View {
                 onReply: { actions.onReply($0) },
                 swipeState: swipeState,
                 onFirstVisibleDateChanged: { firstVisibleDate = $0 },
+                unreadCount: {
+                    let readAt = vm.readCursors[myLogin ?? ""] ?? vm.otherReadAt
+                    return visibleMessages.filter { ($0.created_at ?? "") > (readAt ?? "") }.count
+                }(),
+                myReadAt: vm.readCursors[myLogin ?? ""] ?? vm.otherReadAt,
                 cellBuilder: { msg, idx in
                     messageRow(for: msg, at: idx)
                 }
