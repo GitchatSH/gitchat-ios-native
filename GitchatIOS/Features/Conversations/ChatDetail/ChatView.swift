@@ -248,6 +248,8 @@ struct ChatView: View {
                 }
             }
             .padding(isMe ? .trailing : .leading, isMe ? 6 : 36)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
             .onTapGesture { actions.onSeenBy(msg) }
             .transition(.scale(scale: 0.5).combined(with: .opacity))
             if !isMe { Spacer() }

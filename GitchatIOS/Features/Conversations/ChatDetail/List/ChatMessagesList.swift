@@ -430,11 +430,13 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 cell.contentConfiguration = UIHostingConfiguration {
                     HStack {
                         Spacer()
-                        AvatarView(url: avatarURL, size: 16)
+                        AvatarView(url: avatarURL, size: 20)
                             .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1))
                     }
                     .padding(.trailing, 6)
                     .padding(.top, 2)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                     .rotationEffect(.degrees(180))
                 }
                 .margins(.horizontal, 12)
