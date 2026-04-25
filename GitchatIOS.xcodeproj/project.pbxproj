@@ -73,6 +73,7 @@
 		7E0C8192B9A0E77104D32979 /* APIClient+Discover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B339A4FABDFD26D236D1E5CF /* APIClient+Discover.swift */; };
 		80C07FFED87C334C9E6943FF /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500978A5175704DEC944236B /* NotificationService.swift */; };
 		84444B1C46F03AC10E764DAC /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F06688A6AEFA05D9DA56B8 /* CachedAsyncImage.swift */; };
+		A1B2C3D4E5F60718A9B0C1D2 /* GroupAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718A9B0C1D3 /* GroupAvatarView.swift */; };
 		85D7EE81B5791E46FB9D5E00 /* GroupInviteLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 169765DCCC813091D7683903 /* GroupInviteLinkSheet.swift */; };
 		86017ADD5A00CAC64683E83E /* CatalystDropModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA06F06179CF48CD72660313 /* CatalystDropModifier.swift */; };
 		875CBDD4A2B05627C889CFF4 /* OneSignalNotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -218,6 +219,7 @@
 		3255839AE4B52EEE916274AF /* RelativeTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelativeTime.swift; sourceTree = "<group>"; };
 		329C9B0EF873958D6A6CA198 /* ImageSendPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSendPreview.swift; sourceTree = "<group>"; };
 		36F06688A6AEFA05D9DA56B8 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718A9B0C1D3 /* GroupAvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupAvatarView.swift; sourceTree = "<group>"; };
 		3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		3CC840DF62F0D52265D6C401 /* GitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GitchatShareExtension.entitlements; sourceTree = "<group>"; };
 		3EACA3D0C53F605D0326E854 /* APIClient+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Group.swift"; sourceTree = "<group>"; };
@@ -452,6 +454,7 @@
 				6F911D72B3577520347C7A25 /* AppRouter.swift */,
 				36F06688A6AEFA05D9DA56B8 /* CachedAsyncImage.swift */,
 				D7B9E6E5D1D42735BC924A7D /* CatalystCloseButton.swift */,
+				A1B2C3D4E5F60718A9B0C1D3 /* GroupAvatarView.swift */,
 				2D5340BD447D966282E2E67D /* Haptics.swift */,
 				D2FDD46F7AAB3B78242FF13A /* HideScrollIndicators.swift */,
 				DC8B403BD6EAA7FADB23F9B5 /* ImageDownloader.swift */,
@@ -913,6 +916,7 @@
 				B7312742825A6973BA9FE86B /* AuthStore.swift in Sources */,
 				23DA5097E24D54E366575F0C /* BlockStore.swift in Sources */,
 				84444B1C46F03AC10E764DAC /* CachedAsyncImage.swift in Sources */,
+				A1B2C3D4E5F60718A9B0C1D2 /* GroupAvatarView.swift in Sources */,
 				7728830EE573F590481B74BE /* CatalystCloseButton.swift in Sources */,
 				86017ADD5A00CAC64683E83E /* CatalystDropModifier.swift in Sources */,
 				00DB4217A078DC17FD451462 /* ChannelDetailView.swift in Sources */,

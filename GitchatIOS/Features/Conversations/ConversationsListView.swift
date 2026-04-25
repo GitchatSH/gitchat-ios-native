@@ -652,9 +652,11 @@ struct ConversationRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if conversation.isGroup && !conversation.participantsOrEmpty.isEmpty {
-                GroupAvatarCluster(
-                    participants: Array(conversation.participantsOrEmpty.prefix(3)),
+            if conversation.isGroup {
+                GroupAvatarView(
+                    name: conversation.group_name ?? conversation.displayTitle,
+                    avatarURL: conversation.group_avatar_url,
+                    groupId: conversation.id,
                     size: avatarSize
                 )
             } else {
@@ -737,39 +739,6 @@ struct ConversationRow: View {
     }
 }
 
-/// Cluster of up to 3 participant avatars arranged inside a fixed square so
-/// group rows feel distinct from single-user rows.
-struct GroupAvatarCluster: View {
-    let participants: [ConversationParticipant]
-    let size: CGFloat
-
-    var body: some View {
-        ZStack {
-            Color.clear.frame(width: size, height: size)
-            if participants.count >= 3 {
-                AvatarView(url: participants[2].avatar_url, size: size * 0.55)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: -size * 0.18, y: -size * 0.18)
-                AvatarView(url: participants[1].avatar_url, size: size * 0.45)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: size * 0.22, y: -size * 0.08)
-                AvatarView(url: participants[0].avatar_url, size: size * 0.40)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: -size * 0.02, y: size * 0.22)
-            } else if participants.count == 2 {
-                AvatarView(url: participants[1].avatar_url, size: size * 0.6)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: -size * 0.16, y: -size * 0.12)
-                AvatarView(url: participants[0].avatar_url, size: size * 0.55)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: size * 0.18, y: size * 0.14)
-            } else if let first = participants.first {
-                AvatarView(url: first.avatar_url, size: size * 0.8)
-            }
-        }
-        .frame(width: size, height: size)
-    }
-}
 
 struct AvatarView: View {
     let url: String?
@@ -904,9 +873,11 @@ struct ConversationHoldPreview: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            if conversation.isGroup && !conversation.participantsOrEmpty.isEmpty {
-                GroupAvatarCluster(
-                    participants: Array(conversation.participantsOrEmpty.prefix(3)),
+            if conversation.isGroup {
+                GroupAvatarView(
+                    name: conversation.group_name ?? conversation.displayTitle,
+                    avatarURL: conversation.group_avatar_url,
+                    groupId: conversation.id,
                     size: 36
                 )
             } else {
