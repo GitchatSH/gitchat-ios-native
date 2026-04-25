@@ -727,6 +727,14 @@ struct ChatDetailView: View {
         ActiveConversationTracker.shared.id = vm.conversation.id
         await vm.load()
         socket.subscribe(conversation: vm.conversation.id)
+        // Receive server-confirmed self-sends directly from OutboxStore
+        // (so a successful send is visible even if the socket event for
+        // it never arrives — e.g. WS disconnect, local API without WS).
+        // Same dedup contract as the socket handler below.
+        OutboxStore.shared.registerDeliveryHandler(conversationID: vm.conversation.id) { msg in
+            guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
+            vm.messages.append(msg)
+        }
         socket.onMessageSent = { msg in
             guard msg.conversation_id == vm.conversation.id else { return }
             // Dedup using the atomic Set insert: the only way a second
@@ -789,6 +797,7 @@ struct ChatDetailView: View {
     }
 
     private func onDisappearCleanup() {
+        OutboxStore.shared.unregisterDeliveryHandler(conversationID: vm.conversation.id)
         socket.unsubscribe(conversation: vm.conversation.id)
         socket.emitTyping(conversationId: vm.conversation.id, isTyping: false)
         if socket.currentConversationId == vm.conversation.id {
