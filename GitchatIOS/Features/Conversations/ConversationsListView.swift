@@ -789,6 +789,40 @@ struct ConversationRow: View {
         return .sent
     }
 
+    private var accessibilityRowLabel: String {
+        var parts: [String] = []
+        parts.append(conversation.displayTitle)
+
+        if let login = conversation.other_user?.login,
+           PresenceStore.shared.isOnline(login) {
+            parts.append("online")
+        }
+
+        if let draft = draftStore.draft(for: conversation.id) {
+            parts.append("Draft: \(draft)")
+        } else {
+            let preview = conversation.previewText ?? ""
+            if !preview.isEmpty { parts.append(preview) }
+        }
+
+        switch checkmarkState {
+        case .sending: parts.append("Sending")
+        case .sent: parts.append("Sent")
+        case .read: parts.append("Read")
+        case .failed: parts.append("Failed to send")
+        case .none: break
+        }
+
+        if displayedUnread > 0 {
+            parts.append("\(displayedUnread) unread message\(displayedUnread == 1 ? "" : "s")")
+        }
+        if hasMention { parts.append("You were mentioned") }
+        if isMuted { parts.append("Muted") }
+        if conversation.isPinned { parts.append("Pinned") }
+
+        return parts.joined(separator: ". ")
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if conversation.isGroup {
@@ -933,6 +967,8 @@ struct ConversationRow: View {
                 }
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityRowLabel)
         #if targetEnvironment(macCatalyst)
         .padding(.horizontal, macRowHorizontalPadding)
         .padding(.vertical, macRowVerticalPadding)
@@ -965,6 +1001,7 @@ struct AvatarView: View {
             .onAppear {
                 if let login { presence.ensure([login]) }
             }
+            .accessibilityHidden(true)
     }
 }
 

@@ -35,6 +35,7 @@ struct GroupAvatarView: View {
             CachedAsyncImage(url: url, contentMode: .fill, maxPixelSize: size * 3)
                 .frame(width: size, height: size)
                 .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .accessibilityHidden(true)
         } else {
             let g = gradient
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -45,6 +46,7 @@ struct GroupAvatarView: View {
                         .font(.system(size: size * 0.38, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                 }
+                .accessibilityHidden(true)
         }
     }
 }
