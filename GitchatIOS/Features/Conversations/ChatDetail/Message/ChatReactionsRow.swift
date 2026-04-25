@@ -37,9 +37,9 @@ struct ChatReactionsRow: View {
             }
         }
         label
-            .font(.caption2)
+            .font(.footnote)
             .padding(.horizontal, 8).padding(.vertical, 4)
-            .frame(minHeight: 28)
+            .frame(minHeight: 44)
             .background(
                 mine
                     ? Color("AccentColor").opacity(0.08)
