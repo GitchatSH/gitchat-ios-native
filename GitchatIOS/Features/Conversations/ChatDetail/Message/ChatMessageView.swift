@@ -77,10 +77,10 @@ struct ChatMessageView: View {
     /// Session-wide set of message ids that have already materialized
     /// on screen — so the fade-in animation only fires the *first*
     /// time a bubble appears, not on every scroll recycle.
-    nonisolated(unsafe) static var seenIds: Set<String> = []
+    @MainActor static var seenIds: Set<String> = []
 
-    static func markSeen(_ ids: [String]) {
-        for id in ids { seenIds.insert(id) }
+    @MainActor static func markSeen(_ ids: [String]) {
+        seenIds.formUnion(ids)
     }
 
     // MARK: Body
@@ -109,6 +109,7 @@ struct ChatMessageView: View {
                 size: 32,
                 login: message.sender
             )
+            .frame(width: 44, height: 44)
             .contentShape(Circle())
             .onTapGesture { onAvatarTap?() }
             .instantTooltip("@\(message.sender)")
@@ -171,21 +172,21 @@ struct ChatMessageView: View {
     }
 
     private var timestampMeta: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 4) {
             if message.edited_at != nil {
                 Text("edited")
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundStyle(metaColor)
             }
             Text(message.shortTime ?? "")
-                .font(.system(size: 10, weight: .regular))
+                .font(.caption2)
                 .foregroundStyle(metaColor)
 
             if isMe, !message.id.hasPrefix("local-"), message.unsent_at == nil {
                 doubleCheckView
             }
         }
-        .padding(.trailing, 6)
+        .padding(.trailing, 8)
         .padding(.bottom, 4)
     }
 
@@ -193,11 +194,13 @@ struct ChatMessageView: View {
     private var doubleCheckView: some View {
         ZStack(alignment: .leading) {
             Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .bold))
+                .font(.caption2.weight(.bold))
+                .imageScale(.small)
                 .foregroundStyle(metaColor)
             if isRead {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.caption2.weight(.bold))
+                    .imageScale(.small)
                     .foregroundStyle(metaColor)
                     .offset(x: 4)
             }
@@ -212,7 +215,7 @@ struct ChatMessageView: View {
         if isPinned {
             Button { onPinTap?() } label: {
                 Image(systemName: "pin.fill")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.white)
                     .rotationEffect(.degrees(45))
                     .padding(5)
@@ -220,6 +223,7 @@ struct ChatMessageView: View {
                     .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
             }
             .buttonStyle(.plain)
+            .frame(minWidth: 44, minHeight: 44)
             .offset(x: 10, y: -10)
         }
     }
@@ -298,20 +302,20 @@ struct ChatMessageView: View {
     /// exactly as tall as the content.
     @ViewBuilder
     private func inlineReplyQuote(for reply: ReplyPreview) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+        VStack(alignment: .leading, spacing: 4) {
             if let login = reply.sender_login {
                 Text("@\(login)")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(isMe ? Color.white : theme.replyAccent)
             }
             Text(reply.body ?? "…")
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundStyle(isMe ? Color.white.opacity(0.85) : .secondary)
                 .lineLimit(2)
         }
         .padding(.leading, 8)
-        .padding(.trailing, 10)
-        .padding(.vertical, 5)
+        .padding(.trailing, 12)
+        .padding(.vertical, 4)
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(isMe ? Color.white : theme.replyAccent)
@@ -320,7 +324,7 @@ struct ChatMessageView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            isMe ? Color.white.opacity(0.18) : Color.black.opacity(0.06),
+            isMe ? Color.white.opacity(0.18) : Color(.tertiarySystemFill),
             in: RoundedRectangle(cornerRadius: 8)
         )
         .contentShape(Rectangle())
@@ -355,14 +359,14 @@ struct ChatMessageView: View {
                     .foregroundStyle(message.sender.senderColor)
                     .padding(.horizontal, 14)
                     .padding(.top, 8)
-                    .padding(.bottom, 2)
+                    .padding(.bottom, 4)
             }
             if let from = parsed.forwardedFrom {
                 HStack(spacing: 4) {
                     Image(systemName: "arrowshape.turn.up.right.fill")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.caption2.weight(.bold))
                     Text("Forwarded from @\(from)")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                 }
                 .foregroundStyle(isMe ? Color.white.opacity(0.85) : .secondary)
                 .padding(.horizontal, 12)
@@ -385,8 +389,8 @@ struct ChatMessageView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
                     .padding(.horizontal, 14)
-                    .padding(.vertical, parsed.forwardedFrom == nil && !showInlineReply ? 10 : 7)
-                    .padding(.bottom, parsed.forwardedFrom == nil && !showInlineReply ? 8 : 10)
+                    .padding(.vertical, 8)
+                    .padding(.bottom, 20)
             }
             if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
                 LinkPreviewCard(url: linkURL, isMe: isMe)
@@ -415,7 +419,7 @@ struct ChatMessageView: View {
                     isOutgoing: isMe,
                     color: isMe ? theme.bubbleOutgoing : theme.bubbleIncoming
                 )
-                .offset(x: isMe ? 6 : -6, y: 0)
+                .offset(x: isMe ? 5 : -5, y: 2)
             }
         }
         #if targetEnvironment(macCatalyst)
@@ -460,7 +464,7 @@ struct ChatMessageView: View {
         if UIApplication.shared.preferredContentSizeCategory.isAccessibilityCategory {
             return screenWidth * 0.85
         }
-        return min(screenWidth * 0.75, 304)
+        return min(screenWidth * 0.78, 340)
         #endif
     }
 
