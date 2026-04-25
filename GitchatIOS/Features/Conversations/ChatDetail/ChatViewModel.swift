@@ -67,6 +67,11 @@ final class ChatViewModel: ObservableObject {
         } else {
             UserDefaults.standard.set(draft, forKey: draftKey)
         }
+        NotificationCenter.default.post(
+            name: DraftStore.draftChangedNotification,
+            object: nil,
+            userInfo: ["conversationId": conversation.id]
+        )
     }
 
     // MARK: - Loading

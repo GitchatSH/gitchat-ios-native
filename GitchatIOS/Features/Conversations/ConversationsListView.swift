@@ -511,6 +511,7 @@ struct ConversationsListView: View {
             }
             .task {
                 await vm.load()
+                DraftStore.shared.loadAll(for: vm.conversations.map(\.id))
                 socket.onConversationUpdated = { Task { await vm.load() } }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gitchatMessageSent)) { note in
@@ -587,6 +588,7 @@ struct ConversationRow: View {
     /// in the sticky detail panel. Flips text/icon colors to white
     /// for contrast against the accent-color background.
     var isActive: Bool = false
+    @ObservedObject private var draftStore = DraftStore.shared
 
     private var primaryTextColor: Color { isActive ? .white : .primary }
     private var secondaryTextColor: Color { isActive ? .white.opacity(0.85) : .secondary }
@@ -648,6 +650,27 @@ struct ConversationRow: View {
             return ""
         }
         return text
+    }
+
+    @ViewBuilder
+    private var previewContent: some View {
+        if let msg = conversation.last_message, (msg.type ?? "user") != "user" {
+            // System message — italic
+            Text(previewWithoutPhotoEmoji)
+                .font(.subheadline.italic())
+                .foregroundStyle(Color(.systemGray2))
+                .lineLimit(2)
+        } else if conversation.isGroup && isOutgoing && conversation.last_message != nil {
+            // Group outgoing — "You:" prefix
+            (Text("You: ").foregroundColor(Color("AccentColor")).font(.subheadline)
+            + Text(previewWithoutPhotoEmoji).foregroundColor(secondaryTextColor).font(.subheadline))
+            .lineLimit(2)
+        } else {
+            Text(previewWithoutPhotoEmoji)
+                .font(.subheadline)
+                .foregroundStyle(secondaryTextColor)
+                .lineLimit(2)
+        }
     }
 
     private enum CheckmarkState {
@@ -729,19 +752,22 @@ struct ConversationRow: View {
                         .lineLimit(1)
                 }
                 HStack(alignment: .top, spacing: 6) {
-                    if let thumbURL = lastPhotoURL {
-                        CachedAsyncImage(
-                            url: thumbURL,
-                            contentMode: .fill,
-                            maxPixelSize: 80
-                        )
-                        .frame(width: 22, height: 22)
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    }
-                    Text(previewWithoutPhotoEmoji)
-                        .font(.subheadline)
-                        .foregroundStyle(secondaryTextColor)
+                    if let draft = draftStore.draft(for: conversation.id) {
+                        (Text("Draft: ").foregroundColor(Color(.systemRed)).font(.subheadline)
+                        + Text(draft).foregroundColor(secondaryTextColor).font(.subheadline))
                         .lineLimit(2)
+                    } else {
+                        if let thumbURL = lastPhotoURL {
+                            CachedAsyncImage(
+                                url: thumbURL,
+                                contentMode: .fill,
+                                maxPixelSize: 80
+                            )
+                            .frame(width: 22, height: 22)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        }
+                        previewContent
+                    }
                 }
             }
             Spacer(minLength: 0)
