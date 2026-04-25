@@ -11,7 +11,6 @@ import UIKit
 /// State owned here:
 /// - `appeared`: drives the first-time-only opacity fade so recycled
 ///   cells don't re-pop on scroll.
-/// - `showTime`: tap-to-toggle relative time above the bubble.
 ///
 /// State owned by the cell factory (via callbacks):
 /// - Reaction / reply / attachment / pin / avatar taps.
@@ -50,10 +49,13 @@ struct ChatMessageView: View {
     /// bubble (outgoing → trailing, incoming → leading). Shown on the
     /// last message in a same-sender group.
     var showTail: Bool = false
+    /// DM: when the other user last read (ISO 8601 timestamp).
+    var otherReadAt: String? = nil
+    /// Group: per-login read timestamps.
+    var readCursors: [String: String] = [:]
 
     // MARK: Local state
 
-    @State private var showTime = false
     @State private var appeared = false
 
     /// Session-wide set of message ids that have already materialized
@@ -106,12 +108,6 @@ struct ChatMessageView: View {
     @ViewBuilder
     private var bubbleColumn: some View {
         VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
-            if showTime {
-                Text(RelativeTime.format(message.created_at))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-            }
             if !isMe && showHeader {
                 Text(message.sender)
                     .font(.caption2)
@@ -121,16 +117,7 @@ struct ChatMessageView: View {
                 .overlay(alignment: .topTrailing) { pinBadge }
                 .scaleEffect(isPulsing ? 1.08 : 1)
                 .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isPulsing)
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) { showTime.toggle() }
-                }
                 .instantTooltip(ChatMessageText.fullTimestamp(message.created_at))
-            if message.edited_at != nil {
-                Text("edited")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
-                    .instantTooltip("Edited \(ChatMessageText.fullTimestamp(message.edited_at))")
-            }
             if let reactions = message.reactions, !reactions.isEmpty {
                 ChatReactionsRow(
                     reactions: reactions,
@@ -149,6 +136,62 @@ struct ChatMessageView: View {
                 .filter { $0.user_login == me }
                 .map { $0.emoji }
         )
+    }
+
+    // MARK: Read state
+
+    private var isRead: Bool {
+        guard isMe, let createdAt = message.created_at else { return false }
+        // DM: other user read past this message
+        if let otherReadAt = otherReadAt, otherReadAt >= createdAt { return true }
+        // Group: any non-me cursor >= createdAt
+        if let myLogin = myLogin {
+            for (login, readAt) in readCursors where login != myLogin {
+                if readAt >= createdAt { return true }
+            }
+        }
+        return false
+    }
+
+    // MARK: Inline timestamp + checkmarks
+
+    private var metaColor: Color {
+        isMe ? theme.bubbleMetaOut : theme.bubbleMetaIn
+    }
+
+    private var timestampMeta: some View {
+        HStack(spacing: 2) {
+            if message.edited_at != nil {
+                Text("edited")
+                    .font(.system(size: 10))
+                    .foregroundStyle(metaColor)
+            }
+            Text(message.shortTime ?? "")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(metaColor)
+
+            if isMe, !message.id.hasPrefix("local-"), message.unsent_at == nil {
+                doubleCheckView
+            }
+        }
+        .padding(.trailing, 6)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private var doubleCheckView: some View {
+        ZStack(alignment: .leading) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(metaColor)
+            if isRead {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(metaColor)
+                    .offset(x: 4)
+            }
+        }
+        .frame(width: isRead ? 14 : 10, height: 10)
     }
 
     // MARK: Pin badge
@@ -217,6 +260,15 @@ struct ChatMessageView: View {
             if !message.content.isEmpty ||
                 (message.reply != nil && !hideReplyPreview) {
                 textBubble
+            } else {
+                // Attachment-only: float timestamp over image
+                HStack {
+                    Spacer()
+                    timestampMeta
+                        .padding(4)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .padding(.top, -12)
             }
         }
     }
@@ -314,13 +366,16 @@ struct ChatMessageView: View {
                     .textSelection(.enabled)
                     .padding(.horizontal, 14)
                     .padding(.vertical, parsed.forwardedFrom == nil && !showInlineReply ? 10 : 7)
-                    .padding(.bottom, parsed.forwardedFrom == nil && !showInlineReply ? 0 : 2)
+                    .padding(.bottom, parsed.forwardedFrom == nil && !showInlineReply ? 8 : 10)
             }
             if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
                 LinkPreviewCard(url: linkURL, isMe: isMe)
                     .padding(.horizontal, 6)
-                    .padding(.bottom, 6)
+                    .padding(.bottom, 14)
             }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            timestampMeta
         }
         .background(isMe ? theme.bubbleOutgoing : theme.bubbleIncoming)
         .clipShape(bubbleClipShape)

@@ -312,6 +312,34 @@ struct Message: Codable, Identifiable, Hashable {
     }
 }
 
+extension Message {
+    /// "HH:mm" display string for the inline bubble timestamp.
+    var shortTime: String? {
+        guard let created = created_at else { return nil }
+        // Thread-local cache: avoid re-creating formatters per cell.
+        struct Cache {
+            static let iso: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                return f
+            }()
+            static let isoBasic: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime]
+                return f
+            }()
+            static let hhmm: DateFormatter = {
+                let f = DateFormatter()
+                f.dateFormat = "HH:mm"
+                return f
+            }()
+        }
+        guard let date = Cache.iso.date(from: created)
+                ?? Cache.isoBasic.date(from: created) else { return nil }
+        return Cache.hhmm.string(from: date)
+    }
+}
+
 struct MessageReaction: Codable, Hashable {
     let emoji: String
     let count: Int

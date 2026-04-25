@@ -15,6 +15,10 @@ struct ChatTheme: Equatable {
     var bubbleOutgoing: Color = Color("AccentColor")
     var bubbleIncomingText: Color = Color(.label)
     var bubbleOutgoingText: Color = .white
+    /// Timestamp + checkmark color inside outgoing bubbles.
+    var bubbleMetaOut: Color = Color.white.opacity(0.7)
+    /// Timestamp + checkmark color inside incoming bubbles.
+    var bubbleMetaIn: Color = Color(.secondaryLabel)
 
     // MARK: Reply preview
     var replyAccent: Color = Color("AccentColor")

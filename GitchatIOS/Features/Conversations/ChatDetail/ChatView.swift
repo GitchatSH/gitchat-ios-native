@@ -202,7 +202,9 @@ struct ChatView: View {
                     onPinTap: { actions.onPinBadgeTap(msg) },
                     onAvatarTap: { actions.onAvatarTap(msg.sender) },
                     imageMatchedNS: imageZoomNamespace,
-                    showTail: showTail
+                    showTail: showTail,
+                    otherReadAt: vm.otherReadAt,
+                    readCursors: vm.readCursors
                 )
                 .padding(.top, showHeader ? 20 : 4)
                 .chatSwipeToReply(isMe: isMe, messageId: msg.id)
@@ -345,7 +347,9 @@ struct ChatView: View {
             myLogin: myLogin,
             resolvedAvatar: resolveAvatar(t.message),
             showHeader: true,
-            isPinned: vm.pinnedIds.contains(t.message.id)
+            isPinned: vm.pinnedIds.contains(t.message.id),
+            otherReadAt: vm.otherReadAt,
+            readCursors: vm.readCursors
         )
     }
 
