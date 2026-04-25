@@ -17,15 +17,17 @@ struct DatePillOverlay: View {
 }
 
 extension Date {
+    private static let dayMonthFmt: DateFormatter = {
+        let f = DateFormatter(); f.locale = .current; f.dateFormat = "d MMM"; return f
+    }()
+    private static let dayMonthYearFmt: DateFormatter = {
+        let f = DateFormatter(); f.locale = .current; f.dateFormat = "d MMM yyyy"; return f
+    }()
+
     var chatDateLabel: String {
-        let cal = Calendar.current
-        if cal.isDateInToday(self) { return "Today" }
-        if cal.isDateInYesterday(self) { return "Yesterday" }
-        let fmt = DateFormatter()
-        fmt.locale = Locale.current
-        fmt.dateFormat = cal.component(.year, from: self) == cal.component(.year, from: Date())
-            ? "d MMM"
-            : "d MMM yyyy"
-        return fmt.string(from: self)
+        if Calendar.current.isDateInToday(self) { return "Today" }
+        if Calendar.current.isDateInYesterday(self) { return "Yesterday" }
+        let sameYear = Calendar.current.component(.year, from: self) == Calendar.current.component(.year, from: Date())
+        return (sameYear ? Self.dayMonthFmt : Self.dayMonthYearFmt).string(from: self)
     }
 }

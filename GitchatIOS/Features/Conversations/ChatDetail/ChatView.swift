@@ -43,7 +43,7 @@ struct ChatView: View {
     let mentionSuggestions: [ConversationParticipant]
     let resolveAvatar: (Message) -> String?
     let seenByLogins: (Message) -> [String]
-    let seenCursorLogins: (Message, Int) -> [String]
+    let seenCursorLogins: (Message, String?) -> [String]
     let participants: [ConversationParticipant]
     let blockedBannerLogin: String?
     let onUnblock: (String) -> Void
@@ -91,6 +91,11 @@ struct ChatView: View {
     @State private var firstVisibleDate: Date?
     @State private var pinnedBannerDismissed = false
     @StateObject private var swipeState = ChatSwipeState()
+    /// Count of new messages that arrived while the user was scrolled up.
+    /// Incremented when `isAtBottom == false` and a new message appears;
+    /// reset to 0 when the user scrolls back to the bottom.
+    @State private var newWhileScrolledUp: Int = 0
+    @State private var newMentionsWhileScrolledUp: Int = 0
 
     // MARK: Body
 
@@ -117,6 +122,25 @@ struct ChatView: View {
         }
         .overlay { menuOverlay }
         .environment(\.chatTheme, .default)
+        // Reset "new while scrolled" counters when the user scrolls back to bottom.
+        .onChange(of: isAtBottom) { atBottom in
+            if atBottom {
+                newWhileScrolledUp = 0
+                newMentionsWhileScrolledUp = 0
+            }
+        }
+        // Track new messages arriving while scrolled up.
+        .onChange(of: visibleMessages.count) { newCount in
+            guard !isAtBottom, newCount > 0 else { return }
+            // The newest message is at index 0 (rotated list).
+            let newest = visibleMessages[0]
+            // Only count messages from OTHER users (own sends auto-scroll).
+            guard newest.sender != myLogin else { return }
+            newWhileScrolledUp += 1
+            if let login = myLogin, newest.content.localizedCaseInsensitiveContains("@\(login)") {
+                newMentionsWhileScrolledUp += 1
+            }
+        }
     }
 
     // MARK: Pinned banner
@@ -199,7 +223,8 @@ struct ChatView: View {
             let prev = idx > 0 ? visibleMessages[idx - 1] : nil
             let showHeader = prev?.sender != msg.sender || (prev?.type ?? "user") != "user"
             let isMe = msg.sender == myLogin
-            let cursors = seenCursorLogins(msg, idx)
+            let nextCreatedAt: String? = (idx + 1 < visibleMessages.count) ? (visibleMessages[idx + 1].created_at ?? "") : nil
+            let cursors = seenCursorLogins(msg, nextCreatedAt)
             // Tail on the last message in a same-sender group. In the
             // rotated table, idx-1 is the NEWER message (visually below).
             // Show tail when the next visual message has a different sender.
@@ -362,25 +387,16 @@ struct ChatView: View {
 
     // MARK: Jump button computed counts
 
-    /// My read cursor (or fallback). Messages newer than this are "unread".
-    private var myReadAt: String? {
-        vm.readCursors[myLogin ?? ""] ?? vm.otherReadAt
-    }
-
-    /// Number of unread messages below the viewport.
+    /// Number of new messages that arrived while the user was scrolled up.
+    /// Matches Telegram's behaviour: the badge counts messages you haven't
+    /// scrolled to yet, not total-unread-in-conversation.
     private var jumpUnreadCount: Int {
-        guard let readAt = myReadAt else { return 0 }
-        return visibleMessages.filter { ($0.created_at ?? "") > readAt }.count
+        newWhileScrolledUp
     }
 
-    /// Number of unread messages that @-mention the current user.
+    /// Number of @-mentions that arrived while the user was scrolled up.
     private var jumpMentionCount: Int {
-        guard let login = myLogin, let readAt = myReadAt else { return 0 }
-        let needle = "@\(login)"
-        return visibleMessages.filter { msg in
-            (msg.created_at ?? "") > readAt &&
-            msg.content.localizedCaseInsensitiveContains(needle)
-        }.count
+        newMentionsWhileScrolledUp
     }
 
     // MARK: Menu overlay

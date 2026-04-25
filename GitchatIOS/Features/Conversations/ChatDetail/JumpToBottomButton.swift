@@ -63,7 +63,7 @@ struct JumpButtonStack: View {
                     label()
                 }
                 .frame(width: 38, height: 38)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .glassEffect(.regular, in: .circle)
             } else {
                 ZStack {
                     Circle()

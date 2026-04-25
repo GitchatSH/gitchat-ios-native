@@ -211,8 +211,8 @@ struct ChatDetailView: View {
             mentionSuggestions: mentionSuggestions,
             resolveAvatar: { resolveAvatar(for: $0) },
             seenByLogins: { vm.seenByLogins(for: $0) },
-            seenCursorLogins: { msg, idx in
-                vm.conversation.isGroup ? vm.seenCursorLogins(for: msg, at: idx) : []
+            seenCursorLogins: { msg, nextCreatedAt in
+                vm.conversation.isGroup ? vm.seenCursorLogins(for: msg, nextCreatedAt: nextCreatedAt) : []
             },
             participants: vm.conversation.participantsOrEmpty,
             blockedBannerLogin: otherBlockedLogin,

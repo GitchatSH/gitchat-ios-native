@@ -177,13 +177,12 @@ final class ChatViewModel: ObservableObject {
         }.sorted()
     }
 
-    func seenCursorLogins(for message: Message, at idx: Int) -> [String] {
+    func seenCursorLogins(for message: Message, nextCreatedAt: String?) -> [String] {
         guard conversation.isGroup, !readCursors.isEmpty else { return [] }
         let msgDate = message.created_at ?? ""
-        let nextDate: String? = (idx + 1 < messages.count) ? (messages[idx + 1].created_at ?? "") : nil
         return readCursors.compactMap { login, readAt in
             guard readAt >= msgDate else { return nil }
-            if let nextDate, readAt >= nextDate { return nil }
+            if let nextDate = nextCreatedAt, readAt >= nextDate { return nil }
             return login
         }.sorted()
     }

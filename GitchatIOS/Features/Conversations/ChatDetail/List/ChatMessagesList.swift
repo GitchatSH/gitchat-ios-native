@@ -192,6 +192,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             }
             if !changedIDs.isEmpty {
                 coord.lastItems = items
+                coord.itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
                 coord.reconfigure(ids: changedIDs)
             }
         }
@@ -232,6 +233,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: animate)
         } else {
             coord.lastItems = items
+            coord.itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         }
 
         // Pinned changes: reconfigure so the pin badge flips without
@@ -242,11 +244,13 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             coord.reconfigure(ids: Array(diff))
         }
 
-        // Read cursors: touch every message row so the seen-by avatars
-        // (rendered inside the cell) re-evaluate.
+        // Read cursors: only reconfigure outgoing messages — incoming
+        // bubbles don't render seen-by avatars, so touching every row
+        // was O(n) wasted work.
         if coord.lastReadCursors != readCursors {
             coord.lastReadCursors = readCursors
-            coord.reconfigure(ids: items.map(\.id))
+            let outgoingIds = items.filter { isMe($0) }.map(\.id)
+            coord.reconfigure(ids: outgoingIds)
         }
 
         // Pulse highlight — reconfigure leaving + entering rows so the
@@ -333,6 +337,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         private var dataSource: UITableViewDiffableDataSource<String, String>!
 
         var lastItems: [Message] = []
+        var itemById: [String: Message] = [:]
         var lastTypingUsers: [String] = []
         var lastShowSeen: Bool = false
         var lastPinnedIds: Set<String> = []
@@ -454,7 +459,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 .margins(.all, 0)
                 return
             }
-            guard let msg = lastItems.first(where: { $0.id == id }) else { return }
+            guard let msg = itemById[id] else { return }
             let idx = lastItems.firstIndex(where: { $0.id == id }) ?? indexPath.row
             let swipeState = parent.swipeState
             // Zero cell margins AND zero min-size. UIHostingConfiguration
@@ -485,6 +490,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             animated: Bool
         ) {
             lastItems = items
+            itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
             lastTypingUsers = typingUsers
             lastShowSeen = showSeen
 
@@ -650,7 +656,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             for path in visiblePaths.reversed() {
                 guard let id = dataSource.itemIdentifier(for: path) else { continue }
                 if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID || chatIsDateRow(id) { continue }
-                if let msg = lastItems.first(where: { $0.id == id }),
+                if let msg = itemById[id],
                    let raw = msg.created_at,
                    let d = isoFormatter.date(from: raw) {
                     foundDate = d
@@ -702,7 +708,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     gr.state = .cancelled
                     return
                 }
-                guard let msg = lastItems.first(where: { $0.id == id }) else {
+                guard let msg = itemById[id] else {
                     gr.state = .cancelled
                     return
                 }
@@ -776,7 +782,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 }
                 if shouldFire,
                    let id = firedId,
-                   let msg = lastItems.first(where: { $0.id == id }) {
+                   let msg = itemById[id] {
                     parent.onReply(msg)
                 }
 
@@ -880,7 +886,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
             if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { return }
             if chatIsDateRow(id) { return }
-            guard let msg = lastItems.first(where: { $0.id == id }) else { return }
+            guard let msg = itemById[id] else { return }
             if haptic { Haptics.impact(.medium) }
             let frame = cell.convert(cell.bounds, to: nil)
             parent.onCellLongPressed(msg, frame)
@@ -894,7 +900,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 guard let id = dataSource.itemIdentifier(for: ip) else { continue }
                 if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { continue }
                 if chatIsDateRow(id) { continue }
-                guard let msg = lastItems.first(where: { $0.id == id }) else { continue }
+                guard let msg = itemById[id] else { continue }
                 if let atts = msg.attachments {
                     for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {
                         if let u = URL(string: a.url), !u.isFileURL { urls.append(u) }
