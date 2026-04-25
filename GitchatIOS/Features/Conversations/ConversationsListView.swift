@@ -683,6 +683,16 @@ struct ConversationRow: View {
         return sender == login
     }
 
+    private var hasMention: Bool {
+        guard displayedUnread > 0,
+              conversation.isGroup,
+              let content = conversation.last_message?.content,
+              !content.isEmpty,
+              let login = AuthStore.shared.login else { return false }
+        let pattern = "(?<![\\w])@\(NSRegularExpression.escapedPattern(for: login))(?![\\w])"
+        return content.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
     private var checkmarkState: CheckmarkState {
         guard isOutgoing, let msg = conversation.last_message else { return .none }
         if msg.unsent_at != nil { return .failed }
@@ -731,20 +741,10 @@ struct ConversationRow: View {
                 )
             }
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(conversation.displayTitle)
-                        .font(displayedUnread > 0 ? .headline : .body)
-                        .foregroundStyle(primaryTextColor)
-                        .lineLimit(1)
-                    if conversation.isPinned {
-                        Image(systemName: "pin.fill").font(.caption2).foregroundStyle(secondaryTextColor)
-                            .instantTooltip("Pinned")
-                    }
-                    if isMuted {
-                        Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(secondaryTextColor)
-                            .instantTooltip("Muted")
-                    }
-                }
+                Text(conversation.displayTitle)
+                    .font(displayedUnread > 0 ? .headline : .body)
+                    .foregroundStyle(primaryTextColor)
+                    .lineLimit(1)
                 if let sender = lastSenderLogin, !isOutgoing {
                     HStack(spacing: 4) {
                         if let avatarURL = conversation.last_message?.sender_avatar,
@@ -824,25 +824,47 @@ struct ConversationRow: View {
                         .foregroundStyle(displayedUnread > 0 && !isActive ? Color("AccentColor") : secondaryTextColor)
                         .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
                 }
-                if displayedUnread > 0 {
-                    let isMutedBadge = isMuted
-                    Text("\(displayedUnread)")
-                        .font(.footnote.bold())
-                        .padding(.horizontal, 8).padding(.vertical, 2)
-                        .frame(minWidth: 24, minHeight: 24)
-                        .background(
-                            isActive
-                                ? Color.white
-                                : (isMutedBadge ? Color(.systemGray3) : Color("AccentColor")),
-                            in: .capsule
-                        )
-                        .foregroundStyle(
-                            isActive
-                                ? Color("AccentColor")
-                                : (isMutedBadge ? Color(.label) : .white)
-                        )
-                } else {
-                    Color.clear.frame(width: 1, height: 18)
+                HStack(spacing: 4) {
+                    if displayedUnread > 0 {
+                        if hasMention {
+                            Text("@")
+                                .font(.caption.bold())
+                                .frame(width: 20, height: 20)
+                                .background(Color("AccentColor"), in: Circle())
+                                .foregroundStyle(.white)
+                        }
+                        Text("\(displayedUnread)")
+                            .font(.footnote.bold())
+                            .padding(.horizontal, 8).padding(.vertical, 2)
+                            .frame(minWidth: 24, minHeight: 24)
+                            .background(
+                                isActive
+                                    ? Color.white
+                                    : (isMuted ? Color(.systemGray) : Color("AccentColor")),
+                                in: .capsule
+                            )
+                            .foregroundStyle(
+                                isActive
+                                    ? Color("AccentColor")
+                                    : .white
+                            )
+                        if isMuted {
+                            Image(systemName: "speaker.slash.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(secondaryTextColor)
+                        }
+                    } else if conversation.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(secondaryTextColor)
+                        if isMuted {
+                            Image(systemName: "speaker.slash.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(secondaryTextColor)
+                        }
+                    } else {
+                        Color.clear.frame(width: 1, height: 24)
+                    }
                 }
             }
         }
