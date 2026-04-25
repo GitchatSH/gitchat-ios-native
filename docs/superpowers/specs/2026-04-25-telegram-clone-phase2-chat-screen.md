@@ -1,34 +1,52 @@
 # Phase 2: Chat Screen — Telegram Clone Spec
 
 ## Mục tiêu
-Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizing, spacing, reactions, delivery status — tất cả đều phải đúng chuẩn Telegram.
+Chat screen (DM + Group) match trải nghiệm Telegram iOS, **tuân thủ Design System** (`docs/design/DESIGN.md`): 8pt spacing grid, semantic fonts, semantic colors, 44pt touch targets.
 
 ## Scope: Option B (Social Messaging) — không voice chat
 
 ---
 
-## Telegram Exact Sizing
+## Sizing Spec (Design System compliant)
 
-| Element | Value |
-|---------|-------|
-| Bubble max-width | ~75% screen (280px trên 375px) |
-| Bubble padding | 7px 12px 6px 12px |
-| Bubble border-radius | 18px (tail corner: 4px) |
-| Bubble font-size | 17px |
-| Bubble line-height | 22px (1.29) |
-| Timestamp font | 11px |
-| Timestamp color (in) | rgba(0,0,0,0.3) |
-| Timestamp color (out) | rgba(255,255,255,0.55) |
-| Checkmark sent | 11x8px |
-| Checkmark read | 16x8px |
-| Sender name | 13.5px semibold |
-| Mini avatar (group) | 34px round |
-| Nav avatar | 36px (DM: round, Group: bo 10px) |
-| Same sender gap | 2px |
-| Different sender gap | 8px |
-| Bubble-to-edge | 8px |
-| Avatar-to-bubble | 6px |
-| Chat background | #EFE7DD (warm beige) |
+Tất cả values snap về 8pt grid (bội số 4/8). Typography dùng SwiftUI semantic fonts. Colors dùng semantic + asset catalog.
+
+| Element | Value | SwiftUI | Grid ✓ |
+|---------|-------|---------|--------|
+| Bubble max-width | 280pt (~75% screen) | hardcode OK | ✓ (280 = 8×35) |
+| Bubble padding | 8pt 12pt 8pt 12pt | `.padding(.horizontal, 12).padding(.vertical, 8)` | ✓ |
+| Bubble border-radius | 16pt (tail corner: 4pt) | `RoundedRectangle(cornerRadius: 16)` | ✓ |
+| Bubble font | 17pt regular | `.body` | ✓ |
+| Timestamp font | 12pt regular | `.caption` | ✓ |
+| Timestamp color (in) | secondary | `.secondary` | — |
+| Timestamp color (out) | white 55% | `.white.opacity(0.55)` | — |
+| Checkmark sent | 12×8pt | custom SVG | ✓ |
+| Checkmark read | 16×8pt | custom SVG | ✓ |
+| Sender name | 13pt semibold | `.footnote.weight(.semibold)` | ✓ |
+| Mini avatar (group) | 32pt round | hardcode | ✓ (32 = 8×4) |
+| Nav avatar | 36pt (DM: round, Group: bo 12pt) | hardcode | ✓ (36 = 4×9) |
+| Same sender gap | 4pt | `spacing: 4` | ✓ |
+| Different sender gap | 8pt | `spacing: 8` | ✓ |
+| Bubble-to-edge | 8pt | `.padding(.horizontal, 8)` | ✓ |
+| Avatar-to-bubble | 8pt | `HStack(spacing: 8)` | ✓ |
+| Chat background | warm beige | `Color("ChatBackground")` in asset catalog | — |
+| Bubble out bg | accent | `Color("AccentColor")` | — |
+| Bubble in bg | system bg | `Color(.systemBackground)` | — |
+| Accent color | coral | `Color("AccentColor")` (#D16238 in asset catalog) | — |
+
+### Color Rules (từ DESIGN.md §1.4)
+
+Không hardcode hex trong code. Tất cả dùng:
+- SwiftUI semantic: `.primary`, `.secondary`, `.white.opacity(0.55)`
+- Asset catalog: `Color("AccentColor")`, `Color("ChatBackground")`
+- Hex chỉ defined trong `Assets.xcassets`, KHÔNG trong Swift code
+
+### Touch Target Rules (từ DESIGN.md §1.2)
+
+Minimum 44×44pt cho mọi tappable element. Elements nhỏ hơn cần invisible padding:
+- Jump buttons 32pt → wrap trong 44×44 touch area
+- Reaction pills ~24pt → `.contentShape(Rectangle())` với padding 44pt height
+- Seen avatars 14pt → tap area bao toàn bộ row, không per-avatar
 
 ---
 
@@ -39,11 +57,11 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 **Vị trí:** Chỉ tin CUỐI CÙNG trong nhóm tin liên tiếp cùng sender.
 
 **Style:**
-- Bezier curve 7x9pt (không phải CSS triangle)
-- Tail corner: border-radius 4px
+- Bezier curve 8×8pt (snap từ Telegram 7×9pt về 8pt grid)
+- Tail corner: border-radius 4pt
 - Outgoing: bottom-right
 - Incoming: bottom-left
-- Tin giữa nhóm: full 18px radius (không tail)
+- Tin giữa nhóm: full 16pt radius (không tail)
 
 **Logic xác định tail:**
 - `showTail = nextMessage == nil || nextMessage.sender != currentMessage.sender || timeDiff > 60s`
@@ -56,12 +74,12 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 **Vị trí:** Inline cùng dòng timestamp, bên phải timestamp. Chỉ outgoing messages.
 
 **States:**
-- `✓` xám (rgba(255,255,255,0.5)) = đã gửi server (có server id)
-- `✓✓` trắng (#fff) = đã đọc (readCursor >= created_at)
+- `✓` `.white.opacity(0.5)` = đã gửi server (có server id)
+- `✓✓` `.white` = đã đọc (readCursor >= created_at)
 
 **Sizing:**
-- Sent (single): 11x8px
-- Read (double): 16x8px
+- Sent (single): 12×8pt
+- Read (double): 16×8pt
 
 **Animation:** Spring animate khi chuyển sent → read.
 
@@ -79,7 +97,7 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 
 ### 3. Thanh tin chưa đọc (Unread Divider)
 
-**Hiển thị:** Dòng kẻ accent (#D16238, opacity 0.2) + text "N tin chưa đọc" (#D16238, 11px semibold).
+**Hiển thị:** Dòng kẻ `Color("AccentColor").opacity(0.2)` + text "N tin chưa đọc" (`Color("AccentColor")`, `.caption2.weight(.semibold)`).
 
 **Vị trí:** Giữa tin đã đọc cuối cùng và tin chưa đọc đầu tiên.
 
@@ -105,17 +123,18 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 **Vị trí:** TRONG bubble, dòng đầu tiên, phía trên text.
 
 **Style:**
-- Font: 13.5px semibold
-- Màu: hash từ login string → 1 trong 7 màu:
+- Font: `.footnote.weight(.semibold)` (13pt)
+- Màu: hash từ login string → 1 trong 7 colors defined trong asset catalog:
   ```
-  #E67E22, #3498DB, #9B59B6, #2ECC71, #E74C3C, #1ABC9C, #F39C12
+  SenderColor1...SenderColor7 (orange, blue, purple, green, red, teal, yellow)
   ```
 - Chỉ hiện ở tin ĐẦU TIÊN trong nhóm tin cùng sender (`showHeader`)
 
-**Avatar 34px:**
+**Avatar 32pt:**
 - Bên trái bubble column, sticky bottom (chỉ hiện ở tin cuối cùng trong nhóm)
-- 2-column layout: `av-col` (34px, stretch height, align-items flex-end) + `bub-col` (flex, align-items flex-start)
-- Avatar ẩn (`visibility: hidden`) cho tin không phải cuối trong nhóm
+- 2-column layout: avatar col (32pt, stretch height, align bottom) + bubble col (flex, align leading)
+- Gap: 8pt (grid-compliant)
+- Avatar ẩn (`.opacity(0)`) cho tin không phải cuối trong nhóm
 
 **KHÔNG áp dụng cho:**
 - DM (không sender name, không mini avatar)
@@ -129,7 +148,7 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 **Vị trí:** Dính dưới nav header, trên chat body.
 
 **Structure:**
-- Pin icon (#D16238, 13px) + label "Tin ghim" (10px semibold, accent) + preview text (11.5px, truncate) + X button (close)
+- Pin icon (`Color("AccentColor")`, 12pt) + label "Tin ghim" (`.caption2.weight(.semibold)`, accent) + preview text (`.caption`, truncate) + X button (close, 44pt touch target)
 
 **Behavior:**
 - Tap banner → scroll đến tin được ghim
@@ -144,13 +163,13 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 ### 6. Online / Last Seen
 
 **DM Header:**
-- Online: subtitle "online" (#34C759) + green dot trên avatar 36px
-- Offline: "hoạt động X phút trước" (#8E8E93)
+- Online: subtitle "online" (`Color(.systemGreen)`) + green dot trên avatar 36pt
+- Offline: "hoạt động X phút trước" (`.secondary`)
 - Dùng `PresenceStore` có sẵn
 
 **Group Header:**
-- Subtitle: "N thành viên, M online" (#8E8E93, M = green)
-- Avatar: 36px vuông bo 10px
+- Subtitle: "N thành viên, M online" (`.secondary`, M = `.systemGreen`)
+- Avatar: 36pt vuông bo 12pt (grid-compliant)
 - Tap subtitle → mở MembersSheet
 
 ---
@@ -163,7 +182,7 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 - Không hiện tên
 
 **Group:**
-- Avatar 34px + typing dots + "alice đang nhập..." (9.5px, #8E8E93)
+- Avatar 32pt + typing dots + "alice đang nhập..." (`.caption2`, `.secondary`)
 - Nhiều người: "alice, bob đang nhập..." hoặc "3 người đang nhập..."
 - Avatar = avatar của người đang gõ
 
@@ -173,7 +192,7 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 
 ### 8. 3 Jump Buttons
 
-**Layout:** Xếp dọc, gap 16px, sticky bottom-right corner trong cbody.
+**Layout:** Xếp dọc, gap 16pt, sticky bottom-right corner trong cbody. Mỗi button 32pt visible, 44×44pt touch target.
 
 **3 buttons (chỉ hiện khi có data):**
 
@@ -188,7 +207,7 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 - React: scroll đến tin có reaction mới gần nhất
 - Unread: scroll đến tin chưa đọc đầu tiên
 
-**Badge:** 16px circle, accent background, white text 9px bold, centered phía trên button.
+**Badge:** 16pt circle, `Color("AccentColor")` background, `.white` text `.caption2.weight(.bold)`, centered phía trên button.
 
 **DM:** Thường chỉ 2 buttons (react + unread). Mention button chỉ hiện nếu có.
 **Group:** Có thể cả 3.
@@ -202,15 +221,14 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 - Outgoing: padding-right 12px, flex-end
 
 **Style:**
-- Pill: white background, 1px border #E5E5EA, border-radius 12px
-- Padding: 2px 7px 2px 5px
-- Emoji + count (10px semibold, #8E8E93)
-- Shadow: 0 0.5px 2px rgba(0,0,0,0.06)
+- Pill: `Color(.systemBackground)`, 1pt border `Color(.separator)`, border-radius 12pt
+- Padding: 4pt 8pt (grid-compliant, 44pt touch height via `.contentShape`)
+- Emoji + count (`.caption2.weight(.semibold)`, `.secondary`)
 
 **`.mine` highlight (khi mình đã react):**
-- Border: accent (#D16238)
-- Background: rgba(209,98,56,0.08)
-- Count color: accent
+- Border: `Color("AccentColor")`
+- Background: `Color("AccentColor").opacity(0.08)`
+- Count color: `Color("AccentColor")`
 
 **Behavior:**
 - Tap pill → toggle react/unreact
@@ -225,7 +243,7 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 
 **Hiển thị:**
 - Bubble opacity 0.6
-- Icon chấm than đỏ (#FF3B30) BÊN PHẢI bubble, 16px circle
+- Icon chấm than `Color(.systemRed)` BÊN PHẢI bubble, 16pt circle (44pt touch target)
 
 **Behavior:**
 - Tap icon → ActionSheet: "Gửi lại" / "Xóa"
@@ -239,10 +257,10 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 ### 11. Date Pill Floating
 
 **Style:**
-- Dark overlay: rgba(0,0,0,0.5) + backdrop-filter blur(8px)
-- Font: 13px bold, white
-- Border-radius: 10px
-- Padding: 3px 10px
+- Dark overlay: `.black.opacity(0.5)` + `.blur(radius: 8)`
+- Font: `.footnote.weight(.semibold)`, `.white`
+- Border-radius: 12pt
+- Padding: 4pt 12pt (grid-compliant)
 
 **Behavior:**
 - Sticky top khi scroll
@@ -269,8 +287,8 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 **Vị trí:** Dưới tin outgoing cuối cùng, align right.
 
 **Style:**
-- Avatar 14px, border 1.5px white (#F2F1F6)
-- Chồng lên nhau: margin-left -3px
+- Avatar 16pt, border 2pt `Color(.systemBackground)`
+- Chồng lên nhau: offset -4pt (grid-compliant)
 - Hiện tối đa 5 avatar + "+N" text nếu nhiều hơn
 
 **Behavior:** Tap → mở SeenBySheet (danh sách ai đã đọc).
@@ -281,7 +299,7 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 
 ### 14. System Messages (Group Only)
 
-**Style:** Centered, 11px, #8E8E93, italic. Không bubble, không avatar.
+**Style:** Centered, `.caption2`, `.secondary`, italic. Không bubble, không avatar.
 
 **Types:** Ghim tin / thêm member / rời nhóm / đổi tên / đổi avatar.
 
@@ -323,10 +341,15 @@ Chat screen (DM + Group) phải match trải nghiệm Telegram iOS. Bubble sizin
 ## Decisions đã chốt
 
 - Delivery status: Option A — chỉ ✓ sent + ✓✓ read (dùng readCursors, không cần BE change cho delivered)
-- Bubble tail: bezier curve 7x9pt (không CSS triangle)
-- Sender name: TRONG bubble, 7 màu hash login
-- Failed send: giữ message (không xóa), icon đỏ bên phải, tap retry
-- Jump buttons: 3 buttons riêng (@mention, react, unread) — chỉ hiện button nào có data
-- Reactions: pill style dưới bubble, highlight `.mine`, max 5 types
-- Chat background: #EFE7DD (warm beige, match Telegram default)
+- Bubble tail: bezier curve 8×8pt (snapped từ Telegram 7×9 về 8pt grid)
+- Bubble radius: 16pt (snapped từ Telegram 18pt về 8pt grid)
+- Sender name: TRONG bubble, `.footnote.weight(.semibold)`, 7 colors in asset catalog
+- Mini avatar: 32pt (snapped từ Telegram 34pt về 8pt grid)
+- Failed send: giữ message (không xóa), icon đỏ bên phải, 44pt touch target, tap retry
+- Jump buttons: 3 buttons riêng (@mention, react, unread) — 32pt visible, 44pt touch target
+- Reactions: pill style dưới bubble, grid-compliant padding (4pt 8pt), 44pt touch height
+- Chat background: `Color("ChatBackground")` trong asset catalog (warm beige)
+- All colors: semantic + asset catalog, KHÔNG hardcode hex trong Swift
+- All spacing: 8pt grid compliant (4, 8, 12, 16, 20, 24, 32+)
+- All typography: SwiftUI semantic fonts (`.body`, `.footnote`, `.caption`, `.caption2`)
 - Data mockup: dùng data thật từ app (NorwayIsHere DM, Never Give Up Group)
