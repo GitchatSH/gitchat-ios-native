@@ -404,7 +404,7 @@ struct ConversationsListView: View {
     private func rowBackground(for convo: Conversation) -> some View {
         let fill: Color? = {
             if isActiveRow(convo) { return Color("AccentColor") }
-            if convo.isPinned { return Color("AccentColor").opacity(0.08) }
+            // Pinned rows use no special background — pin icon in right column is sufficient
             return nil
         }()
 
@@ -722,17 +722,17 @@ struct ConversationRow: View {
             Text(previewWithoutPhotoEmoji)
                 .font(.subheadline.italic())
                 .foregroundStyle(Color(.systemGray2))
-                .lineLimit(2)
+                .lineLimit(1)
         } else if conversation.isGroup && isOutgoing && conversation.last_message != nil {
             // Group outgoing — "You:" prefix
             (Text("You: ").foregroundColor(Color("AccentColor")).font(.subheadline)
             + Text(previewWithoutPhotoEmoji).foregroundColor(secondaryTextColor).font(.subheadline))
-            .lineLimit(2)
+            .lineLimit(1)
         } else {
             Text(previewWithoutPhotoEmoji)
                 .font(.subheadline)
                 .foregroundStyle(secondaryTextColor)
-                .lineLimit(2)
+                .lineLimit(1)
         }
     }
 
@@ -838,130 +838,53 @@ struct ConversationRow: View {
                 )
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(conversation.displayTitle)
-                    .font(displayedUnread > 0 ? .headline : .body)
-                    .foregroundStyle(primaryTextColor)
-                    .lineLimit(1)
-                if let sender = lastSenderLogin, !isOutgoing {
-                    HStack(spacing: 4) {
-                        if let avatarURL = conversation.last_message?.sender_avatar,
-                           let url = URL(string: avatarURL) {
-                            CachedAsyncImage(
-                                url: url,
-                                contentMode: .fill,
-                                maxPixelSize: 60
-                            )
-                            .frame(width: 20, height: 20)
-                            .clipShape(Circle())
-                        } else {
-                            Circle()
-                                .fill(Color(.systemGray4))
-                                .frame(width: 20, height: 20)
-                                .overlay {
-                                    Text(String(sender.prefix(1)).uppercased())
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(.white)
-                                }
-                        }
-                        Text(sender)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(secondaryTextColor)
-                            .lineLimit(1)
-                    }
-                }
-                HStack(alignment: .top, spacing: 6) {
-                    if let draft = draftStore.draft(for: conversation.id) {
-                        (Text("Draft: ").foregroundColor(Color(.systemRed)).font(.subheadline)
-                        + Text(draft).foregroundColor(secondaryTextColor).font(.subheadline))
-                        .lineLimit(2)
-                    } else {
-                        if let thumbURL = lastPhotoURL {
-                            CachedAsyncImage(
-                                url: thumbURL,
-                                contentMode: .fill,
-                                maxPixelSize: 80
-                            )
-                            .frame(width: 22, height: 22)
-                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        }
-                        previewContent
-                    }
-                }
-            }
-            Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: 6) {
+                // Row 1: Name + Checkmark + Date
                 HStack(spacing: 4) {
-                    switch checkmarkState {
-                    case .sending:
-                        Image(systemName: "clock")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color(.systemGray))
-                    case .sent:
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Color(.systemGray))
-                    case .read:
-                        ZStack {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .medium))
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 12, weight: .medium))
-                                .offset(x: 4)
-                        }
-                        .foregroundStyle(Color("AccentColor"))
-                    case .failed:
-                        Image(systemName: "exclamationmark.circle")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color(.systemRed))
-                    case .none:
-                        EmptyView()
-                    }
+                    Text(conversation.displayTitle)
+                        .font(displayedUnread > 0 ? .headline : .body)
+                        .foregroundStyle(primaryTextColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    checkmarkView
                     Text(RelativeTime.chatListStamp(conversation.last_message_at))
                         .font(metaFont)
                         .foregroundStyle(displayedUnread > 0 && !isActive ? Color("AccentColor") : secondaryTextColor)
                         .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
+                        .layoutPriority(1)
                 }
-                HStack(spacing: 4) {
-                    if displayedUnread > 0 {
-                        if hasMention {
-                            Text("@")
-                                .font(.caption.bold())
-                                .frame(width: 20, height: 20)
-                                .background(Color("AccentColor"), in: Circle())
-                                .foregroundStyle(.white)
+                // Row 2: Sender (group) or Preview + right indicators
+                HStack(alignment: .bottom, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let sender = lastSenderLogin, !isOutgoing {
+                            HStack(spacing: 4) {
+                                senderAvatarView(for: sender)
+                                Text(sender)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(secondaryTextColor)
+                                    .lineLimit(1)
+                            }
                         }
-                        Text("\(displayedUnread)")
-                            .font(.footnote.bold())
-                            .padding(.horizontal, 8).padding(.vertical, 2)
-                            .frame(minWidth: 24, minHeight: 24)
-                            .background(
-                                isActive
-                                    ? Color.white
-                                    : (isMuted ? Color(.systemGray) : Color("AccentColor")),
-                                in: .capsule
-                            )
-                            .foregroundStyle(
-                                isActive
-                                    ? Color("AccentColor")
-                                    : .white
-                            )
-                        if isMuted {
-                            Image(systemName: "speaker.slash.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(secondaryTextColor)
+                        HStack(alignment: .top, spacing: 6) {
+                            if let draft = draftStore.draft(for: conversation.id) {
+                                (Text("Draft: ").foregroundColor(Color(.systemRed)).font(.subheadline)
+                                + Text(draft).foregroundColor(secondaryTextColor).font(.subheadline))
+                                .lineLimit(1)
+                            } else {
+                                if let thumbURL = lastPhotoURL {
+                                    CachedAsyncImage(
+                                        url: thumbURL,
+                                        contentMode: .fill,
+                                        maxPixelSize: 80
+                                    )
+                                    .frame(width: 22, height: 22)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                                }
+                                previewContent
+                            }
                         }
-                    } else if conversation.isPinned {
-                        Image(systemName: "pin.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(secondaryTextColor)
-                        if isMuted {
-                            Image(systemName: "speaker.slash.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(secondaryTextColor)
-                        }
-                    } else {
-                        Color.clear.frame(width: 1, height: 24)
                     }
+                    Spacer(minLength: 4)
+                    rightIndicators
                 }
             }
         }
@@ -973,6 +896,107 @@ struct ConversationRow: View {
         #else
         .padding(.vertical, 12)
         #endif
+    }
+
+    @ViewBuilder
+    private var checkmarkView: some View {
+        switch checkmarkState {
+        case .sending:
+            Image(systemName: "clock")
+                .font(.system(size: 12))
+                .foregroundStyle(Color(.systemGray))
+        case .sent:
+            Image(systemName: "checkmark")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color(.systemGray))
+        case .read:
+            ZStack {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .medium))
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .medium))
+                    .offset(x: 4)
+            }
+            .foregroundStyle(Color("AccentColor"))
+        case .failed:
+            Image(systemName: "exclamationmark.circle")
+                .font(.system(size: 12))
+                .foregroundStyle(Color(.systemRed))
+        case .none:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var rightIndicators: some View {
+        HStack(spacing: 4) {
+            if displayedUnread > 0 {
+                if hasMention {
+                    Text("@")
+                        .font(.caption.bold())
+                        .frame(width: 20, height: 20)
+                        .background(Color("AccentColor"), in: Circle())
+                        .foregroundStyle(.white)
+                }
+                Text("\(displayedUnread)")
+                    .font(.footnote.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .frame(minWidth: 24, minHeight: 24)
+                    .background(
+                        isActive
+                            ? Color.white
+                            : (isMuted ? Color(.systemGray) : Color("AccentColor")),
+                        in: .capsule
+                    )
+                    .foregroundStyle(
+                        isActive
+                            ? Color("AccentColor")
+                            : .white
+                    )
+                if isMuted {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(secondaryTextColor)
+                }
+            } else if conversation.isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(secondaryTextColor)
+                if isMuted {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(secondaryTextColor)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func senderAvatarView(for sender: String) -> some View {
+        let url: URL? = {
+            if let p = conversation.participantsOrEmpty.first(where: { $0.login == sender }),
+               let urlStr = p.avatar_url, let u = URL(string: urlStr) { return u }
+            if let urlStr = conversation.last_message?.sender_avatar,
+               let u = URL(string: urlStr) { return u }
+            if let cached = MessageCache.shared.get(conversation.id)?.messages,
+               let msg = cached.last(where: { $0.sender == sender }),
+               let urlStr = msg.sender_avatar, let u = URL(string: urlStr) { return u }
+            return URL(string: "https://github.com/\(sender).png")
+        }()
+        if let url {
+            CachedAsyncImage(url: url, contentMode: .fill, maxPixelSize: 60)
+                .frame(width: 20, height: 20)
+                .clipShape(Circle())
+        } else {
+            Circle()
+                .fill(Color(.systemGray4))
+                .frame(width: 20, height: 20)
+                .overlay {
+                    Text(String(sender.prefix(1)).uppercased())
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+        }
     }
 }
 
