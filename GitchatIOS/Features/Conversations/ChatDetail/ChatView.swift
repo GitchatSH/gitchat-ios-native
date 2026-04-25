@@ -89,6 +89,7 @@ struct ChatView: View {
     @StateObject private var keyboard = KeyboardState()
     @State private var menuTarget: MessageMenuTarget?
     @State private var firstVisibleDate: Date?
+    @State private var pinnedBannerDismissed = false
     @StateObject private var swipeState = ChatSwipeState()
 
     // MARK: Body
@@ -98,6 +99,7 @@ struct ChatView: View {
             ChatBackground()
                 .ignoresSafeArea()
             VStack(spacing: 0) {
+                pinnedBanner
                 list
                 if let login = blockedBannerLogin {
                     blockedBanner(login: login)
@@ -115,6 +117,22 @@ struct ChatView: View {
         }
         .overlay { menuOverlay }
         .environment(\.chatTheme, .default)
+    }
+
+    // MARK: Pinned banner
+
+    @ViewBuilder
+    private var pinnedBanner: some View {
+        if vm.conversation.isGroup && !vm.pinnedIds.isEmpty && !pinnedBannerDismissed {
+            let pinned = visibleMessages.filter { vm.pinnedIds.contains($0.id) }
+            if !pinned.isEmpty {
+                PinnedBannerView(
+                    pinnedMessages: pinned,
+                    onTap: { msg in pendingJumpId = msg.id },
+                    onDismiss: { pinnedBannerDismissed = true }
+                )
+            }
+        }
     }
 
     // MARK: List

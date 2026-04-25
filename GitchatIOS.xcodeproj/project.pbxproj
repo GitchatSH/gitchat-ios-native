@@ -47,6 +47,7 @@
 		4BC3E5401B7248FA52B0CB26 /* AppsFlyerLib in Frameworks */ = {isa = PBXBuildFile; productRef = BC2B90ECA96F101778114ECA /* AppsFlyerLib */; };
 		4F15046CCB7A9CA0952031AB /* AnalyticsTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9946C8E877CD39F30375750D /* AnalyticsTracker.swift */; };
 		4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */; };
+		64664A90303E8CD63AD1E838 /* PinnedBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810F757BBC3E0891110E0B95 /* PinnedBannerView.swift */; };
 		513BD4079D585EAFD82684E7 /* ChatClipboardChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F559E3CB229DF8F4F6CA5C9 /* ChatClipboardChip.swift */; };
 		531DEE508D58C8A62DB94393 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = 47DE335175F71C2369260202 /* FacebookCore */; };
 		5320852E8BA5BF99A5A6C0F7 /* DiscoverSubTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EF0AE1C58D76C8FBB0F123A /* DiscoverSubTab.swift */; };
@@ -289,6 +290,7 @@
 		C2B26B063AB6FD5899CF40E0 /* GroupManagementSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupManagementSheets.swift; sourceTree = "<group>"; };
 		C300A84467231D3D6475F5E0 /* Geist-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Bold.ttf"; sourceTree = "<group>"; };
 		C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedMessagesSheet.swift; sourceTree = "<group>"; };
+		810F757BBC3E0891110E0B95 /* PinnedBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedBannerView.swift; sourceTree = "<group>"; };
 		C3B238A579BDAC391159C493 /* GitchatShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = GitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C3B4E0D7FC5BEBE8BD771C03 /* DesktopReturnToSend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopReturnToSend.swift; sourceTree = "<group>"; };
 		C52A3C804970611E07FF79D0 /* SystemMessageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMessageRow.swift; sourceTree = "<group>"; };
@@ -709,6 +711,7 @@
 				1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */,
 				59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */,
 				781AD42CB2F6BD7F8C084678 /* MessageSearchSheet.swift */,
+				810F757BBC3E0891110E0B95 /* PinnedBannerView.swift */,
 				C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */,
 				2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */,
 				A066E307A07B247124125B04 /* Routes.swift */,
@@ -1006,6 +1009,7 @@
 				20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */,
 				3A3E0B7B4AE4F296C6F0A4CD /* OutboxStore.swift in Sources */,
 				EC901521FFF8953EEB00DC9B /* PeekHostWindow.swift in Sources */,
+				64664A90303E8CD63AD1E838 /* PinnedBannerView.swift in Sources */,
 				4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */,
 				A7396B793DDA8316A187E165 /* PresenceStore.swift in Sources */,
 				2A4E2644658850573AD267CD /* ProfileView.swift in Sources */,
