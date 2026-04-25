@@ -218,26 +218,43 @@ struct ChatView: View {
             // "chỗ đúng chỗ sai" (right on bubbles without seen-by,
             // wrong on bubbles with it). Pinning to 0 makes the
             // vertical rhythm entirely owned by .padding(.top) below.
+            let isFailed: Bool = {
+                guard msg.id.hasPrefix("local-"),
+                      let p = OutboxStore.shared.pending(conversationID: vm.conversation.id, localID: msg.id),
+                      case .failed = p.state else { return false }
+                return true
+            }()
             VStack(spacing: 0) {
-                ChatMessageView(
-                    message: msg,
-                    isMe: isMe,
-                    myLogin: myLogin,
-                    resolvedAvatar: resolveAvatar(msg),
-                    showHeader: showHeader,
-                    isPinned: vm.pinnedIds.contains(msg.id),
-                    isPulsing: pulsingId == msg.id,
-                    onReactionsTap: { actions.onReactionsTap(msg) },
-                    onReplyTap: { actions.onReplyPreviewTap(msg) },
-                    onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
-                    onPinTap: { actions.onPinBadgeTap(msg) },
-                    onAvatarTap: { actions.onAvatarTap(msg.sender) },
-                    imageMatchedNS: imageZoomNamespace,
-                    showTail: showTail,
-                    isGroup: vm.conversation.isGroup,
-                    otherReadAt: vm.otherReadAt,
-                    readCursors: vm.readCursors
-                )
+                HStack(alignment: .bottom, spacing: 4) {
+                    ChatMessageView(
+                        message: msg,
+                        isMe: isMe,
+                        myLogin: myLogin,
+                        resolvedAvatar: resolveAvatar(msg),
+                        showHeader: showHeader,
+                        isPinned: vm.pinnedIds.contains(msg.id),
+                        isPulsing: pulsingId == msg.id,
+                        onReactionsTap: { actions.onReactionsTap(msg) },
+                        onReplyTap: { actions.onReplyPreviewTap(msg) },
+                        onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
+                        onPinTap: { actions.onPinBadgeTap(msg) },
+                        onAvatarTap: { actions.onAvatarTap(msg.sender) },
+                        imageMatchedNS: imageZoomNamespace,
+                        showTail: showTail,
+                        isGroup: vm.conversation.isGroup,
+                        otherReadAt: vm.otherReadAt,
+                        readCursors: vm.readCursors
+                    )
+                    .opacity(isFailed ? 0.6 : 1)
+                    if isFailed {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(.systemRed))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                            .onTapGesture { actions.onRetryPending(msg) }
+                    }
+                }
                 .padding(.top, showHeader ? 20 : 4)
                 .chatSwipeToReply(isMe: isMe, messageId: msg.id)
                 .onTapGesture(count: 2) { actions.onDoubleTapHeart(msg) }
