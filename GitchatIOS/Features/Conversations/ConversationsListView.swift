@@ -650,6 +650,47 @@ struct ConversationRow: View {
         return text
     }
 
+    private enum CheckmarkState {
+        case none, sending, sent, read, failed
+    }
+
+    private var isOutgoing: Bool {
+        guard let login = AuthStore.shared.login,
+              let sender = conversation.last_message?.sender else { return false }
+        return sender == login
+    }
+
+    private var checkmarkState: CheckmarkState {
+        guard isOutgoing, let msg = conversation.last_message else { return .none }
+        if msg.unsent_at != nil { return .failed }
+        if msg.id.hasPrefix("local-") { return .sending }
+        guard let createdAt = msg.created_at else { return .sent }
+        if let cache = MessageCache.shared.get(conversation.id) {
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let isoFallback = ISO8601DateFormatter()
+            isoFallback.formatOptions = [.withInternetDateTime]
+            func parseDate(_ s: String) -> Date? { iso.date(from: s) ?? isoFallback.date(from: s) }
+            if conversation.isGroup {
+                if let cursors = cache.readCursors, let msgDate = parseDate(createdAt) {
+                    let otherRead = cursors.contains { login, readAt in
+                        guard login != AuthStore.shared.login,
+                              let cursorDate = parseDate(readAt) else { return false }
+                        return cursorDate >= msgDate
+                    }
+                    if otherRead { return .read }
+                }
+            } else if let otherReadAt = cache.otherReadAt {
+                if let readDate = parseDate(otherReadAt),
+                   let msgDate = parseDate(createdAt),
+                   readDate >= msgDate {
+                    return .read
+                }
+            }
+        }
+        return .sent
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             if conversation.isGroup {
@@ -705,10 +746,37 @@ struct ConversationRow: View {
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 6) {
-                Text(RelativeTime.chatListStamp(conversation.last_message_at))
-                    .font(metaFont)
-                    .foregroundStyle(displayedUnread > 0 && !isActive ? Color("AccentColor") : secondaryTextColor)
-                    .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
+                HStack(spacing: 4) {
+                    switch checkmarkState {
+                    case .sending:
+                        Image(systemName: "clock")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(.systemGray))
+                    case .sent:
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color(.systemGray))
+                    case .read:
+                        ZStack {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .medium))
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .medium))
+                                .offset(x: 4)
+                        }
+                        .foregroundStyle(Color("AccentColor"))
+                    case .failed:
+                        Image(systemName: "exclamationmark.circle")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color(.systemRed))
+                    case .none:
+                        EmptyView()
+                    }
+                    Text(RelativeTime.chatListStamp(conversation.last_message_at))
+                        .font(metaFont)
+                        .foregroundStyle(displayedUnread > 0 && !isActive ? Color("AccentColor") : secondaryTextColor)
+                        .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
+                }
                 if displayedUnread > 0 {
                     let isMutedBadge = isMuted
                     Text("\(displayedUnread)")
