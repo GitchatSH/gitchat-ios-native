@@ -11,7 +11,7 @@ import SwiftUI
 /// user-type styles).
 struct ChatTheme: Equatable {
     // MARK: Bubble surfaces
-    var bubbleIncoming: Color = Color(.secondarySystemBackground)
+    var bubbleIncoming: Color = Color(.secondarySystemGroupedBackground)
     var bubbleOutgoing: Color = Color("AccentColor")
     var bubbleIncomingText: Color = Color(.label)
     var bubbleOutgoingText: Color = .white

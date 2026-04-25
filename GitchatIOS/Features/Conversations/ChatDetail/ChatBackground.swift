@@ -11,9 +11,9 @@ struct ChatBackground: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(.systemBackground),
+                    Color("ChatBackground"),
                     Color("AccentColor").opacity(colorScheme == .dark ? 0.06 : 0.04),
-                    Color(.systemBackground),
+                    Color("ChatBackground"),
                 ],
                 startPoint: .top,
                 endPoint: .bottom

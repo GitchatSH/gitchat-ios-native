@@ -184,7 +184,7 @@ struct ChatMessageView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(theme.replyBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
             .foregroundStyle(.secondary)
     }
 
@@ -319,10 +319,10 @@ struct ChatMessageView: View {
             }
         }
         .background(isMe ? theme.bubbleOutgoing : theme.bubbleIncoming)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
         .foregroundStyle(isMe ? theme.bubbleOutgoingText : theme.bubbleIncomingText)
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: 20)
                 .strokeBorder(
                     parsed.forwardedFrom != nil
                         ? (isMe ? Color.white.opacity(0.3) : Color.secondary.opacity(0.3))
@@ -331,11 +331,26 @@ struct ChatMessageView: View {
                 )
         )
         #if targetEnvironment(macCatalyst)
-        BubbleHugLayout(maxWidth: hasLink ? 312 : 560) {
+        BubbleHugLayout(maxWidth: hasLink ? 312 : bubbleMaxWidth) {
             bubble
         }
         #else
         bubble
+            .frame(maxWidth: hasLink ? 312 : bubbleMaxWidth, alignment: isMe ? .trailing : .leading)
+        #endif
+    }
+
+    // MARK: Bubble max-width (responsive)
+
+    private var bubbleMaxWidth: CGFloat {
+        #if targetEnvironment(macCatalyst)
+        return 560
+        #else
+        let screenWidth = UIScreen.main.bounds.width
+        if UIApplication.shared.preferredContentSizeCategory.isAccessibilityCategory {
+            return screenWidth * 0.85
+        }
+        return min(screenWidth * 0.75, 304)
         #endif
     }
 
