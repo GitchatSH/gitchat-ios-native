@@ -56,6 +56,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
     let items: [Message]
     let typingUsers: [String]
+    let isGroup: Bool
     let showSeen: Bool
     let seenAvatarURL: String?
     let pinnedIds: Set<String>
@@ -417,8 +418,9 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             }
             if id == ChatTypingRowID {
                 let logins = lastTypingUsers
+                let isGroup = parent.isGroup
                 cell.contentConfiguration = UIHostingConfiguration {
-                    TypingIndicatorRow(logins: logins)
+                    TypingIndicatorRow(logins: logins, isGroup: isGroup)
                         .rotationEffect(.degrees(180))
                 }
                 .margins(.horizontal, 12)

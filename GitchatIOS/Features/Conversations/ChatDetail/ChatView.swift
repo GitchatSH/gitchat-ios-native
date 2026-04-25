@@ -127,6 +127,7 @@ struct ChatView: View {
             ChatMessagesList(
                 items: visibleMessages,
                 typingUsers: Array(vm.typingUsers),
+                isGroup: vm.conversation.isGroup,
                 showSeen: showSeen,
                 seenAvatarURL: seenAvatarURL,
                 pinnedIds: vm.pinnedIds,

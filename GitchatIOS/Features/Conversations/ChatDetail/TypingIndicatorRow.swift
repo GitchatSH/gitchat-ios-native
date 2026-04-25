@@ -2,20 +2,29 @@ import SwiftUI
 
 struct TypingIndicatorRow: View {
     let logins: [String]
+    var isGroup: Bool = false
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 6) {
-            if let first = logins.first {
-                AvatarView(url: "https://github.com/\(first).png", size: 28, login: first)
-            } else {
-                Color.clear.frame(width: 28, height: 28)
+            if isGroup {
+                if let first = logins.first {
+                    AvatarView(url: "https://github.com/\(first).png", size: 32, login: first)
+                } else {
+                    Color.clear.frame(width: 32, height: 32)
+                }
             }
-            TypingDots()
-                .padding(.horizontal, 14)
-                // Match the inner padding of a one-line message bubble
-                // (MessageBubble uses .padding(.vertical, 8)).
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+            VStack(alignment: .leading, spacing: 2) {
+                TypingDots()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+                if isGroup, let first = logins.first {
+                    Text("\(first) đang nhập...")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 4)
+                }
+            }
             Spacer(minLength: 0)
         }
     }
