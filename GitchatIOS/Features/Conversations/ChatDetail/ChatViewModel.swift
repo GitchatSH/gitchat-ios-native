@@ -240,7 +240,7 @@ final class ChatViewModel: ObservableObject {
                 )
                 OutboxStore.shared.enqueue(pending)
                 Haptics.impact(.light)
-                OutboxStore.runSend(for: pending)
+                OutboxStore.shared.runSend(for: pending)
             }
         } catch {
             self.error = error.localizedDescription
