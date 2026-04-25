@@ -24,10 +24,10 @@ struct ChatDetailTitleBar: View {
             if vm.isSyncing {
                 SyncingDotsLabel()
                     .transition(.opacity)
-            } else if let subtitle {
-                Text(subtitle)
+            } else if let sub = subtitleInfo {
+                Text(sub.text)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(sub.isOnline ? .green : .secondary)
                     .transition(.opacity)
             }
         }
@@ -43,30 +43,40 @@ struct ChatDetailTitleBar: View {
         }
     }
 
-    private var subtitle: String? {
+    private struct SubtitleInfo {
+        let text: String
+        let isOnline: Bool
+    }
+
+    private var subtitleInfo: SubtitleInfo? {
         if conversation.isGroup {
             let participants = conversation.participantsOrEmpty.map(\.login)
             guard !participants.isEmpty else { return nil }
             let onlineCount = participants.filter { presence.isOnline($0) }.count
-            return "\(onlineCount)/\(participants.count) online"
+            return SubtitleInfo(
+                text: "\(participants.count) thành viên, \(onlineCount) online",
+                isOnline: onlineCount > 0
+            )
         }
         guard let login = conversation.other_user?.login else { return nil }
-        if presence.isOnline(login) { return "online" }
+        if presence.isOnline(login) {
+            return SubtitleInfo(text: "online", isOnline: true)
+        }
         if let date = presence.lastSeen[login] {
-            return "last seen \(Self.relative(date))"
+            return SubtitleInfo(text: Self.relative(date), isOnline: false)
         }
         return nil
     }
 
     private static func relative(_ date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "just now" }
+        if seconds < 60 { return "vừa mới truy cập" }
         let mins = seconds / 60
-        if mins < 60 { return "\(mins)m ago" }
+        if mins < 60 { return "\(mins) phút trước" }
         let hours = mins / 60
-        if hours < 24 { return "\(hours)h ago" }
+        if hours < 24 { return "\(hours) giờ trước" }
         let days = hours / 24
-        if days == 1 { return "yesterday" }
-        return "\(days)d ago"
+        if days == 1 { return "hôm qua" }
+        return "\(days) ngày trước"
     }
 }
