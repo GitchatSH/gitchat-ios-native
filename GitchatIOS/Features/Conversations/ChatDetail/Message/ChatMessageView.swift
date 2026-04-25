@@ -1,6 +1,20 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Stable sender color hash
+
+extension String {
+    /// Stable DJB2 hash → index 0-6 for sender colors.
+    /// Unlike String.hashValue, this is deterministic across app launches.
+    var senderColorIndex: Int {
+        abs(self.utf8.reduce(5381) { ($0 &<< 5) &+ $0 &+ Int($1) }) % 7
+    }
+
+    var senderColor: Color {
+        Color("SenderColor\(senderColorIndex + 1)")
+    }
+}
+
 /// The chat bubble — one instance per message cell. Composition is
 /// intentionally explicit: header avatar / sender / reply preview /
 /// bubble content / pin badge / reactions row, each delegated to a
@@ -49,6 +63,8 @@ struct ChatMessageView: View {
     /// bubble (outgoing → trailing, incoming → leading). Shown on the
     /// last message in a same-sender group.
     var showTail: Bool = false
+    /// Whether this conversation is a group chat.
+    var isGroup: Bool = false
     /// DM: when the other user last read (ISO 8601 timestamp).
     var otherReadAt: String? = nil
     /// Group: per-login read timestamps.
@@ -70,7 +86,7 @@ struct ChatMessageView: View {
     // MARK: Body
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 6) {
+        HStack(alignment: .bottom, spacing: 8) {
             if isMe {
                 Spacer(minLength: 40)
             } else {
@@ -87,10 +103,10 @@ struct ChatMessageView: View {
 
     @ViewBuilder
     private var avatarColumn: some View {
-        if showHeader {
+        if showTail {
             AvatarView(
                 url: resolvedAvatar ?? message.sender_avatar,
-                size: 28,
+                size: 32,
                 login: message.sender
             )
             .contentShape(Circle())
@@ -99,7 +115,7 @@ struct ChatMessageView: View {
         } else {
             // Keep the column width stable when consecutive messages
             // from the same sender omit the avatar, so bubbles line up.
-            Color.clear.frame(width: 28, height: 28)
+            Color.clear.frame(width: 32, height: 32)
         }
     }
 
@@ -108,11 +124,6 @@ struct ChatMessageView: View {
     @ViewBuilder
     private var bubbleColumn: some View {
         VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
-            if !isMe && showHeader {
-                Text(message.sender)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
             bubble
                 .overlay(alignment: .topTrailing) { pinBadge }
                 .scaleEffect(isPulsing ? 1.08 : 1)
@@ -336,7 +347,16 @@ struct ChatMessageView: View {
         let hasLink = ChatMessageText.firstURL(in: parsed.body) != nil
         let showInlineReply = (message.reply != nil) && !hideReplyPreview
         let hasText = !message.content.isEmpty
+        let showSenderName = showHeader && !isMe && isGroup
         let bubble = VStack(alignment: .leading, spacing: 0) {
+            if showSenderName {
+                Text(message.sender)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(message.sender.senderColor)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .padding(.bottom, 2)
+            }
             if let from = parsed.forwardedFrom {
                 HStack(spacing: 4) {
                     Image(systemName: "arrowshape.turn.up.right.fill")

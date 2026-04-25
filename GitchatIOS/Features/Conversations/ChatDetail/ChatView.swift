@@ -203,6 +203,7 @@ struct ChatView: View {
                     onAvatarTap: { actions.onAvatarTap(msg.sender) },
                     imageMatchedNS: imageZoomNamespace,
                     showTail: showTail,
+                    isGroup: vm.conversation.isGroup,
                     otherReadAt: vm.otherReadAt,
                     readCursors: vm.readCursors
                 )
@@ -348,6 +349,7 @@ struct ChatView: View {
             resolvedAvatar: resolveAvatar(t.message),
             showHeader: true,
             isPinned: vm.pinnedIds.contains(t.message.id),
+            isGroup: vm.conversation.isGroup,
             otherReadAt: vm.otherReadAt,
             readCursors: vm.readCursors
         )
