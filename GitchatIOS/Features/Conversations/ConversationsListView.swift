@@ -465,17 +465,8 @@ struct ConversationsListView: View {
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         #endif
         .listRowBackground(rowBackground(for: convo))
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button {
-                vm.toggleRead(convo)
-            } label: {
-                Label(
-                    vm.locallyRead.contains(convo.id) || convo.unreadCount == 0 ? "Unread" : "Read",
-                    systemImage: vm.locallyRead.contains(convo.id) || convo.unreadCount == 0 ? "envelope.badge.fill" : "envelope.open.fill"
-                )
-            }
-            .tint(Color(.systemGreen))
-        }
+        // NOTE: Read/Unread swipe deferred — markRead API exists but markUnread does not.
+        // Revisit when BE adds markUnread endpoint.
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 confirmDelete = convo
@@ -670,7 +661,7 @@ struct ConversationRow: View {
         #if targetEnvironment(macCatalyst)
         return .footnote
         #else
-        return .footnote
+        return .caption2
         #endif
     }
 
@@ -678,11 +669,16 @@ struct ConversationRow: View {
         isLocallyRead ? 0 : conversation.unreadCount
     }
 
+    /// Single cache lookup per row render — avoids repeated MessageCache.get() calls.
+    private var cachedEntry: MessageCache.Entry? {
+        MessageCache.shared.get(conversation.id)
+    }
+
     /// Pull the most recent attachment URL out of the message cache so
     /// "📷 Photo" preview rows can show an actual thumbnail instead of
     /// the camera emoji.
     private var lastPhotoURL: URL? {
-        guard let messages = MessageCache.shared.get(conversation.id)?.messages,
+        guard let messages = cachedEntry?.messages,
               let last = messages.last else { return nil }
         if let urlString = last.attachments?.first?.url, let url = URL(string: urlString) {
             return url
@@ -695,7 +691,7 @@ struct ConversationRow: View {
 
     private var lastSenderLogin: String? {
         guard conversation.isGroup else { return nil }
-        if let cached = MessageCache.shared.get(conversation.id)?.messages,
+        if let cached = cachedEntry?.messages,
            let last = cached.last, last.type == nil || last.type == "user" {
             return last.sender
         }
@@ -775,7 +771,7 @@ struct ConversationRow: View {
         if msg.unsent_at != nil { return .failed }
         if msg.id.hasPrefix("local-") { return .sending }
         guard let createdAt = msg.created_at else { return .sent }
-        if let cache = MessageCache.shared.get(conversation.id) {
+        if let cache = cachedEntry {
             if conversation.isGroup {
                 if let cursors = cache.readCursors, let msgDate = Self.parseISO8601(createdAt) {
                     let otherRead = cursors.contains { login, readAt in
@@ -987,7 +983,7 @@ struct ConversationRow: View {
                let urlStr = p.avatar_url, let u = URL(string: urlStr) { return u }
             if let urlStr = conversation.last_message?.sender_avatar,
                let u = URL(string: urlStr) { return u }
-            if let cached = MessageCache.shared.get(conversation.id)?.messages,
+            if let cached = cachedEntry?.messages,
                let msg = cached.last(where: { $0.sender == sender }),
                let urlStr = msg.sender_avatar, let u = URL(string: urlStr) { return u }
             return URL(string: "https://github.com/\(sender).png")
@@ -1160,7 +1156,7 @@ struct ConversationHoldPreview: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(conversation.displayTitle)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                 if conversation.isGroup {
                     Text("\(conversation.participantsOrEmpty.count) members")
@@ -1170,8 +1166,8 @@ struct ConversationHoldPreview: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var emptyBody: some View {
@@ -1198,7 +1194,7 @@ struct ConversationHoldPreview: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
         }
         .scrollDisabled(true)
         // ScrollView ships with an opaque systemBackground fill that
@@ -1223,16 +1219,16 @@ struct ConversationHoldPreview: View {
         VStack(alignment: .leading, spacing: 2) {
             if !isMe && conversation.isGroup {
                 Text(msg.sender)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
             Text(bubbleText(for: msg))
-                .font(.system(size: 13))
+                .font(.footnote)
                 .lineLimit(4)
                 .foregroundStyle(isMe ? Color.white : Color(.label))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(isMe ? Color("AccentColor") : Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
