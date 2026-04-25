@@ -88,6 +88,7 @@ struct ChatView: View {
 
     @StateObject private var keyboard = KeyboardState()
     @State private var menuTarget: MessageMenuTarget?
+    @State private var firstVisibleDate: Date?
     @StateObject private var swipeState = ChatSwipeState()
 
     // MARK: Body
@@ -148,10 +149,16 @@ struct ChatView: View {
                 isMe: { $0.sender == myLogin },
                 onReply: { actions.onReply($0) },
                 swipeState: swipeState,
+                onFirstVisibleDateChanged: { firstVisibleDate = $0 },
                 cellBuilder: { msg, idx in
                     messageRow(for: msg, at: idx)
                 }
             )
+            .overlay(alignment: .top) {
+                DatePillOverlay(date: firstVisibleDate)
+                    .padding(.top, 8)
+                    .animation(.easeInOut(duration: 0.2), value: firstVisibleDate)
+            }
             .onTapGesture { focusProxy.blur() }
         }
     }

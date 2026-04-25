@@ -69,6 +69,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     let isMe: (Message) -> Bool
     let onReply: (Message) -> Void
     let swipeState: ChatSwipeState
+    var onFirstVisibleDateChanged: ((Date?) -> Void)?
     let cellBuilder: (Message, Int) -> Cell
 
     // MARK: UIViewRepresentable plumbing
@@ -327,6 +328,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         var initialScrollAt: Date?
         private var loadingMore = false
 
+        // Date pill: cached ISO8601 formatter for parsing created_at
+        private let isoFormatter = ISO8601DateFormatter()
+        /// Last date reported to the date pill callback, used to avoid
+        /// redundant dispatches on every scroll tick.
+        private var lastReportedDate: Date?
+
         // Swipe-to-reply state
         private var swipeActiveId: String?
         private var swipeActiveIsMe: Bool = false
@@ -563,10 +570,47 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
             // Pagination: approaching the far end of the content (=
             // visually the TOP of the screen, = oldest messages).
-            guard !loadingMore else { return }
-            let distanceToEnd = scrollView.contentSize.height
-                - (scrollView.contentOffset.y + scrollView.bounds.height)
-            if distanceToEnd < 600 { fireLoadMore() }
+            if !loadingMore {
+                let distanceToEnd = scrollView.contentSize.height
+                    - (scrollView.contentOffset.y + scrollView.bounds.height)
+                if distanceToEnd < 600 { fireLoadMore() }
+            }
+
+            // Date pill: find the oldest visible message (visually at
+            // the top). In the rotated table, `indexPathsForVisibleRows`
+            // is sorted by ascending IndexPath — `.last` is the highest
+            // section + row = the oldest message on screen.
+            guard let tv = scrollView as? UITableView,
+                  let visiblePaths = tv.indexPathsForVisibleRows,
+                  !visiblePaths.isEmpty else { return }
+            // Walk from the last visible path backwards to find the
+            // first real message row (skip date pills and synthetic rows).
+            var foundDate: Date?
+            for path in visiblePaths.reversed() {
+                guard let id = dataSource.itemIdentifier(for: path) else { continue }
+                if id == ChatTypingRowID || id == ChatSeenRowID || chatIsDateRow(id) { continue }
+                if let msg = lastItems.first(where: { $0.id == id }),
+                   let raw = msg.created_at,
+                   let d = isoFormatter.date(from: raw) {
+                    foundDate = d
+                    break
+                }
+            }
+            // Only notify when the calendar day actually changes —
+            // avoids churning SwiftUI state on every scroll tick.
+            let cal = Calendar.current
+            let changed: Bool
+            if let prev = lastReportedDate, let next = foundDate {
+                changed = !cal.isDate(prev, inSameDayAs: next)
+            } else {
+                changed = (lastReportedDate == nil) != (foundDate == nil)
+            }
+            if changed {
+                lastReportedDate = foundDate
+                let cb = parent.onFirstVisibleDateChanged
+                let date = foundDate
+                DispatchQueue.main.async { cb?(date) }
+            }
         }
 
         private func fireLoadMore() {
