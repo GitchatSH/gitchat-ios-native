@@ -5,8 +5,6 @@ import SwiftUI
 /// tinted background + bordered capsule. Tap opens the reactors
 /// sheet.
 struct ChatReactionsRow: View {
-    @Environment(\.chatTheme) private var theme
-
     let reactions: [MessageReaction]
     let myLogin: String?
     /// Pre-computed set of emojis the current user has reacted with —
@@ -25,8 +23,6 @@ struct ChatReactionsRow: View {
             .spring(response: 0.35, dampingFraction: 0.55),
             value: reactions.map { "\($0.emoji)|\($0.count)" }
         )
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
     }
 
     @ViewBuilder
@@ -42,19 +38,22 @@ struct ChatReactionsRow: View {
         }
         label
             .font(.caption2)
-            .padding(.horizontal, 6).padding(.vertical, 2)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .frame(minHeight: 28)
             .background(
                 mine
-                    ? AnyShapeStyle(theme.replyAccent.opacity(0.25))
-                    : AnyShapeStyle(.ultraThinMaterial)
+                    ? Color("AccentColor").opacity(0.08)
+                    : Color(.systemBackground)
             )
             .clipShape(Capsule())
             .overlay(
                 Capsule().stroke(
-                    mine ? theme.replyAccent.opacity(0.6) : Color.clear,
+                    mine ? Color("AccentColor") : Color(.separator),
                     lineWidth: 1
                 )
             )
+            .contentShape(Capsule())
+            .highPriorityGesture(TapGesture().onEnded { onTap() })
             .instantTooltip(mine ? "You reacted \(r.emoji)" : "\(r.count) reaction\(r.count == 1 ? "" : "s")")
     }
 }
