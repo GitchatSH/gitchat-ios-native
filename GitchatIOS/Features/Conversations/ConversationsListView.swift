@@ -17,6 +17,14 @@ final class ConversationsViewModel: ObservableObject {
         locallyRead.insert(id)
     }
 
+    func toggleRead(_ convo: Conversation) {
+        if locallyRead.contains(convo.id) {
+            locallyRead.remove(convo.id)
+        } else {
+            locallyRead.insert(convo.id)
+        }
+    }
+
     /// Sum of unread counts across all conversations, treating ones the
     /// user has tapped locally as already read so the badge updates the
     /// instant they open a chat.
@@ -427,26 +435,35 @@ struct ConversationsListView: View {
         .listRowBackground(rowBackground(for: convo))
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
-                Task { await vm.togglePin(convo) }
+                vm.toggleRead(convo)
             } label: {
-                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash.fill" : "pin.fill")
+                Label(
+                    vm.locallyRead.contains(convo.id) || convo.unreadCount == 0 ? "Unread" : "Read",
+                    systemImage: vm.locallyRead.contains(convo.id) || convo.unreadCount == 0 ? "envelope.badge.fill" : "envelope.open.fill"
+                )
             }
-            .tint(.orange)
+            .tint(Color(.systemGreen))
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                confirmDelete = convo
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .tint(.red)
             Button {
                 Task { await vm.toggleMute(convo) }
             } label: {
                 let muted = vm.isLocallyMuted(convo)
                 Label(muted ? "Unmute" : "Mute", systemImage: muted ? "bell.fill" : "bell.slash.fill")
             }
-            .tint(.gray)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                Task { await vm.delete(convo) }
+            .tint(.orange)
+            Button {
+                Task { await vm.togglePin(convo) }
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash.fill" : "pin.fill")
             }
-            .tint(.red)
+            .tint(Color(.systemBlue))
         }
     }
 
