@@ -420,7 +420,7 @@ struct ConversationsListView: View {
         #if targetEnvironment(macCatalyst)
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         #else
-        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         #endif
         .scaleEffect(tappedConvoId == convo.id ? 0.97 : 1)
         .opacity(tappedConvoId == convo.id ? 0.7 : 1)
@@ -453,7 +453,7 @@ struct ConversationsListView: View {
     private var sidebar: some View {
         Group {
                 if vm.isLoading && vm.conversations.isEmpty {
-                    SkeletonList(count: 10, avatarSize: 50)
+                    SkeletonList(count: 10, avatarSize: 56)
                 } else if vm.conversations.isEmpty {
                     ContentUnavailableCompat(
                         title: "No conversations yet",
@@ -597,7 +597,7 @@ struct ConversationRow: View {
         #if targetEnvironment(macCatalyst)
         return 44
         #else
-        return 50
+        return 56
         #endif
     }
 
@@ -605,7 +605,7 @@ struct ConversationRow: View {
         #if targetEnvironment(macCatalyst)
         return .footnote
         #else
-        return .caption2
+        return .footnote
         #endif
     }
 
@@ -669,7 +669,7 @@ struct ConversationRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(conversation.displayTitle)
-                        .font(.headline)
+                        .font(displayedUnread > 0 ? .headline : .body)
                         .foregroundStyle(primaryTextColor)
                         .lineLimit(1)
                     if conversation.isPinned {
@@ -707,13 +707,14 @@ struct ConversationRow: View {
             VStack(alignment: .trailing, spacing: 6) {
                 Text(RelativeTime.chatListStamp(conversation.last_message_at))
                     .font(metaFont)
-                    .foregroundStyle(secondaryTextColor)
+                    .foregroundStyle(displayedUnread > 0 && !isActive ? Color("AccentColor") : secondaryTextColor)
                     .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
                 if displayedUnread > 0 {
                     let isMutedBadge = isMuted
                     Text("\(displayedUnread)")
-                        .font(.caption2.bold())
+                        .font(.footnote.bold())
                         .padding(.horizontal, 8).padding(.vertical, 2)
+                        .frame(minWidth: 24, minHeight: 24)
                         .background(
                             isActive
                                 ? Color.white
@@ -734,7 +735,7 @@ struct ConversationRow: View {
         .padding(.horizontal, macRowHorizontalPadding)
         .padding(.vertical, macRowVerticalPadding)
         #else
-        .padding(.vertical, 4)
+        .padding(.vertical, 12)
         #endif
     }
 }
@@ -752,11 +753,11 @@ struct AvatarView: View {
             .clipShape(Circle())
             .overlay(alignment: .bottomTrailing) {
                 if let login, presence.isOnline(login) {
-                    let dot = max(8, size * 0.28)
+                    let dot: CGFloat = 12
                     Circle()
-                        .fill(Color.green)
+                        .fill(Color(.systemGreen))
                         .frame(width: dot, height: dot)
-                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: max(1, dot * 0.18)))
+                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
                 }
             }
             .onAppear {
