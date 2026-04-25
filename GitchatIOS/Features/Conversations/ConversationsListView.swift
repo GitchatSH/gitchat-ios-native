@@ -740,6 +740,20 @@ struct ConversationRow: View {
         case none, sending, sent, read, failed
     }
 
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFallbackFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+    private static func parseISO8601(_ s: String) -> Date? {
+        isoFormatter.date(from: s) ?? isoFallbackFormatter.date(from: s)
+    }
+
     private var isOutgoing: Bool {
         guard let login = AuthStore.shared.login,
               let sender = conversation.last_message?.sender else { return false }
@@ -762,23 +776,18 @@ struct ConversationRow: View {
         if msg.id.hasPrefix("local-") { return .sending }
         guard let createdAt = msg.created_at else { return .sent }
         if let cache = MessageCache.shared.get(conversation.id) {
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let isoFallback = ISO8601DateFormatter()
-            isoFallback.formatOptions = [.withInternetDateTime]
-            func parseDate(_ s: String) -> Date? { iso.date(from: s) ?? isoFallback.date(from: s) }
             if conversation.isGroup {
-                if let cursors = cache.readCursors, let msgDate = parseDate(createdAt) {
+                if let cursors = cache.readCursors, let msgDate = Self.parseISO8601(createdAt) {
                     let otherRead = cursors.contains { login, readAt in
                         guard login != AuthStore.shared.login,
-                              let cursorDate = parseDate(readAt) else { return false }
+                              let cursorDate = Self.parseISO8601(readAt) else { return false }
                         return cursorDate >= msgDate
                     }
                     if otherRead { return .read }
                 }
             } else if let otherReadAt = cache.otherReadAt {
-                if let readDate = parseDate(otherReadAt),
-                   let msgDate = parseDate(createdAt),
+                if let readDate = Self.parseISO8601(otherReadAt),
+                   let msgDate = Self.parseISO8601(createdAt),
                    readDate >= msgDate {
                     return .read
                 }
@@ -864,7 +873,7 @@ struct ConversationRow: View {
                                     .lineLimit(1)
                             }
                         }
-                        HStack(alignment: .top, spacing: 6) {
+                        HStack(alignment: .top, spacing: 4) {
                             if let draft = draftStore.draft(for: conversation.id) {
                                 (Text("Draft: ").foregroundColor(Color(.systemRed)).font(.subheadline)
                                 + Text(draft).foregroundColor(secondaryTextColor).font(.subheadline))

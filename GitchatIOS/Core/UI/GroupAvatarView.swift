@@ -18,8 +18,13 @@ struct GroupAvatarView: View {
         (Color(red: 0.94, green: 0.52, blue: 0.61), Color(red: 0.90, green: 0.41, blue: 0.60)),
     ]
 
+    /// Deterministic hash (djb2) so gradient color is stable across app launches.
     private var gradient: (Color, Color) {
-        let idx = abs(groupId.hashValue) % Self.gradients.count
+        var hash: UInt64 = 5381
+        for byte in groupId.utf8 {
+            hash = hash &* 33 &+ UInt64(byte)
+        }
+        let idx = Int(hash % UInt64(Self.gradients.count))
         return Self.gradients[idx]
     }
 
