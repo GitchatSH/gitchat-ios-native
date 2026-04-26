@@ -142,28 +142,12 @@ struct ChatMessageView: View {
 
     @ViewBuilder
     private var bubbleColumn: some View {
-        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+        VStack(alignment: isMe ? .trailing : .leading, spacing: 0) {
             bubble
                 .overlay(alignment: .topTrailing) { pinBadge }
                 .scaleEffect(isPulsing ? 1.08 : 1)
                 .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isPulsing)
                 .instantTooltip(ChatMessageText.fullTimestamp(message.created_at))
-            if let reactions = message.reactions, !reactions.isEmpty {
-                ChatReactionsRow(
-                    reactions: reactions,
-                    myLogin: myLogin,
-                    myReactionEmojis: myReactionEmojis,
-                    onToggleReact: { emoji in onToggleReact?(emoji) },
-                    onLongPress: { onMoreReactions?() },
-                    onTap: { onReactionsTap?() }
-                )
-                // Spec: incoming DM → 12pt left, incoming Group → 40pt left (32+8),
-                // outgoing → 12pt right
-                .padding(
-                    isMe ? .trailing : .leading,
-                    isMe ? 12 : (isGroup ? 40 : 12)
-                )
-            }
         }
     }
 
@@ -204,6 +188,12 @@ struct ChatMessageView: View {
                     .font(.caption)
                     .foregroundStyle(metaColor)
             }
+            if isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(metaColor)
+                    .rotationEffect(.degrees(45))
+            }
             Text(message.shortTime ?? "")
                 .font(.caption)
                 .foregroundStyle(metaColor)
@@ -212,8 +202,8 @@ struct ChatMessageView: View {
                 doubleCheckView
             }
         }
-        .padding(.trailing, 8)
-        .padding(.bottom, 4)
+        .fixedSize()
+        .padding(.trailing, 12)
     }
 
     @ViewBuilder
@@ -233,11 +223,11 @@ struct ChatMessageView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRead)
     }
 
-    // MARK: Pin badge
+    // MARK: Pin badge (removed — pin icon now inline with timestamp)
 
     @ViewBuilder
     private var pinBadge: some View {
-        if isPinned {
+        if false {
             Button { onPinTap?() } label: {
                 Image(systemName: "pin.fill")
                     .font(.caption2.weight(.semibold))
@@ -376,6 +366,7 @@ struct ChatMessageView: View {
         let hasLink = ChatMessageText.firstURL(in: parsed.body) != nil
         let showInlineReply = (message.reply != nil) && !hideReplyPreview
         let hasText = !message.content.isEmpty
+        let isShortText = hasText && parsed.body.count <= 20 && !parsed.body.contains("\n")
         let showSenderName = showHeader && !isMe && isGroup
         let bubble = VStack(alignment: .leading, spacing: 0) {
             if showSenderName {
@@ -384,7 +375,7 @@ struct ChatMessageView: View {
                     .foregroundStyle(message.sender.senderColor)
                     .padding(.horizontal, 12)
                     .padding(.top, 8)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 0)
             }
             if let from = parsed.forwardedFrom {
                 HStack(spacing: 4) {
@@ -405,26 +396,62 @@ struct ChatMessageView: View {
                     .padding(.bottom, hasText ? 2 : 6)
             }
             if hasText {
-                Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
-                    .tint(isMe ? .white : theme.replyAccent)
-                #if targetEnvironment(macCatalyst)
-                    .font(.scaledSystem(size: 17))
-                #endif
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .textSelection(.enabled)
+                if isShortText {
+                    // Short message: text + pin + timestamp inline same row
+                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                        Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
+                            .tint(isMe ? .white : theme.replyAccent)
+                            #if targetEnvironment(macCatalyst)
+                            .font(.scaledSystem(size: 17))
+                            #endif
+                            .textSelection(.enabled)
+                        timestampMeta
+                    }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .padding(.bottom, 20)
+                } else {
+                    // Long message: text with reserved bottom space for overlay timestamp
+                    Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
+                        .tint(isMe ? .white : theme.replyAccent)
+                    #if targetEnvironment(macCatalyst)
+                        .font(.scaledSystem(size: 17))
+                    #endif
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .padding(.bottom, 20)
+                }
             }
             if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
                 LinkPreviewCard(url: linkURL, isMe: isMe)
                     .padding(.horizontal, 6)
                     .padding(.bottom, 14)
             }
+            // Reactions inside bubble
+            if let reactions = message.reactions, !reactions.isEmpty {
+                ChatReactionsRow(
+                    reactions: reactions,
+                    myLogin: myLogin,
+                    myReactionEmojis: myReactionEmojis,
+                    isOutgoing: isMe,
+                    onToggleReact: { emoji in onToggleReact?(emoji) },
+                    onLongPress: { onMoreReactions?() },
+                    onTap: { onReactionsTap?() }
+                )
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+            }
         }
+        .frame(minWidth: 80, alignment: .leading)
         .overlay(alignment: .bottomTrailing) {
-            timestampMeta
+            // Only show overlay timestamp for long messages —
+            // short messages have it inline in the HStack.
+            if !isShortText {
+                timestampMeta
+                    .padding(.bottom, 4)
+            }
         }
         .background(isMe ? theme.bubbleOutgoing : theme.bubbleIncoming)
         .clipShape(bubbleClipShape)

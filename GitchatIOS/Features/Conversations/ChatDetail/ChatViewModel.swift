@@ -353,6 +353,34 @@ final class ChatViewModel: ObservableObject {
         )
     }
 
+    func removeOptimisticReaction(messageId: String, emoji: String, myLogin: String?) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        var existing = messages[idx].reactions ?? []
+        if let ri = existing.firstIndex(where: { $0.emoji == emoji }) {
+            let r = existing[ri]
+            if r.count <= 1 {
+                existing.remove(at: ri)
+            } else {
+                existing[ri] = MessageReaction(emoji: emoji, count: r.count - 1, reacted: false)
+            }
+        }
+        let m = messages[idx]
+        var rows = m.reactionRows ?? []
+        if let rowIdx = rows.firstIndex(where: { $0.emoji == emoji && $0.user_login == myLogin }) {
+            rows.remove(at: rowIdx)
+        }
+        messages[idx] = Message(
+            id: m.id, conversation_id: m.conversation_id,
+            sender: m.sender, sender_avatar: m.sender_avatar,
+            content: m.content, created_at: m.created_at,
+            edited_at: m.edited_at, reactions: existing.isEmpty ? nil : existing,
+            attachment_url: m.attachment_url, type: m.type,
+            reply_to_id: m.reply_to_id, reply: m.reply,
+            attachments: m.attachments, unsent_at: m.unsent_at,
+            reactionRows: rows
+        )
+    }
+
     func react(messageId: String, emoji: String, myLogin: String? = nil) async {
         // Optimistic: bump the count (or add a new chip) on the local message immediately.
         if let idx = messages.firstIndex(where: { $0.id == messageId }) {

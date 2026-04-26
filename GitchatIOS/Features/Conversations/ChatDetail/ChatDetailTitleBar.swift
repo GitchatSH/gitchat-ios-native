@@ -15,6 +15,8 @@ struct ChatDetailTitleBar: View {
             HStack(spacing: 4) {
                 Text(conversation.displayTitle)
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 if vm.isMuted {
                     Image(systemName: "bell.slash.fill")
                         .font(.caption2)

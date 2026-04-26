@@ -323,9 +323,15 @@ struct ChatDetailView: View {
         }
         a.onReact = { msg, emoji in
             Haptics.impact(.light)
-            vm.applyOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
-            AnalyticsTracker.trackReaction(emoji: emoji)
-            Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: true) }
+            let alreadyReacted = (msg.reactionRows ?? []).contains { $0.emoji == emoji && $0.user_login == auth.login }
+            if alreadyReacted {
+                vm.removeOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
+                Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: false) }
+            } else {
+                vm.applyOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
+                AnalyticsTracker.trackReaction(emoji: emoji)
+                Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: true) }
+            }
         }
         a.onMoreReactions = { msg in reactingFor = msg }
         a.onReply = { msg in

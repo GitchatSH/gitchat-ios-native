@@ -12,6 +12,8 @@ struct ChatReactionsRow: View {
     let myLogin: String?
     /// Pre-computed set of emojis the current user has reacted with.
     let myReactionEmojis: Set<String>
+    /// Whether this is inside an outgoing (my) bubble.
+    var isOutgoing: Bool = false
     /// Tap a pill → toggle that emoji reaction.
     let onToggleReact: (String) -> Void
     /// Long-press a pill → open full emoji picker.
@@ -65,24 +67,32 @@ struct ChatReactionsRow: View {
                 Text("\(r.emoji) \(r.count)")
             }
         }
+        // Colors depend on both mine (I reacted) and isOutgoing (my bubble):
+        // Incoming bubble + not mine: white bg, primary text
+        // Incoming bubble + mine:     accent subtle bg, accent text
+        // Outgoing bubble + not mine: white 20% bg, white 80% text
+        // Outgoing bubble + mine:     white 30% bg, white text
+        let chipBg: Color = {
+            if isOutgoing {
+                return mine ? Color.white.opacity(0.3) : Color.white.opacity(0.2)
+            } else {
+                return mine ? Color("AccentColor").opacity(0.15) : Color(.systemBackground)
+            }
+        }()
+        let chipFg: Color = {
+            if isOutgoing {
+                return mine ? .white : .white.opacity(0.85)
+            } else {
+                return mine ? Color("AccentColor") : .primary
+            }
+        }()
         label
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(mine ? Color("AccentColor") : .secondary)
+            .foregroundStyle(chipFg)
             .padding(.horizontal, 8).padding(.vertical, 4)
-            .frame(minHeight: 28)
-            .background(
-                mine
-                    ? Color("AccentColor").opacity(0.08)
-                    : Color(.systemBackground)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12).stroke(
-                    mine ? Color("AccentColor") : Color(.separator),
-                    lineWidth: 1
-                )
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .background(chipBg)
+            .clipShape(Capsule())
+            .contentShape(Capsule())
             .highPriorityGesture(TapGesture().onEnded { onToggleReact(r.emoji) })
             .onLongPressGesture { onLongPress() }
             .instantTooltip(mine ? "You reacted \(r.emoji)" : "\(r.count) reaction\(r.count == 1 ? "" : "s")")

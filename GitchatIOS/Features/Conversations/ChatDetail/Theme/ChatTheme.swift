@@ -44,7 +44,7 @@ struct ChatTheme: Equatable {
 
     // MARK: Feature flags
     /// Decorative bubble tails — disable to rollback to plain rounded rect.
-    var useBubbleTails: Bool = true
+    var useBubbleTails: Bool = false
 
     // MARK: Banners
     var blockedBannerBg: Color = Color(.secondarySystemBackground)

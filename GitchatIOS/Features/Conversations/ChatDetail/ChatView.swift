@@ -193,7 +193,7 @@ struct ChatView: View {
                             GeometryReader { geo in
                                 Color.clear.preference(
                                     key: ComposerHeightKey.self,
-                                    value: geo.size.height
+                                    value: geo.size.height + geo.safeAreaInsets.bottom + 8
                                 )
                             }
                         )
@@ -361,12 +361,14 @@ struct ChatView: View {
             let isMe = msg.sender == myLogin
             let nextCreatedAt: String? = (idx + 1 < visibleMessages.count) ? (visibleMessages[idx + 1].created_at ?? "") : nil
             let cursors = seenCursorLogins(msg, nextCreatedAt)
-            // Tail on the last message in a same-sender group. In the
-            // rotated table, idx-1 is the NEWER message (visually below).
-            // Show tail when the next visual message has a different sender.
+            // Tail + avatar on the LAST (newest) message in a same-sender
+            // group. visibleMessages is sorted oldest-first. In the rotated
+            // table, the newest message (highest idx) is visually at the
+            // BOTTOM. Check if the NEXT message (idx+1 = newer = visually
+            // below) has a different sender → this msg is the group's last.
             let showTail: Bool = {
-                guard idx > 0 else { return true } // newest message always has tail
-                let next = visibleMessages[idx - 1]
+                guard idx + 1 < visibleMessages.count else { return true }
+                let next = visibleMessages[idx + 1]
                 if let t = next.type, t != "user" { return true }
                 return next.sender != msg.sender
             }()
