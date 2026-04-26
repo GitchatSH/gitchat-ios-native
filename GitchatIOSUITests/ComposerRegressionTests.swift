@@ -53,4 +53,21 @@ final class ComposerRegressionTests: XCTestCase {
         waitForExpectations(timeout: 3)
     }
     #endif
+
+    #if targetEnvironment(macCatalyst)
+    /// T9 (Catalyst): Shift+Return inserts \n into composer, no submit.
+    func testCatalystShiftReturnNewline() throws {
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+        let composer = app.textViews["composer"].firstMatch
+        composer.clearText()
+
+        composer.typeText("hi")
+        composer.typeKey(.enter, modifierFlags: .shift)
+        composer.typeText("there")
+
+        XCTAssertEqual(composer.value as? String, "hi\nthere")
+    }
+    #endif
 }
