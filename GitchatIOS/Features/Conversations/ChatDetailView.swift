@@ -28,6 +28,7 @@ struct ChatDetailView: View {
     // Sheet + alert presentation state.
     @State private var showSearch = false
     @State private var showPinned = false
+    @State private var showHeaderMenu = false
     @State private var showForward: Message?
     @State private var reactorsFor: Message?
     @State private var seenByFor: Message?
@@ -230,7 +231,7 @@ struct ChatDetailView: View {
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             chatToolbar
@@ -411,10 +412,57 @@ struct ChatDetailView: View {
                 localID: message.id
             )
         }
+        a.onBack = { dismiss() }
+        a.onHeaderTap = {
+            if vm.conversation.isGroup { showMembers = true }
+        }
+        a.headerMenuContent = AnyView(headerMenuItems)
         return a
     }
 
-    // MARK: - Toolbar
+    // MARK: - Header menu items (shared between custom header + Catalyst toolbar)
+
+    @ViewBuilder
+    private var headerMenuItems: some View {
+        if vm.conversation.isGroup {
+            Button { showMembers = true } label: {
+                Label("\(vm.conversation.participantsOrEmpty.count) Members", systemImage: "person.2")
+            }
+            Button { showAddMember = true } label: {
+                Label("Add member", systemImage: "person.crop.circle.badge.plus")
+            }
+            Button { showInviteLink = true } label: {
+                Label("Invite link", systemImage: "link")
+            }
+            Button { showGroupSettings = true } label: {
+                Label("Edit group", systemImage: "pencil")
+            }
+        } else if let other = vm.conversation.other_user {
+            NavigationLink(value: ProfileLoginRoute(login: other.login)) {
+                Label("View profile", systemImage: "person.crop.circle")
+            }
+            Button {
+                Task { await convertToGroupAndAddMember() }
+            } label: {
+                Label("Add to conversation", systemImage: "person.crop.circle.badge.plus")
+            }
+        }
+        Button { showSearch = true } label: { Label("Search", systemImage: "magnifyingglass") }
+        Button { showPinned = true } label: { Label("Pinned messages", systemImage: "pin") }
+        Button {
+            Task { await vm.toggleMute() }
+        } label: {
+            Label(vm.isMuted ? "Unmute" : "Mute", systemImage: vm.isMuted ? "bell" : "bell.slash")
+        }
+        if vm.conversation.isGroup {
+            Divider()
+            Button(role: .destructive) { showLeaveConfirm = true } label: {
+                Label("Leave group", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        }
+    }
+
+    // MARK: - Toolbar (Catalyst fallback)
 
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {

@@ -11,10 +11,10 @@ struct ChatDetailTitleBar: View {
     @ObservedObject private var presence = PresenceStore.shared
 
     var body: some View {
-        VStack(spacing: 1) {
+        VStack(spacing: -2) {
             HStack(spacing: 4) {
                 Text(conversation.displayTitle)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                 if vm.isMuted {
                     Image(systemName: "bell.slash.fill")
                         .font(.caption2)
@@ -78,18 +78,25 @@ struct ChatDetailTitleBar: View {
                 Text(Self.relative(date)).foregroundStyle(.secondary)
             ))
         }
-        return nil
+        return SubtitleInfo(view: AnyView(
+            Text("last seen recently").foregroundStyle(.secondary)
+        ))
     }
 
     private static func relative(_ date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "last seen just now" }
+        if seconds < 60 { return "last seen recently" }
         let mins = seconds / 60
-        if mins < 60 { return "last seen \(mins)m ago" }
+        if mins == 1 { return "last seen 1 minute ago" }
+        if mins < 60 { return "last seen \(mins) minutes ago" }
         let hours = mins / 60
-        if hours < 24 { return "last seen \(hours)h ago" }
+        if hours == 1 { return "last seen 1 hour ago" }
+        if hours < 24 { return "last seen \(hours) hours ago" }
         let days = hours / 24
         if days == 1 { return "last seen yesterday" }
-        return "last seen \(days)d ago"
+        if days < 7 { return "last seen \(days) days ago" }
+        let weeks = days / 7
+        if weeks == 1 { return "last seen a week ago" }
+        return "last seen \(weeks) weeks ago"
     }
 }

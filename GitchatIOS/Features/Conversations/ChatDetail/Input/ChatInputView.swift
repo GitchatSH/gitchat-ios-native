@@ -72,7 +72,7 @@ struct ChatInputView: View {
                 .onDisappear { focusProxy.setter = nil }
             sendButton
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
         #endif
     }
@@ -83,9 +83,10 @@ struct ChatInputView: View {
     private var attachButton: some View {
         PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
             Image(systemName: "paperclip")
-                .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
+                .modifier(GlassCircle())
         }
         .disabled(isUploading)
     }
@@ -125,14 +126,7 @@ struct ChatInputView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
             .frame(maxWidth: .infinity)
-            .background(
-                Color(.systemBackground).opacity(0.8),
-                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Color(.separator).opacity(0.3), lineWidth: 0.5)
-            )
+            .modifier(GlassPill())
         #endif
     }
 

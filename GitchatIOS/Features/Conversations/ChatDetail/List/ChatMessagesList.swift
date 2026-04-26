@@ -74,6 +74,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     let onReply: (Message) -> Void
     let swipeState: ChatSwipeState
     var onFirstVisibleDateChanged: ((Date?) -> Void)?
+    /// Height of the composer overlay for contentInset (scroll-behind blur).
+    /// Rotated table: visual-bottom = contentInset.top.
+    var composerOverlayHeight: CGFloat = 0
+    /// Height of the pinned banner overlay.
+    /// Rotated table: visual-top = contentInset.bottom.
+    var bannerOverlayHeight: CGFloat = 0
     var unreadCount: Int = 0
     var myReadAt: String? = nil
     let cellBuilder: (Message, Int) -> Cell
@@ -97,7 +103,23 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // appearing, reply bar in/out), which on a rotated table
         // shows up as a snap back toward the latest-message edge
         // mid-scroll.
+        // `.never` — we manage content insets manually for the
+        // frosted overlay (composer scrolls-behind) effect.
         tv.contentInsetAdjustmentBehavior = .never
+        // Rotated table: visual-bottom = contentInset.top,
+        // visual-top = contentInset.bottom.
+        // Nav bar height comes from adjustedContentInset automatically
+        // when contentInsetAdjustmentBehavior = .always, but we use
+        // .never + manual insets to avoid animation glitches. So we
+        // add the safe area top (nav bar) to contentInset.bottom
+        // (rotated visual-top).
+        let safeTop = tv.superview?.safeAreaInsets.top ?? 0
+        tv.contentInset = UIEdgeInsets(
+            top: composerOverlayHeight,
+            left: 0,
+            bottom: bannerOverlayHeight + safeTop,
+            right: 0
+        )
         tv.scrollsToTop = false
         // Self-sizing cells — UIHostingConfiguration reports its
         // intrinsic height.
@@ -210,7 +232,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
         // Rotation-aware: "near bottom" visually = contentOffset near 0.
         let prevHeight = tv.contentSize.height
-        let prevOffset = tv.contentOffset.y
+        let prevOffset = tv.contentOffset.y + tv.contentInset.top
         let wasNearBottom = tv.bounds.height > 0 && prevOffset < 200
 
         // Apply the new snapshot. Animated for new-message arrivals +
@@ -280,6 +302,19 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         }
         coord.lastBottomInset = bottomInset
 
+        // Sync overlay insets for scroll-behind blur.
+        // Rotated table: visual-bottom = .top, visual-top = .bottom.
+        let safeTop = tv.superview?.safeAreaInsets.top ?? 0
+        let wantedTop = composerOverlayHeight
+        let wantedBottom = bannerOverlayHeight + safeTop
+        if abs(tv.contentInset.top - wantedTop) > 0.5
+            || abs(tv.contentInset.bottom - wantedBottom) > 0.5 {
+            tv.contentInset = UIEdgeInsets(
+                top: wantedTop, left: 0,
+                bottom: wantedBottom, right: 0
+            )
+        }
+
         // With the rotated-table layout, prepending older messages
         // (pagination) adds rows at the FAR END of the data
         // (visually the top). The table stays parked at its current
@@ -304,7 +339,9 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 if hasUnread {
                     coord.scrollTo(id: ChatUnreadDividerID, in: tv, animated: false)
                 } else {
-                    tv.setContentOffset(.zero, animated: false)
+                    // Rest point with contentInset is -inset.top, not (0,0).
+                    let rest = CGPoint(x: 0, y: -tv.contentInset.top)
+                    tv.setContentOffset(rest, animated: false)
                 }
             }
         }
@@ -637,7 +674,10 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // and back to "at bottom" under 40. A single threshold
             // toggled on every tiny bounce, which in turn re-rendered
             // the whole ChatView mid-scroll and felt like a jerk.
-            let offset = scrollView.contentOffset.y
+            // Normalize offset: with contentInset for composer overlay,
+            // the resting point is -contentInset.top, not 0. Adding
+            // contentInset.top makes thresholds (40/120) work unchanged.
+            let offset = scrollView.contentOffset.y + scrollView.contentInset.top
             let current = parent.isAtBottom
             let next: Bool
             if current {

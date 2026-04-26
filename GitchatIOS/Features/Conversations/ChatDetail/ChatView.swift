@@ -77,6 +77,10 @@ struct ChatView: View {
         var onShowPinnedList: () -> Void = {}
         var onRetryPending: (Message) -> Void = { _ in }
         var onDiscardPending: (Message) -> Void = { _ in }
+        var onBack: () -> Void = {}
+        var onHeaderTap: () -> Void = {}
+        /// Builds the header menu content. Caller provides Menu items.
+        var headerMenuContent: AnyView = AnyView(EmptyView())
     }
 
     let actions: Actions
@@ -102,27 +106,105 @@ struct ChatView: View {
 
     // MARK: Body
 
+    /// Composer height measured via GeometryReader, fed to the list
+    /// as contentInset so messages scroll behind the frosted overlay.
+    @State private var composerOverlayHeight: CGFloat = 0
+    @State private var bannerOverlayHeight: CGFloat = 0
+
     var body: some View {
         ZStack {
             ChatBackground()
                 .ignoresSafeArea()
+
+            // Message list — FULL SCREEN. No VStack wrapping.
+            // contentInset on the UITableView pushes content away
+            // from overlays while allowing scroll-behind for blur.
+            // Gradient mask fades bubbles out at top/bottom edges
+            // so they blur into the header/composer overlays.
+            list
+                .ignoresSafeArea()
+                .mask {
+                    VStack(spacing: 0) {
+                        LinearGradient(
+                            colors: [.clear, .black],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: bannerOverlayHeight + 20)
+
+                        Rectangle().fill(.black)
+
+                        LinearGradient(
+                            colors: [.black, .clear],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: composerOverlayHeight + 20)
+                    }
+                }
+
+            // Header + Pinned banner overlay — top
             VStack(spacing: 0) {
-                pinnedBanner
-                list
+                VStack(spacing: 8) {
+                    chatHeader
+                    pinnedBanner
+                }
+                .background {
+                    LinearGradient(
+                        colors: [
+                            Color("ChatBackground"),
+                            Color("ChatBackground").opacity(0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea(.container, edges: .top)
+                }
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(
+                            key: BannerHeightKey.self,
+                            value: geo.size.height
+                        )
+                    }
+                )
+                Spacer()
+            }
+
+            // Composer overlay — bottom
+            VStack {
+                Spacer()
                 if let login = blockedBannerLogin {
                     blockedBanner(login: login)
                 } else if composerVisible {
                     composerStack
+                        .background {
+                            LinearGradient(
+                                colors: [
+                                    Color("ChatBackground").opacity(0),
+                                    Color("ChatBackground")
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                            .ignoresSafeArea(.container, edges: .bottom)
+                        }
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(
+                                    key: ComposerHeightKey.self,
+                                    value: geo.size.height
+                                )
+                            }
+                        )
                 }
             }
-            #if targetEnvironment(macCatalyst)
-            // Detail column on Catalyst is wide — bubbles + composer
-            // hugging the edges reads as "unfinished layout". Inset
-            // them so content has breathing room while the background
-            // keeps extending edge-to-edge.
-            .padding(.horizontal, 16)
-            #endif
         }
+        .onPreferenceChange(ComposerHeightKey.self) { composerOverlayHeight = $0 }
+        .onPreferenceChange(BannerHeightKey.self) { bannerOverlayHeight = $0 }
+        #if targetEnvironment(macCatalyst)
+        .padding(.horizontal, 16)
+        #endif
         .overlay { menuOverlay }
         .environment(\.chatTheme, .default)
         // Reset "new while scrolled" counters when the user scrolls back to bottom.
@@ -146,6 +228,52 @@ struct ChatView: View {
             }
         }
     }
+
+    // MARK: Chat header (custom nav bar replacement)
+
+    #if !targetEnvironment(macCatalyst)
+    @ViewBuilder
+    private var chatHeader: some View {
+        HStack(spacing: 8) {
+            Button { actions.onBack() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .modifier(GlassCircle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            ChatDetailTitleBar(
+                conversation: vm.conversation,
+                vm: vm,
+                onTap: { actions.onHeaderTap() }
+            )
+            .padding(.horizontal, 44)
+            .frame(height: 44)
+            .modifier(GlassPill())
+
+            Spacer()
+
+            Menu {
+                actions.headerMenuContent
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(Color(.label))
+                    .frame(width: 44, height: 44)
+                    .modifier(GlassCircle())
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 44)
+    }
+    #else
+    @ViewBuilder
+    private var chatHeader: some View { EmptyView() }
+    #endif
 
     // MARK: Pinned banner
 
@@ -199,6 +327,8 @@ struct ChatView: View {
                 onReply: { actions.onReply($0) },
                 swipeState: swipeState,
                 onFirstVisibleDateChanged: { firstVisibleDate = $0 },
+                composerOverlayHeight: composerOverlayHeight,
+                bannerOverlayHeight: bannerOverlayHeight,
                 unreadCount: {
                     let readAt = vm.readCursors[myLogin ?? ""] ?? vm.otherReadAt
                     return visibleMessages.filter { ($0.created_at ?? "") > (readAt ?? "") }.count
@@ -553,5 +683,21 @@ struct ChatView: View {
         .padding(.top, 12)
         .padding(.bottom, 12)
         .background(theme.blockedBannerBg)
+    }
+}
+
+// MARK: - Preference key for composer overlay height
+
+private struct ComposerHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct BannerHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

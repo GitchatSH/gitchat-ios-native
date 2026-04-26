@@ -52,11 +52,8 @@ struct PinnedBannerView: View {
                 .buttonStyle(.plain)
             }
             .frame(height: 44)
-            .background(
-                Color(.secondarySystemGroupedBackground).opacity(0.92),
-                in: Capsule()
-            )
-            .padding(.horizontal, 8)
+            .modifier(GlassPill())
+            .padding(.horizontal, 16)
             .padding(.vertical, 4)
         }
     }
