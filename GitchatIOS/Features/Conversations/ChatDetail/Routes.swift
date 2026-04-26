@@ -11,6 +11,10 @@ struct ImagePreviewState: Hashable, Identifiable {
     let index: Int
 }
 
+struct PinnedListRoute: Hashable {
+    let conversationId: String
+}
+
 struct URLItem: Identifiable {
     let url: URL
     var id: String { url.absoluteString }

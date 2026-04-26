@@ -74,6 +74,7 @@ struct ChatView: View {
         var onClipboardPaste: (UIImage) -> Void = { _ in }
         var onClipboardDismiss: () -> Void = {}
         var onMacCatalystSubmit: () -> Void = {}
+        var onShowPinnedList: () -> Void = {}
         var onRetryPending: (Message) -> Void = { _ in }
         var onDiscardPending: (Message) -> Void = { _ in }
     }
@@ -90,7 +91,6 @@ struct ChatView: View {
     @StateObject private var keyboard = KeyboardState()
     @State private var menuTarget: MessageMenuTarget?
     @State private var firstVisibleDate: Date?
-    @State private var pinnedBannerDismissed = false
     @StateObject private var swipeState = ChatSwipeState()
     /// Count of new messages that arrived while the user was scrolled up.
     /// Incremented when `isAtBottom == false` and a new message appears;
@@ -151,22 +151,16 @@ struct ChatView: View {
 
     @ViewBuilder
     private var pinnedBanner: some View {
-        let key = "pinnedBannerDismissed_\(vm.conversation.id)"
-        if !vm.pinnedMessages.isEmpty
-            && !pinnedBannerDismissed
-            && !UserDefaults.standard.bool(forKey: key) {
+        if !vm.pinnedMessages.isEmpty {
             PinnedBannerView(
                 pinnedMessages: vm.pinnedMessages,
                 onTap: { msg in
+                    pendingJumpId = msg.id
                     Task {
-                        let found = await vm.ensureMessageLoaded(id: msg.id)
-                        if found { pendingJumpId = msg.id }
+                        _ = await vm.ensureMessageLoaded(id: msg.id, createdAt: msg.created_at)
                     }
                 },
-                onDismiss: {
-                    pinnedBannerDismissed = true
-                    UserDefaults.standard.set(true, forKey: key)
-                }
+                onShowList: { actions.onShowPinnedList() }
             )
         }
     }

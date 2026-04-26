@@ -5,7 +5,7 @@ import SwiftUI
 struct PinnedBannerView: View {
     let pinnedMessages: [Message]
     let onTap: (Message) -> Void
-    let onDismiss: () -> Void
+    let onShowList: () -> Void
     @State private var currentIndex = 0
 
     var body: some View {
@@ -42,7 +42,7 @@ struct PinnedBannerView: View {
 
                 // Unpin / list icon
                 Button {
-                    onDismiss()
+                    onShowList()
                 } label: {
                     Image(systemName: "text.line.first.and.arrowtriangle.forward")
                         .font(.system(size: 14, weight: .medium))

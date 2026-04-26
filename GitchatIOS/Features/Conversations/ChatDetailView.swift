@@ -378,6 +378,7 @@ struct ChatDetailView: View {
             }
         }
         a.onPinBadgeTap = { _ in showPinned = true }
+        a.onShowPinnedList = { showPinned = true }
         a.onAvatarTap = { login in
             profileRoute = ProfileLoginRoute(login: login)
         }
@@ -484,10 +485,10 @@ struct ChatDetailView: View {
 
     private func jumpToReply(from msg: Message) {
         guard let targetId = msg.reply?.id else { return }
+        let createdAt = vm.messages.first(where: { $0.id == targetId })?.created_at
+        pendingJumpId = targetId
         Task {
-            let found = await vm.ensureMessageLoaded(id: targetId)
-            guard found else { return }
-            pendingJumpId = targetId
+            _ = await vm.ensureMessageLoaded(id: targetId, createdAt: createdAt)
             try? await Task.sleep(nanoseconds: 300_000_000)
             withAnimation(.easeInOut(duration: 0.25)) { pulsingId = targetId }
             try? await Task.sleep(nanoseconds: 600_000_000)
@@ -864,13 +865,28 @@ private struct ChatDetailSheets: ViewModifier {
                     .presentationDetents([.large])
             }
             .sheet(isPresented: $showPinned) {
-                NavigationStack {
-                    PinnedMessagesSheet(conversation: vm.conversation) { id in
+                PinnedMessagesSheet(
+                    conversation: vm.conversation,
+                    myLogin: auth.login,
+                    onJumpToMessage: { id in
                         pendingJumpId = id
+                        Task { _ = await vm.ensureMessageLoaded(id: id) }
+                    },
+                    onUnpinAll: {
+                        Task {
+                            for pin in vm.pinnedMessages {
+                                try? await APIClient.shared.unpinMessage(
+                                    conversationId: vm.conversation.id,
+                                    messageId: pin.id
+                                )
+                            }
+                            vm.pinnedIds.removeAll()
+                            vm.pinnedMessages.removeAll()
+                        }
                     }
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
             }
             .sheet(item: $showForward) { msg in
                 NavigationStack { ForwardSheet(message: msg) }
