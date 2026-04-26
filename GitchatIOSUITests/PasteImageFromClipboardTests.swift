@@ -32,10 +32,7 @@ final class PasteImageFromClipboardTests: XCTestCase {
         try ChatNav.openFirstChat(app)
 
         let composer = app.textViews["composer"].firstMatch
-        // Clear any pre-existing draft so the equality assertion is deterministic.
-        composer.typeKey("a", modifierFlags: .command)
-        composer.typeKey(.delete, modifierFlags: [])
-
+        composer.clearText()
         composer.typeKey("v", modifierFlags: .command)
 
         XCTAssertEqual(composer.value as? String, "hello world")

@@ -11,6 +11,17 @@ extension XCUIApplication {
     }
 }
 
+extension XCUIElement {
+    /// Clears the receiver's text by selecting all (Cmd+A) and pressing
+    /// Delete. Standard XCUITest idiom for normalizing UITextField /
+    /// UITextView pre-state when an exact-equality assertion follows.
+    /// The element must be focused (call `.tap()` first).
+    func clearText() {
+        typeKey("a", modifierFlags: .command)
+        typeKey(.delete, modifierFlags: [])
+    }
+}
+
 enum PasteboardFixture {
     /// Loads `test-screenshot.png` from the test bundle as `UIImage`-
     /// equivalent data. Returns the raw PNG bytes — callers should
