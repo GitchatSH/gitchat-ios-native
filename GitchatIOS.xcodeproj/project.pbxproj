@@ -12,6 +12,7 @@
 		050786142A446599066C62D0 /* MacHover.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1340F67554881C8FB0BC0BFA /* MacHover.swift */; };
 		0992E140C62E0F3779B22A78 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B70C13ECDA5B85E7FDEDB9D8 /* Models.swift */; };
 		0A22B4DC623FFE11C4DE55B2 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8CAB4116A44600924A5B1A4 /* DiscoverView.swift */; };
+		0CF34A4E114CD00DF57DC12A /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06414EF268FC059C7E6D2183 /* SmokeTests.swift */; };
 		0F9DA620D390F737ABAF8E4A /* ChatAttachmentsGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ECB3ACEDD3F4DDBE05167BC /* ChatAttachmentsGrid.swift */; };
 		1002899F9F99F440D42DC48F /* GlassPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DA1766BE87B16368E73F58 /* GlassPill.swift */; };
 		10832E2BD27509C69912DE76 /* ShareTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD425E44DCCAF06510180F2B /* ShareTokenStore.swift */; };
@@ -54,6 +55,7 @@
 		5769D859AC782AFDBB13C6B1 /* DiscoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 877BDA4EA59EAE485A2E7219 /* DiscoverViewModel.swift */; };
 		58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */; };
 		589F007C9FC3C65B41E24DF1 /* WaveButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE841F1B53AE0E4DAA4F004E /* WaveButton.swift */; };
+		5A50460F13A5D328D5E48838 /* test-screenshot.png in Resources */ = {isa = PBXBuildFile; fileRef = 4A0A9276804B9C1EC4E5E5C2 /* test-screenshot.png */; };
 		60D610D3E81196FD29EADE83 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F911D72B3577520347C7A25 /* AppRouter.swift */; };
 		633B7848AFE04D7B0D1939B2 /* LinkGithubBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0108E6ED2C630F572A0C5F9 /* LinkGithubBanner.swift */; };
 		654B9A9D39D48AB87373AA1F /* Routes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A066E307A07B247124125B04 /* Routes.swift */; };
@@ -156,6 +158,13 @@
 			remoteGlobalIDString = EB0765B7BFA48EC0AC25A5E6;
 			remoteInfo = GitchatShareExtension;
 		};
+		3A37CA7AB15769F75DBA9858 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE209328F4293473D3365D39 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 15D7A7746C96C0D956D835DF;
+			remoteInfo = GitchatIOS;
+		};
 		F05CDA2F190907952F592C0C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = DE209328F4293473D3365D39 /* Project object */;
@@ -184,6 +193,7 @@
 		02C140A3AB7A1B01F7BEDFC3 /* ChatReplyEditBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReplyEditBar.swift; sourceTree = "<group>"; };
 		043204DC26642044739AFFED /* OneSignalNotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OneSignalNotificationServiceExtension.entitlements; sourceTree = "<group>"; };
 		0581BC792D393D25DB425CB4 /* KeyboardHeight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHeight.swift; sourceTree = "<group>"; };
+		06414EF268FC059C7E6D2183 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		06D9FF2224123D14E9F3B352 /* ChatTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTheme.swift; sourceTree = "<group>"; };
 		099A525B70EFC8BB24EDBA38 /* ChatReplyPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReplyPreview.swift; sourceTree = "<group>"; };
 		0A64D83F5578E057CF2F6A03 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -222,10 +232,12 @@
 		3CC840DF62F0D52265D6C401 /* GitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GitchatShareExtension.entitlements; sourceTree = "<group>"; };
 		3EACA3D0C53F605D0326E854 /* APIClient+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Group.swift"; sourceTree = "<group>"; };
 		3F559E3CB229DF8F4F6CA5C9 /* ChatClipboardChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatClipboardChip.swift; sourceTree = "<group>"; };
+		401FF094D33B8716885A5985 /* GitchatIOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GitchatIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		40DB657ADF1F6FC16C8A2BA9 /* ImageCropSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropSheet.swift; sourceTree = "<group>"; };
 		449D98B405970A2AF05994F1 /* ShareAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAPI.swift; sourceTree = "<group>"; };
 		44CB898980AE4010FDBE8070 /* ConversationsCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationsCache.swift; sourceTree = "<group>"; };
 		46DAB3DF885FFD1C9FC46733 /* ShareConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareConfig.swift; sourceTree = "<group>"; };
+		4A0A9276804B9C1EC4E5E5C2 /* test-screenshot.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "test-screenshot.png"; sourceTree = "<group>"; };
 		4BC0F97726C2E12C5EF27207 /* FollowingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FollowingView.swift; sourceTree = "<group>"; };
 		4DBC8FEE623A8B5FB4BDFFBC /* MacReadableWidth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacReadableWidth.swift; sourceTree = "<group>"; };
 		4ED56669CED0DEE797EABF78 /* EmojiPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerSheet.swift; sourceTree = "<group>"; };
@@ -314,6 +326,7 @@
 		F7537B4250B26209B8C7F03C /* Geist-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-SemiBold.ttf"; sourceTree = "<group>"; };
 		F7E0D975F7A5F9F05AE4C937 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		FAA0DB03557EDE0854293B66 /* MessageMenuAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageMenuAction.swift; sourceTree = "<group>"; };
+		FC01A065D8F07A1C92D1A4D3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
 		FE29B3507EA081EE81ACD1F8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		FFB37F9F8D7D60BEB1494E05 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
@@ -393,6 +406,7 @@
 			isa = PBXGroup;
 			children = (
 				0D9442EC8C4FC8F6B1095FEA /* GitchatIOS */,
+				E6A34DD757B3D1347B9965D6 /* GitchatIOSUITests */,
 				BBFECFB08747D33409E0CDFA /* GitchatShareExtension */,
 				6AD5976CDA709D12CBDE670A /* OneSignalNotificationServiceExtension */,
 				BA7A14953E341B5C937325EA /* Frameworks */,
@@ -440,6 +454,7 @@
 			isa = PBXGroup;
 			children = (
 				653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */,
+				401FF094D33B8716885A5985 /* GitchatIOSUITests.xctest */,
 				C3B238A579BDAC391159C493 /* GitchatShareExtension.appex */,
 				814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */,
 			);
@@ -593,6 +608,14 @@
 			path = StoreKit;
 			sourceTree = "<group>";
 		};
+		8BC243EEC9FF235FA7EB63AD /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				4A0A9276804B9C1EC4E5E5C2 /* test-screenshot.png */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		9F15F5366DF09B87DCD6B465 /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -737,6 +760,16 @@
 			path = Conversations;
 			sourceTree = "<group>";
 		};
+		E6A34DD757B3D1347B9965D6 /* GitchatIOSUITests */ = {
+			isa = PBXGroup;
+			children = (
+				FC01A065D8F07A1C92D1A4D3 /* Info.plist */,
+				06414EF268FC059C7E6D2183 /* SmokeTests.swift */,
+				8BC243EEC9FF235FA7EB63AD /* Resources */,
+			);
+			path = GitchatIOSUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -769,6 +802,25 @@
 			productName = GitchatIOS;
 			productReference = 653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */;
 			productType = "com.apple.product-type.application";
+		};
+		31FF3033EBD507A35E482DDA /* GitchatIOSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1000D835451344A1777E5163 /* Build configuration list for PBXNativeTarget "GitchatIOSUITests" */;
+			buildPhases = (
+				739A296F312FDD071BD000B1 /* Sources */,
+				480A17BD8B28C50FBD6D7D28 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				289939E6C4C8611562CED79F /* PBXTargetDependency */,
+			);
+			name = GitchatIOSUITests;
+			packageProductDependencies = (
+			);
+			productName = GitchatIOSUITests;
+			productReference = 401FF094D33B8716885A5985 /* GitchatIOSUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 		6F43BFDA3F932B01CF0412E7 /* OneSignalNotificationServiceExtension */ = {
 			isa = PBXNativeTarget;
@@ -819,6 +871,10 @@
 						DevelopmentTeam = 9S5F8693FB;
 						ProvisioningStyle = Automatic;
 					};
+					31FF3033EBD507A35E482DDA = {
+						DevelopmentTeam = 9S5F8693FB;
+						TestTargetID = 15D7A7746C96C0D956D835DF;
+					};
 					6F43BFDA3F932B01CF0412E7 = {
 						DevelopmentTeam = 9S5F8693FB;
 						ProvisioningStyle = Automatic;
@@ -853,6 +909,7 @@
 			projectRoot = "";
 			targets = (
 				15D7A7746C96C0D956D835DF /* GitchatIOS */,
+				31FF3033EBD507A35E482DDA /* GitchatIOSUITests */,
 				EB0765B7BFA48EC0AC25A5E6 /* GitchatShareExtension */,
 				6F43BFDA3F932B01CF0412E7 /* OneSignalNotificationServiceExtension */,
 			);
@@ -860,6 +917,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		480A17BD8B28C50FBD6D7D28 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A50460F13A5D328D5E48838 /* test-screenshot.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B3A3CE17CC142D96B4213C39 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -895,6 +960,14 @@
 				E64B7E1BDD32E7DE9A148EBD /* ShareRootView.swift in Sources */,
 				10832E2BD27509C69912DE76 /* ShareTokenStore.swift in Sources */,
 				C17F6E3938CE1135ADF031BA /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		739A296F312FDD071BD000B1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0CF34A4E114CD00DF57DC12A /* SmokeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1027,6 +1100,11 @@
 			target = EB0765B7BFA48EC0AC25A5E6 /* GitchatShareExtension */;
 			targetProxy = 20715C9AE127C9BAFAE25084 /* PBXContainerItemProxy */;
 		};
+		289939E6C4C8611562CED79F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 15D7A7746C96C0D956D835DF /* GitchatIOS */;
+			targetProxy = 3A37CA7AB15769F75DBA9858 /* PBXContainerItemProxy */;
+		};
 		96BDEA750E9F07883F228703 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			platformFilter = ios;
@@ -1061,6 +1139,26 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
+		};
+		226B5EAB66649ABFA76D22C2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = GitchatIOSUITests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = chat.git.uitests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GitchatIOS;
+			};
+			name = Release;
 		};
 		46F0AA835EF715E8551CC421 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -1184,6 +1282,26 @@
 			};
 			name = Release;
 		};
+		B75CBC314FEFF9A1FEB0BAAF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = GitchatIOSUITests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = chat.git.uitests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = GitchatIOS;
+			};
+			name = Debug;
+		};
 		C561546A71D82EBA0A7A9F4F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1300,6 +1418,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		1000D835451344A1777E5163 /* Build configuration list for PBXNativeTarget "GitchatIOSUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B75CBC314FEFF9A1FEB0BAAF /* Debug */,
+				226B5EAB66649ABFA76D22C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		21198B8F3C613CE63360E551 /* Build configuration list for PBXProject "GitchatIOS" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
