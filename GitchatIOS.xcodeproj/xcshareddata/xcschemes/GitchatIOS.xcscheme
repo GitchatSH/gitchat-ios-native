@@ -37,6 +37,16 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "31FF3033EBD507A35E482DDA"
+               BuildableName = "GitchatIOSUITests.xctest"
+               BlueprintName = "GitchatIOSUITests"
+               ReferencedContainer = "container:GitchatIOS.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

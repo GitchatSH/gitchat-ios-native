@@ -60,7 +60,6 @@ struct ChatDetailView: View {
     @State private var dropCaption = ""
     @State private var cropTarget: Int?
     @State private var isDragOver = false
-    @StateObject private var clipboard = ClipboardWatcher()
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
@@ -141,13 +140,6 @@ struct ChatDetailView: View {
         return nil
     }
 
-    private var pendingClipboardBinding: Binding<UIImage?> {
-        Binding(
-            get: { clipboard.pendingImage },
-            set: { _ in /* driven by ClipboardWatcher; writes via consume/dismiss */ }
-        )
-    }
-
     // MARK: - Body
 
     var body: some View {
@@ -205,7 +197,6 @@ struct ChatDetailView: View {
             isAtBottom: $isAtBottom,
             scrollToBottomToken: $scrollToBottomToken,
             photoItems: $photoItems,
-            pendingClipboardImage: pendingClipboardBinding,
             composerVisible: $composerVisible,
             imageZoomNamespace: imageZoomNamespace,
             mentionSuggestions: mentionSuggestions,
@@ -329,7 +320,6 @@ struct ChatDetailView: View {
         }
         a.onCopyText = { msg in
             UIPasteboard.general.string = msg.content
-            ClipboardWatcher.markSelfOriginWrite()
             ToastCenter.shared.show(.success, "Copied")
         }
         a.onCopyImage = { msg in
@@ -372,13 +362,13 @@ struct ChatDetailView: View {
             profileRoute = ProfileLoginRoute(login: login)
         }
         a.onInsertMention = { p in insertMention(p.login) }
-        a.onClipboardPaste = { img in
+        a.onPasteImage = { img in
+            guard !showDropConfirm else { return }   // ignore re-paste while sheet is up
             Haptics.impact(.light)
             pendingDropImages = [img]
+            dropCaption = ""
             showDropConfirm = true
-            clipboard.consume()
         }
-        a.onClipboardDismiss = { clipboard.dismiss() }
         a.onMacCatalystSubmit = {
             Task { await vm.send() }
         }
@@ -646,12 +636,6 @@ struct ChatDetailView: View {
         let type = pasteboardUTI(for: data, url: url)
         await MainActor.run {
             UIPasteboard.general.setData(data, forPasteboardType: type)
-            // Tell every ClipboardWatcher in the app that this write
-            // came from us so their notification handlers skip the
-            // main-thread decode + PNG-hash path. Without this the
-            // second+ copy of the same image stalls ~200–500ms on
-            // memory-constrained devices.
-            ClipboardWatcher.markSelfOriginWrite()
             ToastCenter.shared.show(.success, "Image copied")
         }
     }
