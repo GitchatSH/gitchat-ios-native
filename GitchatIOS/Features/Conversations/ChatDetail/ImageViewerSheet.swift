@@ -71,8 +71,37 @@ struct ImageViewerSheet: View {
             .padding(.top, 12)
             .padding(.trailing, 16)
             .opacity(1 - dismissProgress)
+
+            // Hardware-keyboard navigation between images. Hidden
+            // buttons hold the shortcuts so they fire regardless of
+            // which subview has focus on Mac Catalyst / iPad with a
+            // connected keyboard. Esc closes the viewer.
+            keyboardShortcuts
         }
         .statusBarHidden(true)
+    }
+
+    @ViewBuilder
+    private var keyboardShortcuts: some View {
+        VStack(spacing: 0) {
+            Button("Previous image") {
+                if index > 0 {
+                    withAnimation(.easeInOut(duration: 0.2)) { index -= 1 }
+                }
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [])
+            Button("Next image") {
+                if index < urls.count - 1 {
+                    withAnimation(.easeInOut(duration: 0.2)) { index += 1 }
+                }
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [])
+            Button("Close viewer") { close() }
+                .keyboardShortcut(.escape, modifiers: [])
+        }
+        .opacity(0)
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
     }
 }
 

@@ -1041,7 +1041,17 @@ private struct ImageViewerDestinationModifier: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, macCatalyst 18.0, *) {
+        // Catalyst always uses fullScreenCover. The iOS 18 zoom-into-
+        // navigation-destination path bleeds out of the right detail
+        // column on a NavigationSplitView host, leaving the sidebar
+        // visible behind/under the image. fullScreenCover takes the
+        // whole window — correct cover behavior on Catalyst.
+        #if targetEnvironment(macCatalyst)
+        content.fullScreenCover(item: $imagePreview) { state in
+            ImageViewerSheet(urls: state.urls, startIndex: state.index)
+        }
+        #else
+        if #available(iOS 18.0, *) {
             content.navigationDestination(item: $imagePreview) { state in
                 zoomDestination(for: state)
             }
@@ -1050,6 +1060,7 @@ private struct ImageViewerDestinationModifier: ViewModifier {
                 ImageViewerSheet(urls: state.urls, startIndex: state.index)
             }
         }
+        #endif
     }
 
     @available(iOS 18.0, macCatalyst 18.0, *)
