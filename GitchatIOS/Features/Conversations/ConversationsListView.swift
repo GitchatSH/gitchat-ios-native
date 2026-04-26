@@ -302,9 +302,9 @@ struct ConversationsListView: View {
     }
 
     private func openConversation(_ convo: Conversation) {
-        withAnimation(.none) { tappedConvoId = convo.id }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            tappedConvoId = nil
+        tappedConvoId = convo.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeOut(duration: 0.2)) { tappedConvoId = nil }
         }
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
@@ -463,8 +463,10 @@ struct ConversationsListView: View {
             isActive: isActiveRow(convo)
         )
         .contentShape(Rectangle())
+        .background(tappedConvoId == convo.id ? Color(.tertiarySystemBackground) : Color.clear)
         .scaleEffect(squeezedConvoId == convo.id ? rowSqueezeFactor(for: convo) : 1)
         .animation(.easeOut(duration: 0.20), value: squeezedConvoId == convo.id)
+        .animation(.easeOut(duration: 0.08), value: tappedConvoId == convo.id)
         .onTapGesture { openConversation(convo) }
         .onLongPressGesture(minimumDuration: 0.32) {
             squeezedConvoId = nil
@@ -488,7 +490,7 @@ struct ConversationsListView: View {
         .macHover()
         .listRowSeparator(.hidden, edges: .top)
         .listRowSeparator(.visible, edges: .bottom)
-        .listRowSeparatorTint(Color(.separator).opacity(0.4))
+        .listRowSeparatorTint(Color(.separator))
         .alignmentGuide(.listRowSeparatorLeading) { _ in 76 }
         .alignmentGuide(.listRowSeparatorTrailing) { d in d.width }
         #if targetEnvironment(macCatalyst)
@@ -497,7 +499,7 @@ struct ConversationsListView: View {
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         #endif
         .listRowBackground(rowBackground(for: convo))
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 vm.markLocallyRead(convo.id)
                 Task { try? await APIClient.shared.markRead(conversationId: convo.id) }
@@ -564,7 +566,9 @@ struct ConversationsListView: View {
         }
         .scrollIndicators(.hidden, axes: .vertical)
         .overlay {
-            if profileResults.isEmpty && !isSearchingProfiles
+            let q = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+            if q.count >= 2
+                && profileResults.isEmpty && !isSearchingProfiles
                 && messageResults.isEmpty && !isSearchingMessages {
                 ContentUnavailableCompat(
                     title: "",
@@ -585,7 +589,7 @@ struct ConversationsListView: View {
     }
 
     private var searchDivider: some View {
-        Color(.separator).opacity(0.4)
+        Color(.separator).opacity(0.5)
             .frame(height: 1 / UIScreen.main.scale)
             .padding(.leading, 16 + 44 + 12) // padding + avatar + gap
     }
@@ -714,7 +718,10 @@ struct ConversationsListView: View {
                     .listStyle(.plain)
                     .macRowListContainer()
                     .scrollIndicators(.hidden, axes: .vertical)
-                    .refreshable { await vm.load() }
+                    .refreshable {
+                        await vm.load()
+                        Haptics.impact(.light)
+                    }
                     .animation(vm.isLoadingMore ? .none : .spring(response: 0.45, dampingFraction: 0.82), value: vm.conversations.map(\.id))
                 }
             }
@@ -813,7 +820,7 @@ struct SyncingIndicator: View {
         TimelineView(.animation) { context in
             let seconds = context.date.timeIntervalSinceReferenceDate
             Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color("AccentColor"))
                 .rotationEffect(.degrees(seconds.truncatingRemainder(dividingBy: 1) * 360))
         }
@@ -830,6 +837,9 @@ struct ConversationRow: View {
     /// for contrast against the accent-color background.
     var isActive: Bool = false
     @ObservedObject private var draftStore = DraftStore.shared
+    @ScaledMetric(relativeTo: .footnote) private var badgeMinSize: CGFloat = 24
+    @ScaledMetric(relativeTo: .caption) private var mentionBadgeSize: CGFloat = 20
+    @ScaledMetric(relativeTo: .caption) private var senderAvatarSize: CGFloat = 20
 
     private var primaryTextColor: Color { isActive ? .white : .primary }
     private var secondaryTextColor: Color { isActive ? .white.opacity(0.85) : .secondary }
@@ -896,17 +906,22 @@ struct ConversationRow: View {
 
     @ViewBuilder
     private var previewContent: some View {
-        if let msg = conversation.last_message, (msg.type ?? "user") != "user" {
+        let lastMsgType: String? = {
+            if let cached = cachedEntry?.messages, let last = cached.last { return last.type }
+            return conversation.last_message?.type
+        }()
+        if let type = lastMsgType, type != "user" {
             // System message — italic
             Text(previewWithoutPhotoEmoji)
                 .font(.subheadline.italic())
                 .foregroundStyle(Color(.systemGray2))
                 .lineLimit(1)
-        } else if conversation.isGroup && isOutgoing && conversation.last_message != nil {
-            // Group outgoing — "You:" prefix
-            (Text("You: ").foregroundColor(Color("AccentColor")).font(.subheadline)
-            + Text(previewWithoutPhotoEmoji).foregroundColor(secondaryTextColor).font(.subheadline))
-            .lineLimit(1)
+        } else if conversation.isGroup && isOutgoing {
+            // Group outgoing — preview only, "You" shown on sender line above
+            Text(previewWithoutPhotoEmoji)
+                .font(.subheadline)
+                .foregroundStyle(secondaryTextColor)
+                .lineLimit(1)
         } else {
             Text(previewWithoutPhotoEmoji)
                 .font(.subheadline)
@@ -934,8 +949,13 @@ struct ConversationRow: View {
     }
 
     private var isOutgoing: Bool {
-        guard let login = AuthStore.shared.login,
-              let sender = conversation.last_message?.sender else { return false }
+        guard let login = AuthStore.shared.login else { return false }
+        // Check cache first (may have newer messages than last_message)
+        if let cached = cachedEntry?.messages,
+           let last = cached.last, last.type == nil || last.type == "user" {
+            return last.sender == login
+        }
+        guard let sender = conversation.last_message?.sender else { return false }
         return sender == login
     }
 
@@ -950,7 +970,16 @@ struct ConversationRow: View {
     }
 
     private var checkmarkState: CheckmarkState {
-        guard isOutgoing, let msg = conversation.last_message else { return .none }
+        guard isOutgoing else { return .none }
+        // Use cache message first, fallback to conversation.last_message
+        let msg: Message? = {
+            if let cached = cachedEntry?.messages,
+               let last = cached.last, last.type == nil || last.type == "user" {
+                return last
+            }
+            return conversation.last_message
+        }()
+        guard let msg else { return .none }
         if msg.unsent_at != nil { return .failed }
         if msg.id.hasPrefix("local-") { return .sending }
         guard let createdAt = msg.created_at else { return .sent }
@@ -1043,7 +1072,12 @@ struct ConversationRow: View {
                 // Row 2: Sender (group) or Preview + right indicators
                 HStack(alignment: .bottom, spacing: 4) {
                     VStack(alignment: .leading, spacing: 2) {
-                        if let sender = lastSenderLogin, !isOutgoing {
+                        if conversation.isGroup && isOutgoing {
+                            Text("You")
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                        } else if let sender = lastSenderLogin, !isOutgoing {
                             HStack(spacing: 4) {
                                 senderAvatarView(for: sender)
                                 Text(sender)
@@ -1089,27 +1123,29 @@ struct ConversationRow: View {
 
     @ViewBuilder
     private var checkmarkView: some View {
+        let checkColor: Color = isMuted ? Color(.systemGray) : Color("AccentColor")
         switch checkmarkState {
         case .sending:
             Image(systemName: "clock")
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundStyle(Color(.systemGray))
         case .sent:
             Image(systemName: "checkmark")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color(.systemGray))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(checkColor)
         case .read:
-            ZStack {
+            ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .medium))
-                    .offset(x: 4)
+                    .font(.caption.weight(.medium))
+                    .offset(x: 6)
             }
-            .foregroundStyle(Color("AccentColor"))
+            .padding(.trailing, 4)
+            .foregroundStyle(checkColor)
         case .failed:
             Image(systemName: "exclamationmark.circle")
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundStyle(Color(.systemRed))
         case .none:
             EmptyView()
@@ -1123,15 +1159,15 @@ struct ConversationRow: View {
                 if hasMention {
                     Text("@")
                         .font(.caption.bold())
-                        .frame(width: 20, height: 20)
+                        .frame(width: mentionBadgeSize, height: mentionBadgeSize)
                         .background(Color("AccentColor"), in: Circle())
                         .foregroundStyle(.white)
                         .transition(.scale.combined(with: .opacity))
                 }
-                Text("\(displayedUnread)")
+                Text(displayedUnread > 99 ? "99+" : "\(displayedUnread)")
                     .font(.footnote.bold())
                     .padding(.horizontal, 8).padding(.vertical, 2)
-                    .frame(minWidth: 24, minHeight: 24)
+                    .frame(minWidth: badgeMinSize, minHeight: badgeMinSize)
                     .background(
                         isActive
                             ? Color.white
@@ -1146,7 +1182,7 @@ struct ConversationRow: View {
                     .transition(.scale.combined(with: .opacity))
                 if isMuted {
                     Image(systemName: "speaker.slash.fill")
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundStyle(secondaryTextColor)
                 }
             } else if conversation.isPinned {
@@ -1155,7 +1191,7 @@ struct ConversationRow: View {
                     .foregroundStyle(secondaryTextColor)
                 if isMuted {
                     Image(systemName: "speaker.slash.fill")
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundStyle(secondaryTextColor)
                 }
             }
@@ -1178,15 +1214,15 @@ struct ConversationRow: View {
         }()
         if let url {
             CachedAsyncImage(url: url, contentMode: .fill, maxPixelSize: 60)
-                .frame(width: 20, height: 20)
+                .frame(width: senderAvatarSize, height: senderAvatarSize)
                 .clipShape(Circle())
         } else {
             Circle()
                 .fill(Color(.systemGray4))
-                .frame(width: 20, height: 20)
+                .frame(width: senderAvatarSize, height: senderAvatarSize)
                 .overlay {
                     Text(String(sender.prefix(1)).uppercased())
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.caption2.bold())
                         .foregroundStyle(.white)
                 }
         }
@@ -1335,12 +1371,12 @@ struct ConversationHoldPreview: View {
                     name: conversation.group_name ?? conversation.displayTitle,
                     avatarURL: conversation.group_avatar_url,
                     groupId: conversation.id,
-                    size: 36
+                    size: 40
                 )
             } else {
                 AvatarView(
                     url: conversation.displayAvatarURL,
-                    size: 36,
+                    size: 40,
                     login: conversation.other_user?.login
                 )
             }
@@ -1352,6 +1388,10 @@ struct ConversationHoldPreview: View {
                     Text("\(conversation.participantsOrEmpty.count) members")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                } else if let login = conversation.other_user?.login {
+                    Text(PresenceStore.shared.isOnline(login) ? "online" : "last seen recently")
+                        .font(.caption2)
+                        .foregroundStyle(PresenceStore.shared.isOnline(login) ? Color(.systemGreen) : .secondary)
                 }
             }
             Spacer(minLength: 0)
@@ -1364,7 +1404,7 @@ struct ConversationHoldPreview: View {
         VStack(spacing: 8) {
             Spacer()
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 28))
+                .font(.title)
                 .foregroundStyle(.secondary)
             Text(conversation.previewText ?? "No messages yet")
                 .font(.footnote)

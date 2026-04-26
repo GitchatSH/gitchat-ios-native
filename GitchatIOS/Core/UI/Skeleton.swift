@@ -45,12 +45,19 @@ struct SkeletonShape: View {
 struct SkeletonRow: View {
     var avatarSize: CGFloat = 48
     var showSubtitle: Bool = true
+    var isGroup: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color(.secondarySystemBackground))
-                .frame(width: avatarSize, height: avatarSize)
+            if isGroup {
+                RoundedRectangle(cornerRadius: avatarSize * 0.25, style: .continuous)
+                    .fill(Color(.secondarySystemBackground))
+                    .frame(width: avatarSize, height: avatarSize)
+            } else {
+                Circle()
+                    .fill(Color(.secondarySystemBackground))
+                    .frame(width: avatarSize, height: avatarSize)
+            }
             VStack(alignment: .leading, spacing: 8) {
                 SkeletonShape().frame(width: 160, height: 12)
                 if showSubtitle {
@@ -71,8 +78,8 @@ struct SkeletonList: View {
     var showSubtitle: Bool = true
 
     var body: some View {
-        List(0..<count, id: \.self) { _ in
-            SkeletonRow(avatarSize: avatarSize, showSubtitle: showSubtitle)
+        List(0..<count, id: \.self) { index in
+            SkeletonRow(avatarSize: avatarSize, showSubtitle: showSubtitle, isGroup: index % 2 == 1)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
         }
