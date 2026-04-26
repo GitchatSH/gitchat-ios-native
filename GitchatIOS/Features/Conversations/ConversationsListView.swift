@@ -463,10 +463,6 @@ struct ConversationsListView: View {
             isActive: isActiveRow(convo)
         )
         .contentShape(Rectangle())
-        // Telegram-style press: 0.12s delay, then 0.20s squeeze
-        // ramp, then activate at 0.32s. `onPressingChanged` fires
-        // immediately on touch / release; we use a token to guard
-        // the deferred squeeze against early lifts.
         .scaleEffect(squeezedConvoId == convo.id ? rowSqueezeFactor(for: convo) : 1)
         .animation(.easeOut(duration: 0.20), value: squeezedConvoId == convo.id)
         .onTapGesture { openConversation(convo) }
@@ -501,15 +497,21 @@ struct ConversationsListView: View {
         .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         #endif
         .listRowBackground(rowBackground(for: convo))
-        // NOTE: Read/Unread swipe deferred — markRead API exists but markUnread does not.
-        // Revisit when BE adds markUnread endpoint.
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                vm.markLocallyRead(convo.id)
+                Task { try? await APIClient.shared.markRead(conversationId: convo.id) }
+            } label: {
+                Label("Read", systemImage: "envelope.open")
+            }
+            .tint(Color(.systemGreen))
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 confirmDelete = convo
             } label: {
                 Label("Delete", systemImage: "trash")
             }
-            .tint(.red)
             Button {
                 Task { await vm.toggleMute(convo) }
             } label: {
@@ -1422,6 +1424,119 @@ struct ConversationHoldPreview: View {
             return "📷 Photo"
         }
         return ""
+    }
+}
+
+// MARK: - Custom Swipe Actions (Telegram-style full-height blocks)
+
+struct SwipeAction {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+}
+
+struct CustomSwipeRow<Content: View>: View {
+    let leadingActions: [SwipeAction]
+    let trailingActions: [SwipeAction]
+    let content: () -> Content
+
+    @State private var offset: CGFloat = 0
+    @State private var prevOffset: CGFloat = 0
+    @GestureState private var isDragging = false
+
+    private let actionWidth: CGFloat = 74
+    private var trailingWidth: CGFloat { CGFloat(trailingActions.count) * actionWidth }
+    private var leadingWidth: CGFloat { CGFloat(leadingActions.count) * actionWidth }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // Leading actions (swipe right)
+            if offset > 0 && !leadingActions.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(Array(leadingActions.enumerated()), id: \.offset) { _, action in
+                        actionBlock(action)
+                    }
+                }
+                .frame(width: max(offset, 0))
+                .clipped()
+            }
+
+            // Trailing actions (swipe left)
+            if offset < 0 && !trailingActions.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(Array(trailingActions.reversed().enumerated()), id: \.offset) { _, action in
+                        actionBlock(action)
+                    }
+                }
+                .frame(width: max(-offset, 0))
+                .clipped()
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+
+            // Content
+            content()
+                .offset(x: offset)
+                .background(Color(.systemBackground))
+        }
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .updating($isDragging) { _, state, _ in state = true }
+                .onChanged { value in
+                    let translation = value.translation.width + prevOffset
+                    if leadingActions.isEmpty && translation > 0 { return }
+                    if trailingActions.isEmpty && translation < 0 { return }
+                    offset = translation
+                }
+                .onEnded { value in
+                    let velocity = value.predictedEndTranslation.width - value.translation.width
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        if offset > leadingWidth / 2 || velocity > 100 {
+                            // Full swipe right — trigger first leading action
+                            if let first = leadingActions.first {
+                                first.action()
+                            }
+                            offset = 0
+                        } else if offset < -trailingWidth / 2 {
+                            // Snap open trailing
+                            offset = -trailingWidth
+                        } else {
+                            offset = 0
+                        }
+                        prevOffset = offset
+                    }
+                }
+        )
+        .onChange(of: isDragging) { dragging in
+            if !dragging && offset != -trailingWidth && offset != 0 {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    offset = 0
+                    prevOffset = 0
+                }
+            }
+        }
+    }
+
+    private func actionBlock(_ action: SwipeAction) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                offset = 0
+                prevOffset = 0
+            }
+            action.action()
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: action.icon)
+                    .font(.system(size: 20))
+                Text(action.title)
+                    .font(.caption2)
+            }
+            .foregroundStyle(.white)
+            .frame(width: actionWidth)
+            .frame(maxHeight: .infinity)
+            .background(action.color)
+        }
+        .buttonStyle(.plain)
     }
 }
 
