@@ -121,6 +121,7 @@ struct ChatInputView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("composer")
         #else
         TextField(placeholder, text: $draft, axis: .vertical)
             .focused($focused)
@@ -130,6 +131,7 @@ struct ChatInputView: View {
             .frame(maxWidth: .infinity)
             .background(Color.clear)
             .modifier(GlassPill())
+            .accessibilityIdentifier("composer")
         #endif
     }
 

@@ -75,6 +75,7 @@ struct ImageSendPreview: View {
                     .scaledToFit()
                     .transition(.opacity.animation(.easeInOut(duration: 0.18)))
                     .id(safeIndex)
+                    .accessibilityIdentifier("paste-preview-image")
             }
             .frame(maxWidth: .infinity)
             .frame(maxHeight: .infinity)
@@ -187,6 +188,7 @@ struct ImageSendPreview: View {
             .disabled(images.isEmpty)
             .opacity(images.isEmpty ? 0.5 : 1)
             .accessibilityLabel("Send")
+            .accessibilityIdentifier("sheet-send")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
