@@ -33,4 +33,24 @@ final class ComposerRegressionTests: XCTestCase {
             "initial=\(initialFrame.height) grown=\(grownFrame.height)")
     }
     #endif
+
+    #if targetEnvironment(macCatalyst)
+    /// T8 (Catalyst): bare Return calls onSubmit, sends the message,
+    /// composer is cleared.
+    func testCatalystReturnSubmits() throws {
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+        let composer = app.textViews["composer"].firstMatch
+        composer.clearText()
+
+        composer.typeText("hi")
+        composer.typeKey(.enter, modifierFlags: [])
+
+        // After submit, draft clears (vm.draft is bound; UITextView reflects)
+        let cleared = NSPredicate(format: "value == ''")
+        expectation(for: cleared, evaluatedWith: composer, handler: nil)
+        waitForExpectations(timeout: 3)
+    }
+    #endif
 }
