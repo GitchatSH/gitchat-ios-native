@@ -360,6 +360,20 @@ struct APIClient {
         let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "DELETE")
     }
 
+    func searchMessagesGlobal(q: String, limit: Int = 20) async throws -> [Message] {
+        struct Wrap: Decodable { let messages: [Message]?; let data: Inner? }
+        struct Inner: Decodable { let messages: [Message] }
+        let w: Wrap = try await request(
+            "messages/search",
+            query: [
+                URLQueryItem(name: "q", value: q),
+                URLQueryItem(name: "limit", value: String(limit)),
+                URLQueryItem(name: "cursor", value: ""),
+            ]
+        )
+        return w.messages ?? w.data?.messages ?? []
+    }
+
     func searchMessagesInConversation(id: String, q: String) async throws -> [Message] {
         struct Wrap: Decodable { let messages: [Message]?; let data: Inner? }
         struct Inner: Decodable { let messages: [Message] }

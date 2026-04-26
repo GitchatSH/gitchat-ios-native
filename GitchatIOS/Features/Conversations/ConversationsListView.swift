@@ -277,6 +277,11 @@ struct ConversationsListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showNewChat = false
     @State private var filter = ""
+    @State private var profileResults: [FriendUser] = []
+    @State private var isSearchingProfiles = false
+    @State private var messageResults: [Message] = []
+    @State private var isSearchingMessages = false
+    @State private var searchTask: Task<Void, Never>?
     @State private var path = NavigationPath()
     @State private var confirmDelete: Conversation?
     @State private var tappedConvoId: String?
@@ -309,7 +314,11 @@ struct ConversationsListView: View {
         #endif
     }
 
-    private var filtered: [Conversation] {
+    private var isSearching: Bool {
+        !filter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var filteredChats: [Conversation] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let base: [Conversation]
         if q.isEmpty {
@@ -317,13 +326,36 @@ struct ConversationsListView: View {
         } else {
             base = vm.conversations.filter { c in
                 c.displayTitle.lowercased().contains(q)
-                    || (c.previewText ?? "").lowercased().contains(q)
                     || c.participantsOrEmpty.contains(where: { $0.login.lowercased().contains(q) })
             }
         }
         return base.sorted { a, b in
             if a.isPinned != b.isPinned { return a.isPinned }
             return (a.last_message_at ?? "") > (b.last_message_at ?? "")
+        }
+    }
+
+    private func runSearch(_ query: String) {
+        searchTask?.cancel()
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else {
+            profileResults = []
+            messageResults = []
+            isSearchingProfiles = false
+            isSearchingMessages = false
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+            isSearchingProfiles = true
+            isSearchingMessages = true
+            async let profiles = APIClient.shared.searchUsersForDM(query: q)
+            async let messages = APIClient.shared.searchMessagesGlobal(q: q)
+            if let p = try? await profiles, !Task.isCancelled { profileResults = p }
+            isSearchingProfiles = false
+            if let m = try? await messages, !Task.isCancelled { messageResults = m }
+            isSearchingMessages = false
         }
     }
 
@@ -458,6 +490,7 @@ struct ConversationsListView: View {
             }
         }
         .macHover()
+        .listRowSeparator(.hidden, edges: .top)
         .listRowSeparator(.visible, edges: .bottom)
         .listRowSeparatorTint(Color(.separator).opacity(0.4))
         .alignmentGuide(.listRowSeparatorLeading) { _ in 76 }
@@ -496,6 +529,152 @@ struct ConversationsListView: View {
         }
     }
 
+    @ViewBuilder
+    private var searchResultsList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if !profileResults.isEmpty || isSearchingProfiles {
+                    sectionHeader("Profiles")
+                    if isSearchingProfiles && profileResults.isEmpty {
+                        HStack { Spacer(); ProgressView(); Spacer() }
+                            .padding(.vertical, 16)
+                    } else {
+                        ForEach(profileResults) { user in
+                            profileRow(user)
+                            searchDivider
+                        }
+                    }
+                }
+
+                if !messageResults.isEmpty || isSearchingMessages {
+                    sectionHeader("Messages")
+                    if isSearchingMessages && messageResults.isEmpty {
+                        HStack { Spacer(); ProgressView(); Spacer() }
+                            .padding(.vertical, 16)
+                    } else {
+                        ForEach(messageResults) { msg in
+                            messageSearchRow(msg)
+                            searchDivider
+                        }
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden, axes: .vertical)
+        .overlay {
+            if profileResults.isEmpty && !isSearchingProfiles
+                && messageResults.isEmpty && !isSearchingMessages {
+                ContentUnavailableCompat(
+                    title: "",
+                    systemImage: "magnifyingglass",
+                    description: "No results. Try a different search."
+                )
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+    }
+
+    private var searchDivider: some View {
+        Color(.separator).opacity(0.4)
+            .frame(height: 1 / UIScreen.main.scale)
+            .padding(.leading, 16 + 44 + 12) // padding + avatar + gap
+    }
+
+    @ViewBuilder
+    private func profileRow(_ user: FriendUser) -> some View {
+        HStack(spacing: 12) {
+            AvatarView(
+                url: user.avatar_url,
+                size: 44,
+                login: user.login
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(user.login)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                if let name = user.name, !name.isEmpty {
+                    Text(name)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            filter = ""
+            if let convo = vm.conversations.first(where: { $0.other_user?.login == user.login }) {
+                openConversation(convo)
+            } else {
+                Task {
+                    if let convo = try? await APIClient.shared.createConversation(recipient: user.login) {
+                        openConversation(convo)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func messageSearchRow(_ msg: Message) -> some View {
+        HStack(spacing: 12) {
+            AvatarView(
+                url: msg.sender_avatar,
+                size: 44,
+                login: msg.sender
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(msg.sender)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                highlightedText(msg.content, query: filter)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 4)
+            if let date = msg.created_at {
+                Text(RelativeTime.chatListStamp(date))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard let convoId = msg.conversation_id,
+                  let convo = vm.conversations.first(where: { $0.id == convoId }) else { return }
+            AppRouter.shared.pendingMessageId = msg.id
+            filter = ""
+            openConversation(convo)
+        }
+    }
+
+    private func highlightedText(_ text: String, query: String) -> Text {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty,
+              let range = text.range(of: q, options: .caseInsensitive) else {
+            return Text(text)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        let before = String(text[text.startIndex..<range.lowerBound])
+        let match = String(text[range])
+        let after = String(text[range.upperBound..<text.endIndex])
+        return Text(before).font(.subheadline).foregroundColor(.secondary)
+            + Text(match).font(.subheadline.bold()).foregroundColor(.primary)
+            + Text(after).font(.subheadline).foregroundColor(.secondary)
+    }
+
     private var sidebar: some View {
         Group {
                 if vm.isLoading && vm.conversations.isEmpty {
@@ -506,7 +685,9 @@ struct ConversationsListView: View {
                         systemImage: "bubble.left.and.bubble.right",
                         description: "Tap the pencil icon to start one."
                     )
-                } else if filtered.isEmpty {
+                } else if isSearching {
+                    searchResultsList
+                } else if filteredChats.isEmpty {
                     ContentUnavailableCompat(
                         title: "No results",
                         systemImage: "magnifyingglass",
@@ -514,7 +695,7 @@ struct ConversationsListView: View {
                     )
                 } else {
                     List {
-                        ForEach(filtered) { convo in
+                        ForEach(filteredChats) { convo in
                             conversationListRow(convo)
                                 .hideMacScrollIndicators()
                         }
@@ -535,7 +716,8 @@ struct ConversationsListView: View {
                     .animation(vm.isLoadingMore ? .none : .spring(response: 0.45, dampingFraction: 0.82), value: vm.conversations.map(\.id))
                 }
             }
-            .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search chats")
+            .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
+            .onChange(of: filter) { runSearch($0) }
             .navigationTitle("Chats")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1087,12 +1269,14 @@ struct ContentUnavailableCompat: View {
     let description: String
 
     var body: some View {
-        if #available(iOS 17, *) {
+        if #available(iOS 17, *), !title.isEmpty {
             ContentUnavailableView(title, systemImage: systemImage, description: Text(description))
         } else {
             VStack(spacing: 12) {
                 Image(systemName: systemImage).font(.system(size: 48)).foregroundStyle(.secondary)
-                Text(title).font(.title3.bold())
+                if !title.isEmpty {
+                    Text(title).font(.title3.bold())
+                }
                 Text(description).font(.subheadline).foregroundStyle(.secondary)
             }
             .padding()
@@ -1238,6 +1422,17 @@ struct ConversationHoldPreview: View {
             return "📷 Photo"
         }
         return ""
+    }
+}
+
+private struct SectionSpacingModifier: ViewModifier {
+    let spacing: CGFloat
+    func body(content: Content) -> some View {
+        if #available(iOS 17, *) {
+            content.listSectionSpacing(spacing)
+        } else {
+            content
+        }
     }
 }
 
