@@ -82,6 +82,36 @@ struct PasteableTextField: UIViewRepresentable {
         context.coordinator.onPasteImage = onPasteImage
     }
 
+    /// Drives SwiftUI sizing directly. Computes the height needed for the
+    /// current text at the proposed width, clamped to:
+    /// - 1 line minimum on both platforms
+    /// - 1 line maximum on Mac Catalyst (single-line composer)
+    /// - 5 lines maximum on iOS (matches the prior `lineLimit(1...5)`)
+    ///
+    /// This bypasses `intrinsicContentSize`, which SwiftUI was reading as
+    /// an unbounded value for an empty `UITextView` with
+    /// `isScrollEnabled = false` — causing the composer to render at the
+    /// SwiftUI frame's maxHeight regardless of content. iOS 16+ added
+    /// this hook precisely so representables can publish their own size.
+    func sizeThatFits(
+        _ proposal: ProposedViewSize,
+        uiView: PasteableUITextView,
+        context: Context
+    ) -> CGSize? {
+        let width = proposal.width ?? UIView.layoutFittingExpandedSize.width
+        let lineHeight = uiView.font?.lineHeight ?? 22
+        #if targetEnvironment(macCatalyst)
+        return CGSize(width: width, height: lineHeight)
+        #else
+        let fitted = uiView.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)
+        )
+        let maxH = lineHeight * 5
+        let clamped = max(lineHeight, min(maxH, fitted.height))
+        return CGSize(width: width, height: clamped)
+        #endif
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject, UITextViewDelegate {

@@ -109,7 +109,6 @@ struct ChatInputView: View {
             onPasteImage: onPasteImage,
             focusProxy: focusProxy
         )
-        .frame(minHeight: 22, maxHeight: catalystOrIOS(catalyst: 22, ios: 110))
         .padding(.horizontal, catalystOrIOS(catalyst: 10, ios: 16))
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity)
