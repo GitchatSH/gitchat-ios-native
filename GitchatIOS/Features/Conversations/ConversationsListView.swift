@@ -458,7 +458,10 @@ struct ConversationsListView: View {
             }
         }
         .macHover()
-        .listRowSeparator(.hidden)
+        .listRowSeparator(.visible, edges: .bottom)
+        .listRowSeparatorTint(Color(.separator).opacity(0.4))
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 76 }
+        .alignmentGuide(.listRowSeparatorTrailing) { d in d.width }
         #if targetEnvironment(macCatalyst)
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         #else
@@ -496,7 +499,7 @@ struct ConversationsListView: View {
     private var sidebar: some View {
         Group {
                 if vm.isLoading && vm.conversations.isEmpty {
-                    SkeletonList(count: 10, avatarSize: 56)
+                    SkeletonList(count: 10, avatarSize: 64)
                 } else if vm.conversations.isEmpty {
                     ContentUnavailableCompat(
                         title: "No conversations yet",
@@ -648,21 +651,17 @@ struct ConversationRow: View {
     private var secondaryTextColor: Color { isActive ? .white.opacity(0.85) : .secondary }
 
     /// Avatar diameter — 44pt on Catalyst (Apple list standard),
-    /// 50pt on iOS for the Telegram-feeling chat-list look.
+    /// 64pt on iOS for the Telegram-feeling chat-list look.
     private var avatarSize: CGFloat {
         #if targetEnvironment(macCatalyst)
         return 44
         #else
-        return 56
+        return 64
         #endif
     }
 
     private var metaFont: Font {
-        #if targetEnvironment(macCatalyst)
-        return .footnote
-        #else
-        return .caption2
-        #endif
+        .footnote
     }
 
     private var displayedUnread: Int {
@@ -864,8 +863,8 @@ struct ConversationRow: View {
                             HStack(spacing: 4) {
                                 senderAvatarView(for: sender)
                                 Text(sender)
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(secondaryTextColor)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
                                     .lineLimit(1)
                             }
                         }

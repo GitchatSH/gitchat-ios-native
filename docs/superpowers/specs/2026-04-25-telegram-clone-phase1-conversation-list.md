@@ -451,10 +451,12 @@ Sticky banner below navigation bar:
 
 | Direction | Actions | Colors |
 |-----------|---------|--------|
-| Leading (right swipe) | Read/Unread toggle | `Color(.systemGreen)` |
+| Leading (right swipe) | Read/Unread toggle — **DEFERRED** | `Color(.systemGreen)` |
 | Trailing (left swipe) | Pin/Unpin, Mute/Unmute, Delete | Pin: `Color(.systemBlue)`, Mute: `Color(.systemOrange)`, Delete: `Color(.systemRed)` |
 
 Use SwiftUI `.swipeActions()` modifier. Context menu (long-press) deferred to Phase 2.
+
+> **Read/Unread swipe deferred:** `APIClient.markRead()` exists but `markUnread` endpoint does not. Implement when BE adds `markUnread`. Code comment in `ConversationsListView.swift` marks the location.
 
 ---
 
