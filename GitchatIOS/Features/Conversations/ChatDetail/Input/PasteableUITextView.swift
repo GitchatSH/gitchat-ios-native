@@ -31,4 +31,27 @@ final class PasteableUITextView: UITextView {
         }
         super.paste(sender)
     }
+
+#if targetEnvironment(macCatalyst)
+    /// Catalyst: bare Return submits via `onReturnSubmit`; Shift+Return
+    /// falls through to default newline insertion. Tracked here rather
+    /// than in `UITextViewDelegate.shouldChangeTextIn:` because the
+    /// text-replacement callback does not carry modifier-flag context.
+    var onReturnSubmit: (() -> Void)?
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        for press in presses {
+            guard let key = press.key else { continue }
+            if key.keyCode == .keyboardReturnOrEnter {
+                if key.modifierFlags.contains(.shift) {
+                    super.pressesBegan(presses, with: event)
+                    return
+                }
+                onReturnSubmit?()
+                return
+            }
+        }
+        super.pressesBegan(presses, with: event)
+    }
+#endif
 }

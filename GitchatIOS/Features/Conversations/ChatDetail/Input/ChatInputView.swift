@@ -44,7 +44,7 @@ struct ChatInputView: View {
     let focusProxy: FocusProxy
 
     final class FocusProxy: ObservableObject {
-        fileprivate var setter: ((Bool) -> Void)?
+        var setter: ((Bool) -> Void)?
         func focus() { setter?(true) }
         func blur() { setter?(false) }
     }

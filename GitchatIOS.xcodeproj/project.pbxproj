@@ -57,6 +57,7 @@
 		58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */; };
 		589F007C9FC3C65B41E24DF1 /* WaveButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE841F1B53AE0E4DAA4F004E /* WaveButton.swift */; };
 		5A50460F13A5D328D5E48838 /* test-screenshot.png in Resources */ = {isa = PBXBuildFile; fileRef = 4A0A9276804B9C1EC4E5E5C2 /* test-screenshot.png */; };
+		5C64CCED436F361067331C14 /* PasteableTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CECEC18438C4857C3D2BA79 /* PasteableTextField.swift */; };
 		60D610D3E81196FD29EADE83 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F911D72B3577520347C7A25 /* AppRouter.swift */; };
 		633B7848AFE04D7B0D1939B2 /* LinkGithubBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0108E6ED2C630F572A0C5F9 /* LinkGithubBanner.swift */; };
 		654B9A9D39D48AB87373AA1F /* Routes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A066E307A07B247124125B04 /* Routes.swift */; };
@@ -263,6 +264,7 @@
 		781AD42CB2F6BD7F8C084678 /* MessageSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSearchSheet.swift; sourceTree = "<group>"; };
 		79D9DA88399CF4A4C8C4371F /* NewChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewChatView.swift; sourceTree = "<group>"; };
 		7A0AAC07BE23842F6B28DC04 /* ForwardSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardSheet.swift; sourceTree = "<group>"; };
+		7CECEC18438C4857C3D2BA79 /* PasteableTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteableTextField.swift; sourceTree = "<group>"; };
 		7E94D622A0735683786E43FF /* SafariSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariSheet.swift; sourceTree = "<group>"; };
 		808AF0F70444427011FF450A /* PushManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushManager.swift; sourceTree = "<group>"; };
 		814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = OneSignalNotificationServiceExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -559,6 +561,7 @@
 				5B2D9E43399F860C5B165A48 /* ChatInputView.swift */,
 				17211226899EE4118572176C /* ChatMentionSuggestionRow.swift */,
 				02C140A3AB7A1B01F7BEDFC3 /* ChatReplyEditBar.swift */,
+				7CECEC18438C4857C3D2BA79 /* PasteableTextField.swift */,
 				468F852B3AC68783991A2985 /* PasteableUITextView.swift */,
 			);
 			path = Input;
@@ -1065,6 +1068,7 @@
 				D6F22BEEE3B7B425EE371B5A /* NewChatView.swift in Sources */,
 				20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */,
 				3A3E0B7B4AE4F296C6F0A4CD /* OutboxStore.swift in Sources */,
+				5C64CCED436F361067331C14 /* PasteableTextField.swift in Sources */,
 				3A9789932CCFBFDA26FCA4CB /* PasteableUITextView.swift in Sources */,
 				EC901521FFF8953EEB00DC9B /* PeekHostWindow.swift in Sources */,
 				4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */,
