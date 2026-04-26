@@ -60,4 +60,20 @@ final class PasteImageFromClipboardTests: XCTestCase {
         XCTAssertFalse(app.images["paste-preview-image"].waitForExistence(timeout: 1),
                        "Image+text paste should not open the sheet — text-only fallback expected")
     }
+
+    /// T4: empty clipboard → Cmd+V is a no-op (no crash, no sheet).
+    func testEmptyClipboardNoOp() throws {
+        UIPasteboard.general.items = []
+
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+
+        let composer = app.textViews["composer"].firstMatch
+        composer.clearText()
+        composer.typeKey("v", modifierFlags: .command)
+
+        XCTAssertEqual(composer.value as? String, "")
+        XCTAssertFalse(app.images["paste-preview-image"].waitForExistence(timeout: 1))
+    }
 }
