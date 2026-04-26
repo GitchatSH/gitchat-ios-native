@@ -11,8 +11,8 @@ import UIKit
 ///   flight).
 ///
 /// Auxiliary surfaces that sit ABOVE the composer (reply/edit bar,
-/// mention suggestions, clipboard chip) live in dedicated files in
-/// this folder and are composed by the owning view.
+/// mention suggestions) live in dedicated files in this folder and
+/// are composed by the owning view.
 ///
 /// Keyboard glue: the composer itself does not own keyboard state —
 /// the enclosing `ChatView` drives the bottom inset via
