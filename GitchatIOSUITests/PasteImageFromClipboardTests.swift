@@ -39,4 +39,25 @@ final class PasteImageFromClipboardTests: XCTestCase {
         XCTAssertFalse(app.images["paste-preview-image"].waitForExistence(timeout: 1),
                        "Text-only paste should not open ImageSendPreview")
     }
+
+    /// T3: image+text clipboard → Cmd+V inserts only text; no sheet (Telegram).
+    func testPasteImagePlusText_OnlyTextNoSheet() throws {
+        let pngData = PasteboardFixture.screenshotPNGData()
+        UIPasteboard.general.items = [[
+            "public.utf8-plain-text": "caption only",
+            "public.png": pngData
+        ]]
+
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+
+        let composer = app.textViews["composer"].firstMatch
+        composer.clearText()
+        composer.typeKey("v", modifierFlags: .command)
+
+        XCTAssertEqual(composer.value as? String, "caption only")
+        XCTAssertFalse(app.images["paste-preview-image"].waitForExistence(timeout: 1),
+                       "Image+text paste should not open the sheet — text-only fallback expected")
+    }
 }
