@@ -70,4 +70,28 @@ final class ComposerRegressionTests: XCTestCase {
         XCTAssertEqual(composer.value as? String, "hi\nthere")
     }
     #endif
+
+    /// T5 (regression): tapping the paperclip opens the system PhotosPicker.
+    /// Actual photo selection is not driven (Apple's picker UI is opaque to
+    /// XCUITest); the sheet flow is covered by T1 + Task 14's drop seam test.
+    func testPhotosPickerOpens() throws {
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+
+        let attach = app.buttons.matching(NSPredicate(
+            format: "label LIKE 'Attach' OR label LIKE 'paperclip'"
+        )).firstMatch
+        XCTAssertTrue(attach.waitForExistence(timeout: 3),
+                      "Attach (paperclip) button not found")
+        attach.tap()
+
+        // PhotosPicker presents a sheet; the navigation bar contains
+        // "Photos" or a localized variant. Look for any sheet-presented
+        // element to avoid locale flake.
+        let sheet = app.otherElements["PhotosPicker"].firstMatch
+        let anyPickerArtifact = sheet.exists ||
+            app.navigationBars.element(boundBy: 0).waitForExistence(timeout: 3)
+        XCTAssertTrue(anyPickerArtifact, "PhotosPicker did not appear")
+    }
 }

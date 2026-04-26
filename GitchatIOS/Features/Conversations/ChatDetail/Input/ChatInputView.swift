@@ -88,6 +88,7 @@ struct ChatInputView: View {
                 #endif
         }
         .disabled(isUploading)
+        .accessibilityLabel("Attach")
     }
 
     // MARK: Text field
