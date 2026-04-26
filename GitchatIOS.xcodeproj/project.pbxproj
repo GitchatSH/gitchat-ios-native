@@ -24,6 +24,7 @@
 		20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */; };
 		23DA5097E24D54E366575F0C /* BlockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C7DB031D380DE22F80C960 /* BlockStore.swift */; };
 		2591225956282BB3140C8446 /* ForwardSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A0AAC07BE23842F6B28DC04 /* ForwardSheet.swift */; };
+		25AFEB16F23937A3A22CFDB2 /* ComposerRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D8FDDB6F6CDBB4122B7CFE /* ComposerRegressionTests.swift */; };
 		27D2E36C0F88847474346B66 /* InstantTooltip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AFC776F8EAF46612FBA12D7 /* InstantTooltip.swift */; };
 		2A4E2644658850573AD267CD /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E987C78E04FD812B6372B42 /* ProfileView.swift */; };
 		2A9935280A2FA6DB2275A27D /* RelativeTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3255839AE4B52EEE916274AF /* RelativeTime.swift */; };
@@ -329,6 +330,7 @@
 		DE8E6059D989F62927E22A1A /* MacBottomNav.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBottomNav.swift; sourceTree = "<group>"; };
 		E53A491227A1B50663F174A3 /* APIClient+Invite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Invite.swift"; sourceTree = "<group>"; };
 		ED882894AD818DBFB0421E96 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		F0D8FDDB6F6CDBB4122B7CFE /* ComposerRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRegressionTests.swift; sourceTree = "<group>"; };
 		F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		F5504187F7E16505485EECBE /* InvitePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvitePreviewSheet.swift; sourceTree = "<group>"; };
 		F7537B4250B26209B8C7F03C /* Geist-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-SemiBold.ttf"; sourceTree = "<group>"; };
@@ -781,6 +783,7 @@
 		E6A34DD757B3D1347B9965D6 /* GitchatIOSUITests */ = {
 			isa = PBXGroup;
 			children = (
+				F0D8FDDB6F6CDBB4122B7CFE /* ComposerRegressionTests.swift */,
 				FC01A065D8F07A1C92D1A4D3 /* Info.plist */,
 				AD3E0E8748D50D70E74D6B35 /* PasteImageFromClipboardTests.swift */,
 				06414EF268FC059C7E6D2183 /* SmokeTests.swift */,
@@ -987,6 +990,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				25AFEB16F23937A3A22CFDB2 /* ComposerRegressionTests.swift in Sources */,
 				B5E6380689143853AE98545A /* PasteImageFromClipboardTests.swift in Sources */,
 				0CF34A4E114CD00DF57DC12A /* SmokeTests.swift in Sources */,
 				006085D23F229CC5E80B280E /* UITestHelpers.swift in Sources */,
