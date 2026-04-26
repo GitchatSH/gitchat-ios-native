@@ -22,4 +22,20 @@ final class PasteImageFromClipboardTests: XCTestCase {
         XCTAssertTrue(preview.waitForExistence(timeout: 3),
                       "ImageSendPreview did not appear after Cmd+V on image clipboard")
     }
+
+    /// T2: text-only clipboard → Cmd+V inserts text into composer; no sheet.
+    func testPasteTextInsertsIntoComposer() throws {
+        UIPasteboard.general.string = "hello world"
+
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+
+        let composer = app.textViews["composer"].firstMatch
+        composer.typeKey("v", modifierFlags: .command)
+
+        XCTAssertEqual(composer.value as? String, "hello world")
+        XCTAssertFalse(app.images["paste-preview-image"].waitForExistence(timeout: 1),
+                       "Text-only paste should not open ImageSendPreview")
+    }
 }
