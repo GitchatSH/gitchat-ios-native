@@ -438,15 +438,15 @@ final class ChatViewModel: ObservableObject {
                 await Self.compressIfImageOffMain(data: item.0, filename: item.1, mimeType: item.2)
             )
         }
-        await sendEncodedAttachments(compressed, caption: "", senderLogin: senderLogin)
+        await sendEncodedAttachments(compressed, senderLogin: senderLogin)
     }
 
     /// UIImage entry point for drop/paste/picker flows. Encodes each image
     /// exactly once, off MainActor, then hands off to the shared upload
-    /// pipeline. The optional `caption` is sent as the message body in the
-    /// same `sendMessage` call as the attachment URLs — Telegram-style
-    /// "image + caption in one bubble". Pass empty string for image-only.
-    func uploadImagesAndSend(images: [UIImage], caption: String = "", senderLogin: String?) async {
+    /// pipeline. Avoids the previous pattern where the caller would
+    /// `jpegData(...)` on MainActor and `uploadAndSendMany` would then
+    /// decode + re-encode via `compressIfImage`.
+    func uploadImagesAndSend(images: [UIImage], senderLogin: String?) async {
         guard !images.isEmpty else { return }
         var encoded: [(Data, String, String)] = []
         encoded.reserveCapacity(images.count)
@@ -455,12 +455,11 @@ final class ChatViewModel: ObservableObject {
                 encoded.append(tuple)
             }
         }
-        await sendEncodedAttachments(encoded, caption: caption, senderLogin: senderLogin)
+        await sendEncodedAttachments(encoded, senderLogin: senderLogin)
     }
 
     private func sendEncodedAttachments(
         _ encoded: [(Data, String, String)],
-        caption: String,
         senderLogin: String?
     ) async {
         guard !encoded.isEmpty else { return }
@@ -488,7 +487,7 @@ final class ChatViewModel: ObservableObject {
             conversation_id: conversation.id,
             sender: senderLogin ?? "me",
             sender_avatar: nil,
-            content: caption,
+            content: "",
             created_at: ISO8601DateFormatter().string(from: Date()),
             edited_at: nil,
             reactions: nil,
@@ -519,7 +518,7 @@ final class ChatViewModel: ObservableObject {
             }
             let msg = try await APIClient.shared.sendMessage(
                 conversationId: conversation.id,
-                body: caption,
+                body: "",
                 attachmentURLs: urls
             )
             ChatMessageView.seenIds.insert(msg.id)

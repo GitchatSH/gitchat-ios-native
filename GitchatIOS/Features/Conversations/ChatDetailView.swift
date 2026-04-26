@@ -593,8 +593,12 @@ struct ChatDetailView: View {
         let caption = dropCaption.trimmingCharacters(in: .whitespacesAndNewlines)
         pendingDropImages = []
         dropCaption = ""
+        if !caption.isEmpty {
+            vm.draft = caption
+            Task { await vm.send() }
+        }
         guard !images.isEmpty else { return }
-        Task { await vm.uploadImagesAndSend(images: images, caption: caption, senderLogin: auth.login) }
+        Task { await vm.uploadImagesAndSend(images: images, senderLogin: auth.login) }
     }
 
     /// Copy an image message to the system pasteboard using the raw
