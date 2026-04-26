@@ -50,7 +50,6 @@
 		4BC3E5401B7248FA52B0CB26 /* AppsFlyerLib in Frameworks */ = {isa = PBXBuildFile; productRef = BC2B90ECA96F101778114ECA /* AppsFlyerLib */; };
 		4F15046CCB7A9CA0952031AB /* AnalyticsTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9946C8E877CD39F30375750D /* AnalyticsTracker.swift */; };
 		4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */; };
-		513BD4079D585EAFD82684E7 /* ChatClipboardChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F559E3CB229DF8F4F6CA5C9 /* ChatClipboardChip.swift */; };
 		531DEE508D58C8A62DB94393 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = 47DE335175F71C2369260202 /* FacebookCore */; };
 		5320852E8BA5BF99A5A6C0F7 /* DiscoverSubTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EF0AE1C58D76C8FBB0F123A /* DiscoverSubTab.swift */; };
 		543D33C8065B857DA764642E /* MessageMenuTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DB962F04AC5A1A18B09A85E /* MessageMenuTarget.swift */; };
@@ -92,7 +91,6 @@
 		9911E286944B2E5A0B5817D6 /* ChatBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC444597FF8A45EB8294EC /* ChatBackground.swift */; };
 		999E1B7961171663AD703952 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */; };
 		9B132E5A31654D56BB07CBCD /* MessageMenuAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA0DB03557EDE0854293B66 /* MessageMenuAction.swift */; };
-		9C608A27E1755509C4A7E88E /* ClipboardWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A122FF1335C1413E045F5276 /* ClipboardWatcher.swift */; };
 		9DA10C8E16781CD5DA07629B /* ChatReplyEditBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C140A3AB7A1B01F7BEDFC3 /* ChatReplyEditBar.swift */; };
 		9DF1DFF3C3FA05419A2BE511 /* MembersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */; };
 		9FF34A6AA21F0417CEF2D2D5 /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D27D2F5A412D74F579504B /* ChannelsView.swift */; };
@@ -236,7 +234,6 @@
 		3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		3CC840DF62F0D52265D6C401 /* GitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GitchatShareExtension.entitlements; sourceTree = "<group>"; };
 		3EACA3D0C53F605D0326E854 /* APIClient+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Group.swift"; sourceTree = "<group>"; };
-		3F559E3CB229DF8F4F6CA5C9 /* ChatClipboardChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatClipboardChip.swift; sourceTree = "<group>"; };
 		401FF094D33B8716885A5985 /* GitchatIOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GitchatIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		40DB657ADF1F6FC16C8A2BA9 /* ImageCropSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropSheet.swift; sourceTree = "<group>"; };
 		449D98B405970A2AF05994F1 /* ShareAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAPI.swift; sourceTree = "<group>"; };
@@ -284,7 +281,6 @@
 		9BD8099D1B297E089FD9BEDE /* SeenAvatarWithTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeenAvatarWithTooltip.swift; sourceTree = "<group>"; };
 		9E6C6D62D2207B8EF522F851 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A066E307A07B247124125B04 /* Routes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Routes.swift; sourceTree = "<group>"; };
-		A122FF1335C1413E045F5276 /* ClipboardWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardWatcher.swift; sourceTree = "<group>"; };
 		A16BA9650859D21117E8FF1B /* ConversationsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationsListView.swift; sourceTree = "<group>"; };
 		A3038C4EA39409E253FD85A0 /* MessageMenuActionList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageMenuActionList.swift; sourceTree = "<group>"; };
 		A5D27D2F5A412D74F579504B /* ChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelsView.swift; sourceTree = "<group>"; };
@@ -571,7 +567,6 @@
 		695F9161C26225974B1E84E9 /* Input */ = {
 			isa = PBXGroup;
 			children = (
-				3F559E3CB229DF8F4F6CA5C9 /* ChatClipboardChip.swift */,
 				5B2D9E43399F860C5B165A48 /* ChatInputView.swift */,
 				17211226899EE4118572176C /* ChatMentionSuggestionRow.swift */,
 				02C140A3AB7A1B01F7BEDFC3 /* ChatReplyEditBar.swift */,
@@ -726,7 +721,6 @@
 				5DA6355A70C27DBE9EA3F912 /* ChatSkeleton.swift */,
 				712E8E47398E82D0EA952BE8 /* ChatView.swift */,
 				2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */,
-				A122FF1335C1413E045F5276 /* ClipboardWatcher.swift */,
 				C3B4E0D7FC5BEBE8BD771C03 /* DesktopReturnToSend.swift */,
 				4ED56669CED0DEE797EABF78 /* EmojiPickerSheet.swift */,
 				7A0AAC07BE23842F6B28DC04 /* ForwardSheet.swift */,
@@ -1018,7 +1012,6 @@
 				9FF34A6AA21F0417CEF2D2D5 /* ChannelsView.swift in Sources */,
 				0F9DA620D390F737ABAF8E4A /* ChatAttachmentsGrid.swift in Sources */,
 				9911E286944B2E5A0B5817D6 /* ChatBackground.swift in Sources */,
-				513BD4079D585EAFD82684E7 /* ChatClipboardChip.swift in Sources */,
 				03DA54DAB6CB0C9146CF00DB /* ChatDetailTitleBar.swift in Sources */,
 				CD8AD7132CAC90482CAD8C90 /* ChatDetailView.swift in Sources */,
 				D27DD02D4AA56A1A5EC1F58D /* ChatInputView.swift in Sources */,
@@ -1035,7 +1028,6 @@
 				92E71F6AACBC3BC9107B14F0 /* ChatTheme.swift in Sources */,
 				ECF54BC9BB24840F6D366937 /* ChatView.swift in Sources */,
 				58199F8143B92FCDE3214FB8 /* ChatViewModel.swift in Sources */,
-				9C608A27E1755509C4A7E88E /* ClipboardWatcher.swift in Sources */,
 				AECA351FBDBD09565E295CA7 /* Config.swift in Sources */,
 				D5BD7E0FF0B7340865144938 /* ConversationPeekOverlay.swift in Sources */,
 				87F1CB4EFE6D24FE348C379A /* ConversationsCache.swift in Sources */,
