@@ -904,16 +904,35 @@ struct ConversationRow: View {
         return text
     }
 
+    private var isLastMessageUnsent: Bool {
+        if let cached = cachedEntry?.messages,
+           let last = cached.last { return last.unsent_at != nil }
+        return conversation.last_message?.unsent_at != nil
+    }
+
+    private var isLastMessageSystem: Bool {
+        if let cached = cachedEntry?.messages, let last = cached.last {
+            if last.unsent_at != nil { return true }
+            if let type = last.type, type != "user" { return true }
+        } else if let msg = conversation.last_message {
+            if msg.unsent_at != nil { return true }
+            if let type = msg.type, type != "user" { return true }
+        }
+        return false
+    }
+
+    private var systemPreviewText: String {
+        if isLastMessageUnsent { return "Message deleted" }
+        // For system messages (join/leave/pin/wave etc), use preview text
+        return conversation.previewText ?? ""
+    }
+
     @ViewBuilder
     private var previewContent: some View {
-        let lastMsgType: String? = {
-            if let cached = cachedEntry?.messages, let last = cached.last { return last.type }
-            return conversation.last_message?.type
-        }()
-        if let type = lastMsgType, type != "user" {
-            // System message — italic
-            Text(previewWithoutPhotoEmoji)
-                .font(.subheadline.italic())
+        if isLastMessageSystem {
+            // System / deleted message — italic gray
+            Text(systemPreviewText)
+                .font(.subheadline)
                 .foregroundStyle(Color(.systemGray2))
                 .lineLimit(1)
         } else if conversation.isGroup && isOutgoing {
@@ -980,7 +999,7 @@ struct ConversationRow: View {
             return conversation.last_message
         }()
         guard let msg else { return .none }
-        if msg.unsent_at != nil { return .failed }
+        if msg.unsent_at != nil { return .none }
         if msg.id.hasPrefix("local-") { return .sending }
         guard let createdAt = msg.created_at else { return .sent }
         if let cache = cachedEntry {
