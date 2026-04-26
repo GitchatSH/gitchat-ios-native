@@ -9,7 +9,7 @@ struct BubbleTailOverlay: View {
     var body: some View {
         BubbleTailShape(isOutgoing: isOutgoing)
             .fill(color)
-            .frame(width: 10, height: 16)
+            .frame(width: 8, height: 8)
     }
 }
 

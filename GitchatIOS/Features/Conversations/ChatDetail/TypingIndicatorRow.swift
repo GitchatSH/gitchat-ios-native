@@ -5,7 +5,7 @@ struct TypingIndicatorRow: View {
     var isGroup: Bool = false
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 6) {
+        HStack(alignment: .bottom, spacing: 8) {
             if isGroup {
                 if let first = logins.first {
                     AvatarView(url: "https://github.com/\(first).png", size: 32, login: first)
@@ -17,9 +17,26 @@ struct TypingIndicatorRow: View {
                 TypingDots()
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
-                if isGroup, let first = logins.first {
-                    Text("\(first) đang nhập...")
+                    .background(
+                        Color(.secondarySystemGroupedBackground),
+                        in: UnevenRoundedRectangle(
+                            topLeadingRadius: 20,
+                            bottomLeadingRadius: 4,
+                            bottomTrailingRadius: 20,
+                            topTrailingRadius: 20
+                        )
+                    )
+                if isGroup, !logins.isEmpty {
+                    let text: String = {
+                        if logins.count == 1 {
+                            return "\(logins[0]) is typing..."
+                        } else if logins.count == 2 {
+                            return "\(logins[0]), \(logins[1]) are typing..."
+                        } else {
+                            return "\(logins.count) people are typing..."
+                        }
+                    }()
+                    Text(text)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.leading, 4)

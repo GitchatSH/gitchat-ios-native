@@ -3,15 +3,18 @@ import SwiftUI
 // MARK: - JumpButtonStack
 
 /// Vertically-stacked floating action buttons shown above the composer.
-/// Shows up to 2 buttons (reaction button deferred):
+/// Shows up to 3 buttons (spec Feature 8):
 ///   1. @-mention jump  — only when there are unread mentions
-///   2. Scroll-to-bottom — when not at bottom, with optional unread badge
+///   2. React (heart)   — only when there are new reactions
+///   3. Scroll-to-bottom — when not at bottom, with optional unread badge
 struct JumpButtonStack: View {
     let isAtBottom: Bool
     let unreadCount: Int
     let mentionCount: Int
+    var reactionCount: Int = 0
     let onJumpToBottom: () -> Void
     let onJumpToMention: () -> Void
+    var onJumpToReaction: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 16) {
@@ -25,6 +28,18 @@ struct JumpButtonStack: View {
                     badge: mentionCount,
                     tooltip: "Jump to mention",
                     action: onJumpToMention
+                )
+                .transition(.scale(scale: 0.4).combined(with: .opacity))
+            }
+            if reactionCount > 0 {
+                jumpButton(
+                    label: {
+                        Text("❤️")
+                            .font(.system(size: 14))
+                    },
+                    badge: reactionCount,
+                    tooltip: "Jump to reaction",
+                    action: onJumpToReaction
                 )
                 .transition(.scale(scale: 0.4).combined(with: .opacity))
             }
@@ -44,6 +59,7 @@ struct JumpButtonStack: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isAtBottom)
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: mentionCount)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: reactionCount)
     }
 
     // MARK: - Single button builder
@@ -67,10 +83,10 @@ struct JumpButtonStack: View {
             } else {
                 ZStack {
                     Circle()
-                        .fill(.ultraThinMaterial)
+                        .fill(Color(.systemBackground))
                         .frame(width: 32, height: 32)
                         .overlay(Circle().stroke(Color(.separator).opacity(0.4), lineWidth: 0.5))
-                        .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+                        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
                     label()
                 }
             }

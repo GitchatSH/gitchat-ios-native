@@ -338,6 +338,12 @@ struct ChatDetailView: View {
                   let url = URL(string: first) else { return }
             Task { await Self.copyImageToPasteboard(url: url) }
         }
+        a.onSaveToPhotos = { msg in
+            guard let urls = Self.imageAttachmentURLs(msg),
+                  let first = urls.first,
+                  let url = URL(string: first) else { return }
+            Task { await ImageDownloader.saveToPhotos(url: url) }
+        }
         a.onTogglePin = { msg in Task { await vm.togglePin(msg) } }
         a.onForward = { msg in showForward = msg }
         a.onSeenBy = { msg in seenByFor = msg }
@@ -474,12 +480,14 @@ struct ChatDetailView: View {
 
     private func jumpToReply(from msg: Message) {
         guard let targetId = msg.reply?.id else { return }
-        pendingJumpId = targetId
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        Task {
+            let found = await vm.ensureMessageLoaded(id: targetId)
+            guard found else { return }
+            pendingJumpId = targetId
+            try? await Task.sleep(nanoseconds: 300_000_000)
             withAnimation(.easeInOut(duration: 0.25)) { pulsingId = targetId }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                withAnimation(.easeInOut(duration: 0.3)) { pulsingId = nil }
-            }
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            withAnimation(.easeInOut(duration: 0.3)) { pulsingId = nil }
         }
     }
 

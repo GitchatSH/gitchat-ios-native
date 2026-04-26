@@ -83,12 +83,9 @@ struct ChatInputView: View {
     private var attachButton: some View {
         PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
             Image(systemName: "paperclip")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.primary)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.secondary)
                 .frame(width: 44, height: 44)
-                #if !targetEnvironment(macCatalyst)
-                .modifier(GlassPill())
-                #endif
         }
         .disabled(isUploading)
     }
@@ -128,8 +125,14 @@ struct ChatInputView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
             .frame(maxWidth: .infinity)
-            .background(Color.clear)
-            .modifier(GlassPill())
+            .background(
+                Color(.systemBackground).opacity(0.8),
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color(.separator).opacity(0.3), lineWidth: 0.5)
+            )
         #endif
     }
 

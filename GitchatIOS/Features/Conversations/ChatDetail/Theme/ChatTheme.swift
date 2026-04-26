@@ -16,7 +16,7 @@ struct ChatTheme: Equatable {
     var bubbleIncomingText: Color = Color(.label)
     var bubbleOutgoingText: Color = .white
     /// Timestamp + checkmark color inside outgoing bubbles.
-    var bubbleMetaOut: Color = Color.white.opacity(0.7)
+    var bubbleMetaOut: Color = Color("BubbleMetaOut")
     /// Timestamp + checkmark color inside incoming bubbles.
     var bubbleMetaIn: Color = Color(.secondaryLabel)
 
@@ -41,6 +41,10 @@ struct ChatTheme: Equatable {
     var sendBg: Color = Color("AccentColor")
     var sendDisabledBg: Color = Color.gray.opacity(0.5)
     var sendGlyph: Color = .white
+
+    // MARK: Feature flags
+    /// Decorative bubble tails — disable to rollback to plain rounded rect.
+    var useBubbleTails: Bool = true
 
     // MARK: Banners
     var blockedBannerBg: Color = Color(.secondarySystemBackground)

@@ -25,9 +25,8 @@ struct ChatDetailTitleBar: View {
                 SyncingDotsLabel()
                     .transition(.opacity)
             } else if let sub = subtitleInfo {
-                Text(sub.text)
+                sub.view
                     .font(.caption2)
-                    .foregroundStyle(sub.isOnline ? .green : .secondary)
                     .transition(.opacity)
             }
         }
@@ -44,8 +43,7 @@ struct ChatDetailTitleBar: View {
     }
 
     private struct SubtitleInfo {
-        let text: String
-        let isOnline: Bool
+        let view: AnyView
     }
 
     private var subtitleInfo: SubtitleInfo? {
@@ -53,30 +51,45 @@ struct ChatDetailTitleBar: View {
             let participants = conversation.participantsOrEmpty.map(\.login)
             guard !participants.isEmpty else { return nil }
             let onlineCount = participants.filter { presence.isOnline($0) }.count
-            return SubtitleInfo(
-                text: "\(participants.count) thành viên, \(onlineCount) online",
-                isOnline: onlineCount > 0
-            )
+            if onlineCount > 0 {
+                return SubtitleInfo(view: AnyView(
+                    HStack(spacing: 0) {
+                        Text("\(participants.count) members, ")
+                            .foregroundStyle(.secondary)
+                        Text("\(onlineCount) online")
+                            .foregroundStyle(.green)
+                    }
+                ))
+            } else {
+                return SubtitleInfo(view: AnyView(
+                    Text("\(participants.count) members")
+                        .foregroundStyle(.secondary)
+                ))
+            }
         }
         guard let login = conversation.other_user?.login else { return nil }
         if presence.isOnline(login) {
-            return SubtitleInfo(text: "online", isOnline: true)
+            return SubtitleInfo(view: AnyView(
+                Text("online").foregroundStyle(.green)
+            ))
         }
         if let date = presence.lastSeen[login] {
-            return SubtitleInfo(text: Self.relative(date), isOnline: false)
+            return SubtitleInfo(view: AnyView(
+                Text(Self.relative(date)).foregroundStyle(.secondary)
+            ))
         }
         return nil
     }
 
     private static func relative(_ date: Date) -> String {
         let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "vừa mới truy cập" }
+        if seconds < 60 { return "last seen just now" }
         let mins = seconds / 60
-        if mins < 60 { return "\(mins) phút trước" }
+        if mins < 60 { return "last seen \(mins)m ago" }
         let hours = mins / 60
-        if hours < 24 { return "\(hours) giờ trước" }
+        if hours < 24 { return "last seen \(hours)h ago" }
         let days = hours / 24
-        if days == 1 { return "hôm qua" }
-        return "\(days) ngày trước"
+        if days == 1 { return "last seen yesterday" }
+        return "last seen \(days)d ago"
     }
 }

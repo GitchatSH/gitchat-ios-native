@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Telegram-style pinned message banner: rounded pill with accent bar left,
+/// title + preview, unpin icon right. Floats below nav header.
 struct PinnedBannerView: View {
     let pinnedMessages: [Message]
     let onTap: (Message) -> Void
@@ -8,37 +10,54 @@ struct PinnedBannerView: View {
 
     var body: some View {
         if let msg = pinnedMessages[safe: currentIndex] ?? pinnedMessages.first {
-            HStack(spacing: 8) {
-                Image(systemName: "pin.fill")
-                    .font(.caption2)
-                    .foregroundColor(Color("AccentColor"))
-                    .rotationEffect(.degrees(45))
+            HStack(spacing: 0) {
+                // Accent bar left
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Color("AccentColor"))
+                    .frame(width: 3)
+                    .padding(.vertical, 8)
+                    .padding(.leading, 12)
 
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Tin ghim")
+                // Title + preview
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Pinned Message")
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(Color("AccentColor"))
+                        .foregroundStyle(Color("AccentColor"))
                     Text(msg.content)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                 }
+                .padding(.leading, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.secondary)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if pinnedMessages.count > 1 {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            currentIndex = (currentIndex + 1) % pinnedMessages.count
+                        }
+                    }
+                    onTap(msg)
                 }
-                .frame(width: 44, height: 44)
+
+                // Unpin / list icon
+                Button {
+                    onDismiss()
+                } label: {
+                    Image(systemName: "text.line.first.and.arrowtriangle.forward")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
             }
-            .padding(.leading, 12)
-            .background(Color(.systemBackground))
-            .overlay(alignment: .bottom) {
-                Divider()
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { onTap(msg) }
+            .frame(height: 44)
+            .background(
+                Color(.secondarySystemGroupedBackground).opacity(0.92),
+                in: Capsule()
+            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
         }
     }
 }

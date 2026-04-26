@@ -298,7 +298,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // If there's an unread divider, scroll to it so the user
             // lands right at the boundary between read and unread.
             // Otherwise park at (0,0) as before.
-            let hasUnread = unreadCount > 0 && myReadAt != nil
+            let hasUnread = unreadCount > 0
             DispatchQueue.main.async { [weak tv, weak coord] in
                 guard let tv, let coord else { return }
                 if hasUnread {
@@ -476,7 +476,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     .rotationEffect(.degrees(180))
                     .environmentObject(swipeState)
             }
-            .margins(.horizontal, 12)
+            .margins(.horizontal, 8)
             .margins(.vertical, 0)
             .minSize(width: 0, height: 0)
         }
@@ -521,7 +521,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // between the last-read message and the first unread one.
             // A message is "read" when its created_at <= myReadAt.
             let unreadDividerMsgId: String? = {
-                guard parent.unreadCount > 0, let readAt = parent.myReadAt else { return nil }
+                guard parent.unreadCount > 0 else { return nil }
+                guard let readAt = parent.myReadAt else {
+                    // myReadAt nil = never opened → all messages unread.
+                    // Return special sentinel so divider goes at the very top.
+                    return "__all_unread__"
+                }
                 // items (lastItems) are oldest-first. Walk from the
                 // END (newest) toward the START (oldest) and find the
                 // first message whose created_at <= readAt — that's
@@ -543,13 +548,18 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     rows = trailingRowsForLatestSection + rows
                 }
                 // Insert unread divider if it belongs in this section.
-                // In the reversed rows array, find the last-read
-                // message id and insert the divider AFTER it (visually
-                // above — because of rotation, "after" in the array =
-                // "above" on screen).
-                if let targetId = unreadDividerMsgId,
-                   let idx = rows.firstIndex(of: targetId) {
-                    rows.insert(ChatUnreadDividerID, at: idx)
+                if let targetId = unreadDividerMsgId {
+                    if targetId == "__all_unread__" {
+                        // myReadAt nil → all unread. Place divider at
+                        // the end of the last section (= visual top).
+                        if offset == groups.count - 1 {
+                            rows.append(ChatUnreadDividerID)
+                        }
+                    } else if let idx = rows.firstIndex(of: targetId) {
+                        // Insert AFTER last-read msg in reversed array
+                        // = visually ABOVE it in rotated table
+                        rows.insert(ChatUnreadDividerID, at: idx + 1)
+                    }
                 }
                 // Append the date pill at the END of the section
                 // (rotation-space bottom of section = visually TOP of
@@ -937,7 +947,7 @@ struct UnreadDividerRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Rectangle().fill(Color("AccentColor").opacity(0.2)).frame(height: 1)
-            Text("\(count) tin chưa đọc")
+            Text("\(count) unread messages")
                 .font(.caption2.weight(.semibold))
                 .foregroundColor(Color("AccentColor"))
                 .fixedSize()

@@ -57,6 +57,7 @@ struct ChatView: View {
         var onReply: (Message) -> Void = { _ in }
         var onCopyText: (Message) -> Void = { _ in }
         var onCopyImage: (Message) -> Void = { _ in }
+        var onSaveToPhotos: (Message) -> Void = { _ in }
         var onTogglePin: (Message) -> Void = { _ in }
         var onForward: (Message) -> Void = { _ in }
         var onSeenBy: (Message) -> Void = { _ in }
@@ -133,10 +134,9 @@ struct ChatView: View {
             }
         }
         // Track new messages arriving while scrolled up.
-        .onChange(of: visibleMessages.count) { newCount in
-            guard !isAtBottom, newCount > 0 else { return }
-            // The newest message is at index 0 (rotated list).
-            let newest = visibleMessages[0]
+        .onChange(of: visibleMessages.last?.id) { _ in
+            guard !isAtBottom else { return }
+            guard let newest = visibleMessages.last else { return }
             // Only count messages from OTHER users (own sends auto-scroll).
             guard newest.sender != myLogin else { return }
             newWhileScrolledUp += 1
@@ -151,15 +151,23 @@ struct ChatView: View {
 
     @ViewBuilder
     private var pinnedBanner: some View {
-        if vm.conversation.isGroup && !vm.pinnedIds.isEmpty && !pinnedBannerDismissed {
-            let pinned = visibleMessages.filter { vm.pinnedIds.contains($0.id) }
-            if !pinned.isEmpty {
-                PinnedBannerView(
-                    pinnedMessages: pinned,
-                    onTap: { msg in pendingJumpId = msg.id },
-                    onDismiss: { pinnedBannerDismissed = true }
-                )
-            }
+        let key = "pinnedBannerDismissed_\(vm.conversation.id)"
+        if !vm.pinnedMessages.isEmpty
+            && !pinnedBannerDismissed
+            && !UserDefaults.standard.bool(forKey: key) {
+            PinnedBannerView(
+                pinnedMessages: vm.pinnedMessages,
+                onTap: { msg in
+                    Task {
+                        let found = await vm.ensureMessageLoaded(id: msg.id)
+                        if found { pendingJumpId = msg.id }
+                    }
+                },
+                onDismiss: {
+                    pinnedBannerDismissed = true
+                    UserDefaults.standard.set(true, forKey: key)
+                }
+            )
         }
     }
 
@@ -264,6 +272,8 @@ struct ChatView: View {
                         isPinned: vm.pinnedIds.contains(msg.id),
                         isPulsing: pulsingId == msg.id,
                         onReactionsTap: { actions.onReactionsTap(msg) },
+                        onToggleReact: { emoji in actions.onReact(msg, emoji) },
+                        onMoreReactions: { actions.onMoreReactions(msg) },
                         onReplyTap: { actions.onReplyPreviewTap(msg) },
                         onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
                         onPinTap: { actions.onPinBadgeTap(msg) },
@@ -284,7 +294,7 @@ struct ChatView: View {
                             .onTapGesture { actions.onRetryPending(msg) }
                     }
                 }
-                .padding(.top, showHeader ? 20 : 4)
+                .padding(.top, showHeader ? 8 : 4)
                 .chatSwipeToReply(isMe: isMe, messageId: msg.id)
                 .onTapGesture(count: 2) { actions.onDoubleTapHeart(msg) }
                 if !cursors.isEmpty {
@@ -298,7 +308,7 @@ struct ChatView: View {
     private func seenByAvatarsRow(cursors: [String], isMe: Bool, for msg: Message) -> some View {
         HStack(spacing: 0) {
             if isMe { Spacer() }
-            let shown = Array(cursors.prefix(10))
+            let shown = Array(cursors.prefix(5))
             let extra = cursors.count - shown.count
             HStack(spacing: -4) {
                 ForEach(shown, id: \.self) { login in
@@ -312,7 +322,7 @@ struct ChatView: View {
                         .padding(.leading, 6)
                 }
             }
-            .padding(isMe ? .trailing : .leading, isMe ? 6 : 36)
+            .padding(isMe ? .trailing : .leading, isMe ? 6 : 40)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
             .onTapGesture { actions.onSeenBy(msg) }
@@ -505,6 +515,7 @@ struct ChatView: View {
             }
         case .copyText: actions.onCopyText(msg)
         case .copyImage: actions.onCopyImage(msg)
+        case .saveToPhotos: actions.onSaveToPhotos(msg)
         case .pin, .unpin: actions.onTogglePin(msg)
         case .forward: actions.onForward(msg)
         case .seenBy: actions.onSeenBy(msg)

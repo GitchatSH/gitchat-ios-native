@@ -5,6 +5,8 @@ import UIKit
 final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var pinnedIds: Set<String> = []
+    /// Full pinned Message objects for the banner — independent of pagination.
+    @Published var pinnedMessages: [Message] = []
     @Published var typingUsers: Set<String> = []
     @Published var otherReadAt: String?
     @Published var readCursors: [String: String] = [:]
@@ -187,10 +189,39 @@ final class ChatViewModel: ObservableObject {
         }.sorted()
     }
 
+    /// Load pages until the target message is in `messages`, then return true.
+    /// Returns false if we exhaust all pages without finding it.
+    func ensureMessageLoaded(id: String) async -> Bool {
+        if messages.contains(where: { $0.id == id }) { return true }
+        // Page backward until we find it or run out of pages.
+        var cursor = nextCursor
+        var attempts = 0
+        while let c = cursor, attempts < 20 {
+            attempts += 1
+            do {
+                let resp = try await APIClient.shared.getConversationMessages(
+                    id: conversation.id, cursor: c
+                )
+                let older = resp.messages.reversed()
+                let known = Set(messages.map(\.id))
+                let deduped = older.filter { !known.contains($0.id) }
+                ChatMessageView.markSeen(deduped.map(\.id))
+                messages.insert(contentsOf: deduped, at: 0)
+                nextCursor = resp.nextCursor
+                cursor = resp.nextCursor
+                persistCache()
+                if messages.contains(where: { $0.id == id }) { return true }
+                if resp.nextCursor == nil { break }
+            } catch { break }
+        }
+        return false
+    }
+
     func loadPinned() async {
         do {
             let pins = try await APIClient.shared.pinnedMessages(conversationId: conversation.id)
             self.pinnedIds = Set(pins.map(\.id))
+            self.pinnedMessages = pins
         } catch { }
     }
 
@@ -386,8 +417,10 @@ final class ChatViewModel: ObservableObject {
         // API call fails.
         if wasPinned {
             pinnedIds.remove(msg.id)
+            pinnedMessages.removeAll { $0.id == msg.id }
         } else {
             pinnedIds.insert(msg.id)
+            pinnedMessages.append(msg)
         }
         Haptics.impact(.light)
         do {
@@ -399,10 +432,13 @@ final class ChatViewModel: ObservableObject {
                 ToastCenter.shared.show(.success, "Pinned message")
             }
         } catch {
+            // Revert on failure
             if wasPinned {
                 pinnedIds.insert(msg.id)
+                pinnedMessages.append(msg)
             } else {
                 pinnedIds.remove(msg.id)
+                pinnedMessages.removeAll { $0.id == msg.id }
             }
             ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
         }

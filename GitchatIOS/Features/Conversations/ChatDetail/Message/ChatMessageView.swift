@@ -7,7 +7,8 @@ extension String {
     /// Stable DJB2 hash → index 0-6 for sender colors.
     /// Unlike String.hashValue, this is deterministic across app launches.
     var senderColorIndex: Int {
-        abs(self.utf8.reduce(5381) { ($0 &<< 5) &+ $0 &+ Int($1) }) % 7
+        let raw = self.utf8.reduce(5381) { ($0 &<< 5) &+ $0 &+ Int($1) }
+        return ((raw % 7) + 7) % 7
     }
 
     var senderColor: Color {
@@ -42,6 +43,8 @@ struct ChatMessageView: View {
     var isPinned: Bool = false
     var isPulsing: Bool = false
     var onReactionsTap: (() -> Void)? = nil
+    var onToggleReact: ((String) -> Void)? = nil
+    var onMoreReactions: (() -> Void)? = nil
     var onReplyTap: (() -> Void)? = nil
     var onAttachmentTap: ((String) -> Void)? = nil
     var onPinTap: (() -> Void)? = nil
@@ -77,10 +80,23 @@ struct ChatMessageView: View {
     /// Session-wide set of message ids that have already materialized
     /// on screen — so the fade-in animation only fires the *first*
     /// time a bubble appears, not on every scroll recycle.
+    /// Capped at 5000 entries to prevent unbounded memory growth.
     @MainActor static var seenIds: Set<String> = []
 
     @MainActor static func markSeen(_ ids: [String]) {
         seenIds.formUnion(ids)
+        trimSeenIdsIfNeeded()
+    }
+
+    @MainActor private static func trimSeenIdsIfNeeded() {
+        if seenIds.count > 5000 {
+            // Drop roughly half — the set is unordered so we can't
+            // pick "oldest", but trimming to 3000 amortizes the O(n)
+            // cost across 2000 inserts. Worst case: a revisited old
+            // bubble gets a redundant fade-in, which is harmless.
+            let keep = Array(seenIds.prefix(3000))
+            seenIds = Set(keep)
+        }
     }
 
     // MARK: Body
@@ -89,7 +105,7 @@ struct ChatMessageView: View {
         HStack(alignment: .bottom, spacing: 8) {
             if isMe {
                 Spacer(minLength: 40)
-            } else {
+            } else if isGroup {
                 avatarColumn
             }
             bubbleColumn
@@ -103,20 +119,22 @@ struct ChatMessageView: View {
 
     @ViewBuilder
     private var avatarColumn: some View {
-        if showTail {
-            AvatarView(
-                url: resolvedAvatar ?? message.sender_avatar,
-                size: 32,
-                login: message.sender
-            )
-            .frame(width: 44, height: 44)
-            .contentShape(Circle())
-            .onTapGesture { onAvatarTap?() }
-            .instantTooltip("@\(message.sender)")
-        } else {
-            // Keep the column width stable when consecutive messages
-            // from the same sender omit the avatar, so bubbles line up.
-            Color.clear.frame(width: 32, height: 32)
+        if isGroup {
+            if showTail {
+                AvatarView(
+                    url: resolvedAvatar ?? message.sender_avatar,
+                    size: 32,
+                    login: message.sender
+                )
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle().inset(by: -6))
+                .onTapGesture { onAvatarTap?() }
+                .instantTooltip("@\(message.sender)")
+            } else {
+                // Keep the column width stable when consecutive messages
+                // from the same sender omit the avatar, so bubbles line up.
+                Color.clear.frame(width: 32, height: 32)
+            }
         }
     }
 
@@ -135,7 +153,15 @@ struct ChatMessageView: View {
                     reactions: reactions,
                     myLogin: myLogin,
                     myReactionEmojis: myReactionEmojis,
+                    onToggleReact: { emoji in onToggleReact?(emoji) },
+                    onLongPress: { onMoreReactions?() },
                     onTap: { onReactionsTap?() }
+                )
+                // Spec: incoming DM → 12pt left, incoming Group → 40pt left (32+8),
+                // outgoing → 12pt right
+                .padding(
+                    isMe ? .trailing : .leading,
+                    isMe ? 12 : (isGroup ? 40 : 12)
                 )
             }
         }
@@ -175,11 +201,11 @@ struct ChatMessageView: View {
         HStack(spacing: 4) {
             if message.edited_at != nil {
                 Text("edited")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(metaColor)
             }
             Text(message.shortTime ?? "")
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(metaColor)
 
             if isMe, !message.id.hasPrefix("local-"), message.unsent_at == nil {
@@ -194,18 +220,17 @@ struct ChatMessageView: View {
     private var doubleCheckView: some View {
         ZStack(alignment: .leading) {
             Image(systemName: "checkmark")
-                .font(.caption2.weight(.bold))
-                .imageScale(.small)
-                .foregroundStyle(metaColor)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(isRead ? metaColor : metaColor.opacity(0.7))
             if isRead {
                 Image(systemName: "checkmark")
-                    .font(.caption2.weight(.bold))
-                    .imageScale(.small)
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(metaColor)
                     .offset(x: 4)
             }
         }
-        .frame(width: isRead ? 14 : 10, height: 10)
+        .frame(width: isRead ? 16 : 12, height: 8)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRead)
     }
 
     // MARK: Pin badge
@@ -357,7 +382,7 @@ struct ChatMessageView: View {
                 Text(message.sender)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(message.sender.senderColor)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 12)
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
@@ -388,7 +413,7 @@ struct ChatMessageView: View {
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .padding(.bottom, 20)
             }
@@ -414,7 +439,7 @@ struct ChatMessageView: View {
                 )
         )
         .overlay(alignment: isMe ? .bottomTrailing : .bottomLeading) {
-            if showTail {
+            if showTail && theme.useBubbleTails {
                 BubbleTailOverlay(
                     isOutgoing: isMe,
                     color: isMe ? theme.bubbleOutgoing : theme.bubbleIncoming
@@ -464,7 +489,7 @@ struct ChatMessageView: View {
         if UIApplication.shared.preferredContentSizeCategory.isAccessibilityCategory {
             return screenWidth * 0.85
         }
-        return min(screenWidth * 0.78, 340)
+        return min(screenWidth * 0.75, 304)
         #endif
     }
 
