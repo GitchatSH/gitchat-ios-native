@@ -79,26 +79,14 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Loading
 
     func load() async {
-        if messages.isEmpty { isLoading = true }
-        isSyncing = true
-        let started = Date()
+        let hadCache = !messages.isEmpty
+        if !hadCache { isLoading = true }
+        // Only show "syncing" when there's no cached data — returning
+        // users see the cached list instantly with no subtitle flicker.
+        if !hadCache { isSyncing = true }
         defer {
             isLoading = false
-            let elapsed = Date().timeIntervalSince(started)
-            if elapsed >= 2 {
-                isSyncing = false
-            } else {
-                let remaining = 2 - elapsed
-                // Strong-capture self so the deferred reset can't be
-                // dropped if SwiftUI rebuilds anything that referenced
-                // the view model. The view model lives as long as the
-                // chat detail view does.
-                let me = self
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
-                    me.isSyncing = false
-                }
-            }
+            isSyncing = false
         }
         do {
             let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
@@ -191,12 +179,43 @@ final class ChatViewModel: ObservableObject {
 
     /// Load pages until the target message is in `messages`, then return true.
     /// Returns false if we exhaust all pages without finding it.
-    func ensureMessageLoaded(id: String) async -> Bool {
+    ///
+    /// Optimization: if a `createdAt` hint is provided (e.g. from a search
+    /// result), use it as cursor to jump directly to the page containing the
+    /// message instead of paging sequentially from the latest.
+    func ensureMessageLoaded(id: String, createdAt: String? = nil) async -> Bool {
         if messages.contains(where: { $0.id == id }) { return true }
-        // Page backward until we find it or run out of pages.
+
+        // Fast path: jump directly using createdAt as cursor.
+        // Backend pagination is exclusive (messages strictly BEFORE cursor),
+        // so bump the cursor forward by 1 second to ensure the target
+        // message itself is included in the response.
+        if let createdAt {
+            let cursor = Self.offsetCursor(createdAt, bySeconds: 1)
+            do {
+                let resp = try await APIClient.shared.getConversationMessages(
+                    id: conversation.id, cursor: cursor, limit: 50
+                )
+                let page = resp.messages.reversed()
+                let known = Set(messages.map(\.id))
+                let deduped = Array(page.filter { !known.contains($0.id) })
+                if !deduped.isEmpty {
+                    ChatMessageView.markSeen(deduped.map(\.id))
+                    // Insert in sorted position
+                    let insertIdx = messages.firstIndex {
+                        ($0.created_at ?? "") > (deduped.first?.created_at ?? "")
+                    } ?? 0
+                    messages.insert(contentsOf: deduped, at: insertIdx)
+                    persistCache()
+                }
+                if messages.contains(where: { $0.id == id }) { return true }
+            } catch { }
+        }
+
+        // Slow fallback: page backward sequentially.
         var cursor = nextCursor
         var attempts = 0
-        while let c = cursor, attempts < 20 {
+        while let c = cursor, attempts < 10 {
             attempts += 1
             do {
                 let resp = try await APIClient.shared.getConversationMessages(
@@ -215,6 +234,25 @@ final class ChatViewModel: ObservableObject {
             } catch { break }
         }
         return false
+    }
+
+    /// Bump an ISO-8601 cursor string forward by `seconds` so that
+    /// exclusive cursor pagination includes the row at the original
+    /// timestamp. Falls back to the original string if parsing fails.
+    private static func offsetCursor(_ iso: String, bySeconds seconds: Int) -> String {
+        let fmt = ISO8601DateFormatter()
+        // Accept both fractional-seconds and plain ISO strings.
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fmt.date(from: iso) {
+            return fmt.string(from: date.addingTimeInterval(TimeInterval(seconds)))
+        }
+        fmt.formatOptions = [.withInternetDateTime]
+        if let date = fmt.date(from: iso) {
+            let fmtOut = ISO8601DateFormatter()
+            fmtOut.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return fmtOut.string(from: date.addingTimeInterval(TimeInterval(seconds)))
+        }
+        return iso
     }
 
     func loadPinned() async {

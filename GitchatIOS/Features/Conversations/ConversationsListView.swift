@@ -660,7 +660,7 @@ struct ConversationsListView: View {
             guard let convoId = msg.conversation_id,
                   let convo = vm.conversations.first(where: { $0.id == convoId }) else { return }
             AppRouter.shared.pendingMessageId = msg.id
-            filter = ""
+            AppRouter.shared.pendingMessageCreatedAt = msg.created_at
             openConversation(convo)
         }
     }

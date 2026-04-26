@@ -311,10 +311,14 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         _ = (wasNearBottom, prevHeight, prevOffset, isPrepend)
 
         // Jump-to-id (reply pulse + message search).
+        // Only consume the id when scroll succeeds — if the target
+        // message hasn't loaded yet, keep it pending so the next
+        // updateUIView cycle retries automatically once pages arrive.
         if let id = scrollToId {
             DispatchQueue.main.async {
-                coord.scrollTo(id: id, in: tv, animated: true)
-                onScrollToIdConsumed()
+                if coord.scrollTo(id: id, in: tv, animated: true) {
+                    onScrollToIdConsumed()
+                }
             }
         }
 
@@ -593,9 +597,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             tv.scrollToRow(at: indexPath, at: .top, animated: animated)
         }
 
-        func scrollTo(id: String, in tv: UITableView, animated: Bool) {
-            guard let indexPath = dataSource.indexPath(for: id) else { return }
+        /// Returns true if the row was found and scrolled to.
+        @discardableResult
+        func scrollTo(id: String, in tv: UITableView, animated: Bool) -> Bool {
+            guard let indexPath = dataSource.indexPath(for: id) else { return false }
             tv.scrollToRow(at: indexPath, at: .middle, animated: animated)
+            return true
         }
 
         // MARK: UITableViewDelegate

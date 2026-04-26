@@ -155,8 +155,12 @@ struct ChatDetailView: View {
             .task { await onAppearTask() }
             .onAppear {
                 if let mid = router.pendingMessageId {
-                    pendingJumpId = mid
                     router.pendingMessageId = nil
+                    // Set jump target immediately — the list retries
+                    // each update cycle until the row appears. The
+                    // actual page-loading happens in onAppearTask
+                    // AFTER vm.load() completes to avoid race conditions.
+                    pendingJumpId = mid
                 }
             }
             .onChange(of: scenePhase) { phase in
@@ -734,6 +738,14 @@ struct ChatDetailView: View {
         socket.currentConversationId = vm.conversation.id
         ActiveConversationTracker.shared.id = vm.conversation.id
         await vm.load()
+        // After load completes, if there's a pending jump target
+        // (from search result / deep link), load the page containing
+        // it. This runs AFTER vm.load() so there's no race condition.
+        if let mid = pendingJumpId {
+            let createdAt = router.pendingMessageCreatedAt
+            router.pendingMessageCreatedAt = nil
+            _ = await vm.ensureMessageLoaded(id: mid, createdAt: createdAt)
+        }
         socket.subscribe(conversation: vm.conversation.id)
         // Receive server-confirmed self-sends directly from OutboxStore
         // (so a successful send is visible even if the socket event for
