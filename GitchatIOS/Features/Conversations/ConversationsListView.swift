@@ -1057,6 +1057,7 @@ struct ConversationRow: View {
                                 (Text("Draft: ").foregroundColor(Color(.systemRed)).font(.subheadline)
                                 + Text(draft).foregroundColor(secondaryTextColor).font(.subheadline))
                                 .lineLimit(1)
+                                .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                             } else {
                                 if let thumbURL = lastPhotoURL {
                                     CachedAsyncImage(
@@ -1125,6 +1126,7 @@ struct ConversationRow: View {
                         .frame(width: 20, height: 20)
                         .background(Color("AccentColor"), in: Circle())
                         .foregroundStyle(.white)
+                        .transition(.scale.combined(with: .opacity))
                 }
                 Text("\(displayedUnread)")
                     .font(.footnote.bold())
@@ -1141,6 +1143,7 @@ struct ConversationRow: View {
                             ? Color("AccentColor")
                             : .white
                     )
+                    .transition(.scale.combined(with: .opacity))
                 if isMuted {
                     Image(systemName: "speaker.slash.fill")
                         .font(.system(size: 12))
@@ -1157,6 +1160,8 @@ struct ConversationRow: View {
                 }
             }
         }
+        .animation(.spring(response: 0.3), value: displayedUnread)
+        .animation(.spring(response: 0.3), value: hasMention)
     }
 
     @ViewBuilder
