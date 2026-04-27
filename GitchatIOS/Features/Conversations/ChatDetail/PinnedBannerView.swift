@@ -27,7 +27,7 @@ struct PinnedBannerView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(Color("AccentColor"))
                     Text(msg.content)
-                        .font(.caption)
+                        .font(.footnote)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                 }
@@ -48,9 +48,9 @@ struct PinnedBannerView: View {
                 Button {
                     onShowList()
                 } label: {
-                    Image(systemName: "text.line.first.and.arrowtriangle.forward")
+                    Image(systemName: "list.bullet")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color("AccentColor"))
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)

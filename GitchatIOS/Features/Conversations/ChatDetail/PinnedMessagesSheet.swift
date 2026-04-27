@@ -108,7 +108,7 @@ struct PinnedMessagesSheet: View {
             Color.clear.frame(width: 36, height: 36)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.top, 16)
         .padding(.bottom, 4)
     }
 
@@ -177,7 +177,21 @@ struct PinnedMessagesSheet: View {
     @ViewBuilder
     private func pinnedMessageRow(_ msg: Message) -> some View {
         let isMe = msg.sender == myLogin
-        HStack(alignment: .bottom, spacing: 6) {
+        let jumpButton = Button {
+            jumpTo(msg)
+        } label: {
+            Image(systemName: "arrow.right.circle.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(Color("AccentColor"))
+                .symbolRenderingMode(.hierarchical)
+        }
+        .buttonStyle(.plain)
+        .frame(width: 44, height: 44)
+
+        HStack(alignment: .bottom, spacing: 8) {
+            if isMe {
+                jumpButton
+            }
             ChatMessageView(
                 message: msg,
                 isMe: isMe,
@@ -186,18 +200,9 @@ struct PinnedMessagesSheet: View {
                 showTail: true,
                 isGroup: conversation.isGroup
             )
-
-            // Jump button
-            Button {
-                jumpTo(msg)
-            } label: {
-                Image(systemName: "arrow.right.circle.fill")
-                    .font(.system(size: 24))
-                    .foregroundStyle(Color("AccentColor"))
-                    .symbolRenderingMode(.hierarchical)
+            if !isMe {
+                jumpButton
             }
-            .buttonStyle(.plain)
-            .frame(width: 44, height: 44)
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
@@ -216,10 +221,12 @@ struct PinnedMessagesSheet: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
+            Spacer()
+
             Button { showUnpinConfirm = true } label: {
                 Text("Unpin all messages")
                     .font(.subheadline)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.red)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .modifier(GlassPill())
@@ -227,7 +234,8 @@ struct PinnedMessagesSheet: View {
             .buttonStyle(.plain)
 
             Spacer()
-
+        }
+        .overlay(alignment: .trailing) {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     showSearch = true
@@ -240,6 +248,7 @@ struct PinnedMessagesSheet: View {
                     .modifier(GlassCircle())
             }
             .buttonStyle(.plain)
+            .padding(.trailing, 16)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
