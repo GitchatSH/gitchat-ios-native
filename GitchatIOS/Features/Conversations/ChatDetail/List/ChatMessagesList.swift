@@ -1057,13 +1057,32 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
             if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { return }
             if chatIsDateRow(id) { return }
-            // Grouped cell: pick the last message (bottom-most, closest to finger).
+            // Grouped cell: determine which bubble was tapped by Y position.
             if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
-                guard let messageIDs = groupById[id],
-                      let lastId = messageIDs.last,
-                      let msg = itemById[lastId] else { return }
+                guard let messageIDs = groupById[id], !messageIDs.isEmpty else { return }
+                // Convert touch point to cell-local coords
+                let localPoint = tv.convert(point, to: cell)
+                // Each bubble occupies roughly equal height in the cell.
+                // The cell content is rotated 180°, so top in cell = bottom visually.
+                let cellH = cell.bounds.height
+                let count = messageIDs.count
+                // In rotated cell: visual bottom = cell Y=0, visual top = cell Y=cellH.
+                // Messages are ordered oldest-first in messageIDs.
+                // Visual layout (after rotation): newest at bottom, oldest at top.
+                // localPoint.y near 0 = visual bottom = newest message.
+                // localPoint.y near cellH = visual top = oldest message.
+                let ratio = localPoint.y / max(cellH, 1)
+                let idx = min(Int(ratio * CGFloat(count)), count - 1)
+                // ratio 0 → newest (last in array), ratio 1 → oldest (first in array)
+                let reversedIdx = max(0, count - 1 - idx)
+                let targetId = messageIDs[reversedIdx]
+                guard let msg = itemById[targetId] else { return }
                 if haptic { Haptics.impact(.medium) }
-                let frame = cell.convert(cell.bounds, to: nil)
+                // Approximate the tapped bubble's frame (portion of cell)
+                let bubbleH = cellH / CGFloat(count)
+                let bubbleY = CGFloat(idx) * bubbleH
+                let bubbleFrame = CGRect(x: cell.bounds.minX, y: bubbleY, width: cell.bounds.width, height: bubbleH)
+                let frame = cell.convert(bubbleFrame, to: nil)
                 parent.onCellLongPressed(msg, frame)
                 return
             }
