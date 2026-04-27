@@ -436,9 +436,11 @@ struct ChatView: View {
         HStack(alignment: .bottom, spacing: 8) {
             // Avatar column — bottom-aligned with the group
             AvatarView(
-                url: messages.first?.sender_avatar,
+                url: resolveAvatar(messages[0])
+                    ?? messages[0].sender_avatar
+                    ?? "https://github.com/\(messages[0].sender).png",
                 size: 32,
-                login: messages.first?.sender ?? ""
+                login: messages[0].sender
             )
             .frame(width: 32, height: 32)
             .onTapGesture { actions.onAvatarTap(messages.first?.sender ?? "") }
