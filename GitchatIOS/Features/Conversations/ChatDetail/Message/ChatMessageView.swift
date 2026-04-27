@@ -68,6 +68,10 @@ struct ChatMessageView: View {
     var showTail: Bool = false
     /// Whether this conversation is a group chat.
     var isGroup: Bool = false
+    /// When true, this bubble is rendered inside a grouped sender cell —
+    /// the outer HStack with avatar/spacers is skipped because the group
+    /// cell provides its own avatar column.
+    var isInsideGroup: Bool = false
     /// DM: when the other user last read (ISO 8601 timestamp).
     var otherReadAt: String? = nil
     /// Group: per-login read timestamps.
@@ -102,17 +106,25 @@ struct ChatMessageView: View {
     // MARK: Body
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if isMe {
-                Spacer(minLength: 40)
-            } else if isGroup {
-                avatarColumn
-            }
+        if isInsideGroup {
+            // Inside a grouped sender cell — just the bubble, no avatar/spacers.
+            // The parent group cell provides the avatar column.
             bubbleColumn
-            if !isMe { Spacer(minLength: 40) }
+                .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
+                .onAppear(perform: onFirstAppear)
+        } else {
+            HStack(alignment: .bottom, spacing: 8) {
+                if isMe {
+                    Spacer(minLength: 40)
+                } else if isGroup {
+                    avatarColumn
+                }
+                bubbleColumn
+                if !isMe { Spacer(minLength: 40) }
+            }
+            .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
+            .onAppear(perform: onFirstAppear)
         }
-        .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
-        .onAppear(perform: onFirstAppear)
     }
 
     // MARK: Avatar column

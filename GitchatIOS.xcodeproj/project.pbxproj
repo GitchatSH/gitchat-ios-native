@@ -103,6 +103,7 @@
 		A7396B793DDA8316A187E165 /* PresenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1257724417C399DFA806F4A /* PresenceStore.swift */; };
 		A834FFACC2EFD9215F4C6A3A /* ShareConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46DAB3DF885FFD1C9FC46733 /* ShareConfig.swift */; };
 		A97235477D8D1C41FE4A2EF1 /* ChatSectioning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 627F4895536B968BBC4A02DD /* ChatSectioning.swift */; };
+		D4E5F6A7B8C91234ABCDEF02 /* ChatSenderGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C91234ABCDEF01 /* ChatSenderGrouping.swift */; };
 		A9CB0EEA7EC214D19D530910 /* PushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 808AF0F70444427011FF450A /* PushManager.swift */; };
 		AB42B8891C75693B046A5BD6 /* APIClient+Invite.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53A491227A1B50663F174A3 /* APIClient+Invite.swift */; };
 		AB75B64F86D9214FFC78C723 /* AddMemberSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1215054ABAC62F54D09E67A9 /* AddMemberSheet.swift */; };
@@ -266,6 +267,7 @@
 		5F1F6DCE80101D081778C6AE /* APIClient+Push.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Push.swift"; sourceTree = "<group>"; };
 		609DA8824FE99EB6C968CF6F /* UITestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestHelpers.swift; sourceTree = "<group>"; };
 		627F4895536B968BBC4A02DD /* ChatSectioning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSectioning.swift; sourceTree = "<group>"; };
+		D4E5F6A7B8C91234ABCDEF01 /* ChatSenderGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSenderGrouping.swift; sourceTree = "<group>"; };
 		653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GitchatIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6E57C30BA465BAC85D5F1F79 /* Geist-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Black.ttf"; sourceTree = "<group>"; };
 		6ECB3ACEDD3F4DDBE05167BC /* ChatAttachmentsGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatAttachmentsGrid.swift; sourceTree = "<group>"; };
@@ -681,6 +683,7 @@
 				C3D4E5F607891234ABCDEF01 /* AvatarOverlayManager.swift */,
 				1AA9859CC82C63F864B8F8D8 /* ChatMessagesList.swift */,
 				627F4895536B968BBC4A02DD /* ChatSectioning.swift */,
+				D4E5F6A7B8C91234ABCDEF01 /* ChatSenderGrouping.swift */,
 			);
 			path = List;
 			sourceTree = "<group>";
@@ -1048,6 +1051,7 @@
 				9DA10C8E16781CD5DA07629B /* ChatReplyEditBar.swift in Sources */,
 				37A90D301655300DDA2E6111 /* ChatReplyPreview.swift in Sources */,
 				A97235477D8D1C41FE4A2EF1 /* ChatSectioning.swift in Sources */,
+				D4E5F6A7B8C91234ABCDEF02 /* ChatSenderGrouping.swift in Sources */,
 				8EC49E171B11904ED31ED2C4 /* ChatSkeleton.swift in Sources */,
 				E0E4B08DBA11E65CE4AB2CC4 /* ChatSwipeReply.swift in Sources */,
 				92E71F6AACBC3BC9107B14F0 /* ChatTheme.swift in Sources */,

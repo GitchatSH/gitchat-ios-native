@@ -334,6 +334,9 @@ struct ChatView: View {
                 myReadAt: vm.readCursors[myLogin ?? ""] ?? vm.otherReadAt,
                 cellBuilder: { msg, idx in
                     messageRow(for: msg, at: idx)
+                },
+                groupCellBuilder: { messages in
+                    AnyView(groupedMessageRow(for: messages))
                 }
             )
             .overlay(alignment: .top) {
@@ -426,6 +429,48 @@ struct ChatView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func groupedMessageRow(for messages: [Message]) -> some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            // Avatar column — 32pt spacer; the floating overlay handles
+            // the actual avatar with sticky scroll behavior.
+            Color.clear.frame(width: 32, height: 32)
+
+            // Bubbles column
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(messages.enumerated()), id: \.element.id) { idx, msg in
+                    let isFirst = idx == 0
+                    let isLast = idx == messages.count - 1
+                    ChatMessageView(
+                        message: msg,
+                        isMe: false,
+                        myLogin: myLogin,
+                        resolvedAvatar: resolveAvatar(msg),
+                        showHeader: isFirst,
+                        isPinned: vm.pinnedIds.contains(msg.id),
+                        isPulsing: pulsingId == msg.id,
+                        onReactionsTap: { actions.onReactionsTap(msg) },
+                        onToggleReact: { emoji in actions.onReact(msg, emoji) },
+                        onMoreReactions: { actions.onMoreReactions(msg) },
+                        onReplyTap: { actions.onReplyPreviewTap(msg) },
+                        onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
+                        onPinTap: { actions.onPinBadgeTap(msg) },
+                        onAvatarTap: { actions.onAvatarTap(msg.sender) },
+                        imageMatchedNS: imageZoomNamespace,
+                        showTail: isLast,
+                        isGroup: true,
+                        isInsideGroup: true,
+                        otherReadAt: vm.otherReadAt,
+                        readCursors: vm.readCursors
+                    )
+                }
+            }
+
+            Spacer(minLength: 40)
+        }
+        .padding(.top, 8)
     }
 
     @ViewBuilder

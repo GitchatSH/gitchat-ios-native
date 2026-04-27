@@ -83,6 +83,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     var unreadCount: Int = 0
     var myReadAt: String? = nil
     let cellBuilder: (Message, Int) -> Cell
+    var groupCellBuilder: (([Message]) -> AnyView)? = nil
 
     // MARK: UIViewRepresentable plumbing
 
@@ -400,6 +401,10 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         var didInitialScroll = false
         let avatarOverlay = AvatarOverlayManager()
         var initialScrollAt: Date?
+        /// Group row ID → ordered message IDs in that group.
+        var groupById: [String: [String]] = [:]
+        /// Individual message ID → the group row ID it belongs to.
+        var groupIdForMessage: [String: String] = [:]
         private var loadingMore = false
 
         // Date pill: cached ISO8601 formatter for parsing created_at
@@ -509,6 +514,24 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 .margins(.all, 0)
                 return
             }
+            // Grouped sender cell: multiple messages rendered as one row.
+            if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                guard let messageIDs = groupById[id] else { return }
+                let messages = messageIDs.compactMap { itemById[$0] }
+                guard !messages.isEmpty else { return }
+                let swipeState = parent.swipeState
+                if let builder = parent.groupCellBuilder {
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        builder(messages)
+                            .rotationEffect(.degrees(180))
+                            .environmentObject(swipeState)
+                    }
+                    .margins(.horizontal, 8)
+                    .margins(.vertical, 0)
+                    .minSize(width: 0, height: 0)
+                }
+                return
+            }
             guard let msg = itemById[id] else { return }
             let idx = lastItems.firstIndex(where: { $0.id == id }) ?? indexPath.row
             let swipeState = parent.swipeState
@@ -555,7 +578,10 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             //                              at the top
             // Pagination listens for "approached last section, last
             // row" via willDisplay below.
-            let groups = ChatSectioning.groupByDay(items)
+            let dayGroups = ChatSectioning.groupByDay(items)
+            // Reset group maps for this snapshot.
+            groupById.removeAll()
+            groupIdForMessage.removeAll()
             // Trailing rows (typing indicator / seen avatar row) belong
             // in data-space AFTER the latest message, so in the
             // rotated table they appear BELOW the latest bubble. In
@@ -591,42 +617,83 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 return nil
             }()
 
-            for (offset, group) in groups.reversed().enumerated() {
-                snap.appendSections([group.sectionID])
-                var rows = Array(group.messageIDs.reversed())
+            for (offset, dayGroup) in dayGroups.reversed().enumerated() {
+                snap.appendSections([dayGroup.sectionID])
+
+                // Run sender grouping within this day section.
+                let grouped = ChatSenderGrouping.group(
+                    messageIDs: dayGroup.messageIDs,
+                    lookup: { itemById[$0] },
+                    isMe: { parent.isMe($0) },
+                    isGroup: parent.isGroup
+                )
+
+                // Build row IDs (reversed for rotated table).
+                var rows: [String] = []
+                for item in grouped.reversed() {
+                    switch item {
+                    case .single(let id):
+                        rows.append(id)
+                    case .group(let g):
+                        rows.append(g.id)
+                        groupById[g.id] = g.messageIDs
+                        for mid in g.messageIDs {
+                            groupIdForMessage[mid] = g.id
+                        }
+                    }
+                }
+
                 if offset == 0 {
                     rows = trailingRowsForLatestSection + rows
                 }
                 // Insert unread divider if it belongs in this section.
+                // For grouped messages, the unread divider targets a
+                // message ID. If that ID is inside a group, we place
+                // the divider after the group row instead.
                 if let targetId = unreadDividerMsgId {
                     if targetId == "__all_unread__" {
                         // myReadAt nil → all unread. Place divider at
                         // the end of the last section (= visual top).
-                        if offset == groups.count - 1 {
+                        if offset == dayGroups.count - 1 {
                             rows.append(ChatUnreadDividerID)
                         }
-                    } else if let idx = rows.firstIndex(of: targetId) {
-                        // Insert AFTER last-read msg in reversed array
-                        // = visually ABOVE it in rotated table
-                        rows.insert(ChatUnreadDividerID, at: idx + 1)
+                    } else {
+                        // Resolve target: if the message is inside a
+                        // group, use the group row ID instead.
+                        let resolvedTarget = groupIdForMessage[targetId] ?? targetId
+                        if let idx = rows.firstIndex(of: resolvedTarget) {
+                            // Insert AFTER last-read msg in reversed array
+                            // = visually ABOVE it in rotated table
+                            rows.insert(ChatUnreadDividerID, at: idx + 1)
+                        }
                     }
                 }
                 // Append the date pill at the END of the section
                 // (rotation-space bottom of section = visually TOP of
                 // the day's messages). Regular row — not a section
                 // footer — so the pill scrolls with content.
-                rows.append(chatDateRowID(for: group.sectionID))
-                snap.appendItems(rows, toSection: group.sectionID)
+                rows.append(chatDateRowID(for: dayGroup.sectionID))
+                snap.appendItems(rows, toSection: dayGroup.sectionID)
             }
             dataSource.apply(snap, animatingDifferences: animated)
         }
 
         func reconfigure(ids: [String]) {
             guard !ids.isEmpty else { return }
+            // Translate individual message IDs that are inside groups
+            // to their group row IDs (the snapshot only knows group IDs).
+            var resolved: Set<String> = []
+            for id in ids {
+                if let gid = groupIdForMessage[id] {
+                    resolved.insert(gid)
+                } else {
+                    resolved.insert(id)
+                }
+            }
             var snap = dataSource.snapshot()
-            let present = ids.filter { snap.itemIdentifiers.contains($0) }
+            let present = resolved.filter { snap.itemIdentifiers.contains($0) }
             guard !present.isEmpty else { return }
-            snap.reloadItems(present)
+            snap.reloadItems(Array(present))
             dataSource.apply(snap, animatingDifferences: false)
         }
 
@@ -646,9 +713,17 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         /// Returns true if the row was found and scrolled to.
         @discardableResult
         func scrollTo(id: String, in tv: UITableView, animated: Bool) -> Bool {
-            guard let indexPath = dataSource.indexPath(for: id) else { return false }
-            tv.scrollToRow(at: indexPath, at: .middle, animated: animated)
-            return true
+            if let indexPath = dataSource.indexPath(for: id) {
+                tv.scrollToRow(at: indexPath, at: .middle, animated: animated)
+                return true
+            }
+            // Fallback: the message may be inside a grouped cell.
+            if let groupId = groupIdForMessage[id],
+               let indexPath = dataSource.indexPath(for: groupId) {
+                tv.scrollToRow(at: indexPath, at: .middle, animated: animated)
+                return true
+            }
+            return false
         }
 
         // MARK: UITableViewDelegate
@@ -722,7 +797,15 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             for path in visiblePaths.reversed() {
                 guard let id = dataSource.itemIdentifier(for: path) else { continue }
                 if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID || chatIsDateRow(id) { continue }
-                if let msg = itemById[id],
+                // Resolve group row to its first message for date.
+                let resolvedId: String
+                if id.hasPrefix(ChatSenderGrouping.groupPrefix),
+                   let mids = groupById[id], let fid = mids.first {
+                    resolvedId = fid
+                } else {
+                    resolvedId = id
+                }
+                if let msg = itemById[resolvedId],
                    let raw = msg.created_at,
                    let d = isoFormatter.date(from: raw) {
                     foundDate = d
@@ -780,16 +863,30 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 // Skip synthetic rows
                 if id == ChatTypingRowID || id == ChatSeenRowID
                     || id == ChatUnreadDividerID || chatIsDateRow(id) { continue }
-                guard let msg = itemById[id] else { continue }
-                // Skip system messages
-                if let t = msg.type, t != "user" { continue }
-                // Skip outgoing messages (only incoming have avatars)
-                if parent.isMe(msg) { continue }
+
+                // Resolve sender info: grouped or single message.
+                let senderLogin: String
+                let senderAvatarURL: String?
+                if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                    guard let messageIDs = groupById[id],
+                          let firstId = messageIDs.first,
+                          let msg = itemById[firstId] else { continue }
+                    if let t = msg.type, t != "user" { continue }
+                    if parent.isMe(msg) { continue }
+                    senderLogin = msg.sender
+                    senderAvatarURL = msg.sender_avatar
+                } else {
+                    guard let msg = itemById[id] else { continue }
+                    if let t = msg.type, t != "user" { continue }
+                    if parent.isMe(msg) { continue }
+                    senderLogin = msg.sender
+                    senderAvatarURL = msg.sender_avatar
+                }
 
                 guard let cell = tv.cellForRow(at: path) else { continue }
                 let frame = tv.convert(cell.frame, to: container)
 
-                if msg.sender == currentLogin {
+                if senderLogin == currentLogin {
                     // Extend current group
                     currentTopY = min(currentTopY, frame.minY)
                     currentBottomY = max(currentBottomY, frame.maxY)
@@ -804,9 +901,9 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                         ))
                     }
                     // Start new group
-                    currentLogin = msg.sender
-                    currentURL = msg.sender_avatar
-                        ?? "https://github.com/\(msg.sender).png?size=64"
+                    currentLogin = senderLogin
+                    currentURL = senderAvatarURL
+                        ?? "https://github.com/\(senderLogin).png?size=64"
                     currentTopY = frame.minY
                     currentBottomY = frame.maxY
                 }
@@ -853,6 +950,28 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 // Skip synthetic rows.
                 if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID || chatIsDateRow(id) {
                     gr.state = .cancelled
+                    return
+                }
+                // Grouped cell: use the last message for swipe-to-reply.
+                if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                    guard let messageIDs = groupById[id],
+                          let lastId = messageIDs.last,
+                          let msg = itemById[lastId] else {
+                        gr.state = .cancelled
+                        return
+                    }
+                    swipeActiveId = lastId
+                    swipeActiveIsMe = parent.isMe(msg)
+                    swipeTriggered = false
+                    let tablePan = tv.panGestureRecognizer
+                    tablePan.isEnabled = false
+                    tablePan.isEnabled = true
+                    if let nav = findNavPopRecognizer(), nav.isEnabled {
+                        nav.isEnabled = false
+                        suspendedNavPopGR = nav
+                    }
+                    parent.swipeState.messageId = lastId
+                    parent.swipeState.offsetX = 0
                     return
                 }
                 guard let msg = itemById[id] else {
@@ -1033,6 +1152,16 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
             if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { return }
             if chatIsDateRow(id) { return }
+            // Grouped cell: pick the last message (bottom-most, closest to finger).
+            if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                guard let messageIDs = groupById[id],
+                      let lastId = messageIDs.last,
+                      let msg = itemById[lastId] else { return }
+                if haptic { Haptics.impact(.medium) }
+                let frame = cell.convert(cell.bounds, to: nil)
+                parent.onCellLongPressed(msg, frame)
+                return
+            }
             guard let msg = itemById[id] else { return }
             if haptic { Haptics.impact(.medium) }
             let frame = cell.convert(cell.bounds, to: nil)
@@ -1047,6 +1176,25 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 guard let id = dataSource.itemIdentifier(for: ip) else { continue }
                 if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { continue }
                 if chatIsDateRow(id) { continue }
+                // For group rows, collect URLs from all messages in the group.
+                if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                    guard let mids = groupById[id] else { continue }
+                    for mid in mids {
+                        guard let msg = itemById[mid] else { continue }
+                        if let atts = msg.attachments {
+                            for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {
+                                if let u = URL(string: a.url), !u.isFileURL { urls.append(u) }
+                            }
+                        }
+                        if let s = msg.attachment_url, let u = URL(string: s), !u.isFileURL {
+                            urls.append(u)
+                        }
+                        if let s = msg.sender_avatar, let u = URL(string: s), !u.isFileURL {
+                            urls.append(u)
+                        }
+                    }
+                    continue
+                }
                 guard let msg = itemById[id] else { continue }
                 if let atts = msg.attachments {
                     for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {
