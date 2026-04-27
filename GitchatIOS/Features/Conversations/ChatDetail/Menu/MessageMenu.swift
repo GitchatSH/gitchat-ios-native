@@ -55,13 +55,6 @@ struct MessageMenu<Preview: View>: View {
                         if !target.isMe { Spacer(minLength: 0) }
                     }
                     .padding(.horizontal, 8)
-                    .scaleEffect(appeared ? 1.015 : 1)
-                    .animation(
-                        appeared
-                            ? .spring(response: 0.3, dampingFraction: 0.6).delay(0.1)
-                            : .spring(response: 0.28, dampingFraction: 0.85),
-                        value: appeared
-                    )
                     .position(x: geo.size.width / 2, y: layout.bubbleCenterY)
 
                     // Action dropdown
