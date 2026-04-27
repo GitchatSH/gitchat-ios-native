@@ -206,6 +206,48 @@ struct ChatMessageView: View {
         .padding(.trailing, 12)
     }
 
+    /// Timestamp for image-only messages — always white on dark overlay.
+    private var imageTimestampMeta: some View {
+        HStack(spacing: 4) {
+            if message.edited_at != nil {
+                Text("edited")
+                    .font(.caption)
+                    .foregroundStyle(.white)
+            }
+            if isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white)
+                    .rotationEffect(.degrees(45))
+            }
+            Text(message.shortTime ?? "")
+                .font(.caption)
+                .foregroundStyle(.white)
+
+            if isMe, !message.id.hasPrefix("local-"), message.unsent_at == nil {
+                imageDoubleCheckView
+            }
+        }
+        .fixedSize()
+    }
+
+    @ViewBuilder
+    private var imageDoubleCheckView: some View {
+        ZStack(alignment: .leading) {
+            Image(systemName: "checkmark")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(isRead ? .white : .white.opacity(0.7))
+            if isRead {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .offset(x: 4)
+            }
+        }
+        .frame(width: isRead ? 16 : 12, height: 8)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRead)
+    }
+
     @ViewBuilder
     private var doubleCheckView: some View {
         ZStack(alignment: .leading) {
@@ -265,6 +307,14 @@ struct ChatMessageView: View {
             .foregroundStyle(.secondary)
     }
 
+    private var isAttachmentOnly: Bool {
+        let hasAttachment = (message.attachments != nil && !message.attachments!.isEmpty)
+            || message.attachment_url != nil
+        let hasText = !message.content.isEmpty
+            || (message.reply != nil && !hideReplyPreview)
+        return hasAttachment && !hasText
+    }
+
     @ViewBuilder
     private var textAndAttachmentBubble: some View {
         VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
@@ -278,9 +328,27 @@ struct ChatMessageView: View {
                     matchedNamespace: imageMatchedNS,
                     activePreviewURL: activeImagePreviewURL
                 )
+                .overlay(alignment: .bottomTrailing) {
+                    if isAttachmentOnly {
+                        imageTimestampMeta
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.black.opacity(0.4), in: Capsule())
+                            .padding(6)
+                    }
+                }
             } else if let s = message.attachment_url,
                       let url = URL(string: s) {
                 legacySingleAttachment(url: url, urlString: s)
+                    .overlay(alignment: .bottomTrailing) {
+                        if isAttachmentOnly {
+                            imageTimestampMeta
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.black.opacity(0.4), in: Capsule())
+                                .padding(6)
+                        }
+                    }
             }
 
             // Text body. Render the bubble when there's text OR
@@ -290,15 +358,6 @@ struct ChatMessageView: View {
             if !message.content.isEmpty ||
                 (message.reply != nil && !hideReplyPreview) {
                 textBubble
-            } else {
-                // Attachment-only: float timestamp over image
-                HStack {
-                    Spacer()
-                    timestampMeta
-                        .padding(4)
-                        .background(.ultraThinMaterial, in: Capsule())
-                }
-                .padding(.top, -12)
             }
         }
     }
