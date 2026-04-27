@@ -662,6 +662,8 @@ struct ChatView: View {
                 actions: visibleActions(for: t),
                 currentReactions: currentUserReactions(for: t.message),
                 seenCount: seenByLogins(t.message).count,
+                seenLogins: seenByLogins(t.message),
+                participants: participants,
                 onReact: { emoji in actions.onReact(t.message, emoji) },
                 onMoreReactions: { actions.onMoreReactions(t.message) },
                 onAction: { action in dispatch(action, for: t.message) },

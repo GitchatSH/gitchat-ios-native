@@ -11,6 +11,8 @@ struct MessageMenu<Preview: View>: View {
     let actions: [MessageMenuAction]
     let currentReactions: Set<String>
     let seenCount: Int
+    let seenLogins: [String]
+    let participants: [ConversationParticipant]
     let onReact: (String) -> Void
     let onMoreReactions: () -> Void
     let onAction: (MessageMenuAction) -> Void
@@ -80,12 +82,14 @@ struct MessageMenu<Preview: View>: View {
                     MessageMenuActionList(
                         actions: actions,
                         seenCount: seenCount,
+                        seenLogins: seenLogins,
+                        participants: participants,
                         onAction: { action in
                             onAction(action)
                             dismiss()
                         }
                     )
-                    .frame(maxWidth: 260)
+                    .frame(maxWidth: 220)
                     .background(GeometryReader { g in
                         Color.clear.onAppear { dropdownSize = g.size }
                     })

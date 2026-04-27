@@ -38,13 +38,7 @@ struct ReactionSelectionView: View {
         }
         .padding(.horizontal, horizontalInset)
         .padding(.vertical, verticalInset)
-        .background(
-            Capsule(style: .continuous).fill(theme.reactionPickerBg)
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(theme.menuDivider.opacity(0.35), lineWidth: 0.5)
-        )
+        .modifier(ReactionBarBackground())
         .shadow(color: .black.opacity(0.22), radius: 22, y: 10)
     }
 
@@ -105,5 +99,27 @@ private struct EmojiLabel: UIViewRepresentable {
     func updateUIView(_ label: UILabel, context: Context) {
         label.text = text
         label.font = UIFont.systemFont(ofSize: pointSize)
+    }
+}
+
+// MARK: - Glass background for reaction bar
+
+private struct ReactionBarBackground: ViewModifier {
+    @Environment(\.chatTheme) private var theme
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular, in: Capsule(style: .continuous))
+        } else {
+            content
+                .background(
+                    Capsule(style: .continuous).fill(theme.reactionPickerBg)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(theme.menuDivider.opacity(0.35), lineWidth: 0.5)
+                )
+        }
     }
 }
