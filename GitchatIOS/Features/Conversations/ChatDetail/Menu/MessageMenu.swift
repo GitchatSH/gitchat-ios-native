@@ -28,7 +28,7 @@ struct MessageMenu<Preview: View>: View {
 
             ZStack {
                 // Dimmed + blurred backdrop
-                Color.black.opacity(appeared ? 0.35 : 0)
+                Color.black.opacity(appeared ? 0.20 : 0)
                     .background(.ultraThinMaterial.opacity(appeared ? 1 : 0))
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
@@ -49,8 +49,19 @@ struct MessageMenu<Preview: View>: View {
 
                     // Bubble preview — starts at original position, animates
                     // to adjusted position if edges need accommodation.
-                    HStack {
+                    HStack(alignment: .bottom, spacing: 8) {
                         if target.isMe { Spacer(minLength: 0) }
+                        if !target.isMe {
+                            AvatarView(
+                                url: target.message.sender_avatar
+                                    ?? "https://github.com/\(target.message.sender).png",
+                                size: 32,
+                                login: target.message.sender
+                            )
+                            .frame(width: 32, height: 32)
+                            .scaleEffect(appeared ? 1 : 0)
+                            .opacity(appeared ? 1 : 0)
+                        }
                         preview()
                         if !target.isMe { Spacer(minLength: 0) }
                     }
