@@ -512,7 +512,7 @@ struct ChatMessageView: View {
                     // Short message: text + pin + timestamp inline same row
                     HStack(alignment: .lastTextBaseline, spacing: 8) {
                         Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
-                            .tint(isMe ? .white : Color(.systemBlue))
+                            .tint(isMe ? .white : Color("AccentColor"))
                             #if targetEnvironment(macCatalyst)
                             .font(.scaledSystem(size: 17))
                             #endif
@@ -525,7 +525,7 @@ struct ChatMessageView: View {
                 } else {
                     // Long message: text with reserved bottom space for overlay timestamp
                     Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
-                        .tint(isMe ? .white : Color(.systemBlue))
+                        .tint(isMe ? .white : Color("AccentColor"))
                     #if targetEnvironment(macCatalyst)
                         .font(.scaledSystem(size: 17))
                     #endif
@@ -533,14 +533,14 @@ struct ChatMessageView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .padding(.bottom, hasReactions ? 4 : 24)
+                        .padding(.vertical, hasLink ? 12 : 8)
+                        .padding(.bottom, hasLink ? 0 : (hasReactions ? 4 : 24))
                 }
             }
             if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
                 LinkPreviewCard(url: linkURL, isMe: isMe)
-                    .padding(.horizontal, 6)
-                    .padding(.bottom, 14)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, hasReactions ? 8 : 40)
             }
             // Reactions inside bubble
             if let reactions = message.reactions, !reactions.isEmpty {
