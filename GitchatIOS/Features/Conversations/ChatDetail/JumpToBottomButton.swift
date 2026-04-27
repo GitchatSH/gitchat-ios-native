@@ -75,16 +75,16 @@ struct JumpButtonStack: View {
                 ZStack {
                     Circle()
                         .fill(.clear)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 44, height: 44)
                     label()
                 }
-                .frame(width: 38, height: 38)
+                .frame(width: 44, height: 44)
                 .glassEffect(.regular, in: .circle)
             } else {
                 ZStack {
                     Circle()
                         .fill(Color(.systemBackground))
-                        .frame(width: 32, height: 32)
+                        .frame(width: 44, height: 44)
                         .overlay(Circle().stroke(Color(.separator).opacity(0.4), lineWidth: 0.5))
                         .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
                     label()
@@ -122,5 +122,42 @@ struct JumpToBottomButton: View {
             onJumpToBottom: action,
             onJumpToMention: {}
         )
+    }
+}
+
+// MARK: - UIKit-hosted glass button
+
+/// SwiftUI glass-style jump button embedded via UIHostingController
+/// into the UITableView's superview for reliable touch handling.
+struct JumpToBottomGlassButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            if #available(iOS 26.0, *) {
+                ZStack {
+                    Circle()
+                        .fill(.clear)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .frame(width: 44, height: 44)
+                .glassEffect(.regular, in: .circle)
+            } else {
+                ZStack {
+                    Circle()
+                        .fill(Color(.systemBackground))
+                        .frame(width: 44, height: 44)
+                        .overlay(Circle().stroke(Color(.separator).opacity(0.4), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }

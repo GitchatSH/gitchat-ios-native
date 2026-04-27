@@ -101,6 +101,8 @@ struct ChatView: View {
     @State private var newMentionsWhileScrolledUp: Int = 0
     /// IDs of messages containing @mention that arrived while scrolled up (for jump-to-mention).
     @State private var pendingMentionIds: [String] = []
+    /// IDs of messages with new reactions that arrived while scrolled up.
+    @State private var pendingReactionIds: [String] = []
 
     // MARK: Body
 
@@ -112,6 +114,10 @@ struct ChatView: View {
     // MARK: Composer link preview
     @State private var dismissedPreviewURLs: Set<String> = []
     @State private var detectedDraftURL: URL?
+
+    /// Direct bridge to UITableView for scroll commands, bypassing
+    /// SwiftUI's updateUIView cycle which races with preference updates.
+    @StateObject private var scrollProxy = ChatScrollProxy()
 
     var body: some View {
         ZStack {
@@ -174,7 +180,7 @@ struct ChatView: View {
             }
 
             // Composer overlay — bottom
-            VStack {
+            VStack(spacing: 0) {
                 Spacer()
                 if let login = blockedBannerLogin {
                     blockedBanner(login: login)
@@ -221,6 +227,7 @@ struct ChatView: View {
                 newWhileScrolledUp = 0
                 newMentionsWhileScrolledUp = 0
                 pendingMentionIds.removeAll()
+                pendingReactionIds.removeAll()
             }
         }
         // Track new messages arriving while scrolled up.
@@ -233,6 +240,11 @@ struct ChatView: View {
             if let login = myLogin, newest.content.localizedCaseInsensitiveContains("@\(login)") {
                 newMentionsWhileScrolledUp += 1
                 pendingMentionIds.append(newest.id)
+            }
+            // Track reactions on own messages
+            if newest.sender == myLogin,
+               let reactions = newest.reactions, !reactions.isEmpty {
+                pendingReactionIds.append(newest.id)
             }
         }
         .onChange(of: vm.draft) { newDraft in
@@ -337,6 +349,21 @@ struct ChatView: View {
                 isLoadingMore: vm.isLoadingMore,
                 bottomInset: keyboard.height,
                 scrollToBottomToken: scrollToBottomToken,
+                scrollProxy: scrollProxy,
+                composerHeight: composerOverlayHeight,
+                jumpMentionCount: pendingMentionIds.count,
+                jumpReactionCount: pendingReactionIds.count,
+                onJumpToMention: {
+                    guard !pendingMentionIds.isEmpty else { return }
+                    let id = pendingMentionIds.removeFirst()
+                    pendingJumpId = id
+                    newMentionsWhileScrolledUp = max(0, newMentionsWhileScrolledUp - 1)
+                },
+                onJumpToReaction: {
+                    guard !pendingReactionIds.isEmpty else { return }
+                    let id = pendingReactionIds.removeFirst()
+                    pendingJumpId = id
+                },
                 isAtBottom: $isAtBottom,
                 onScrollToIdConsumed: { pendingJumpId = nil },
                 onTopReached: { Task { await vm.loadMoreIfNeeded() } },
@@ -598,26 +625,6 @@ struct ChatView: View {
                 onPasteImage: actions.onPasteImage,
                 focusProxy: focusProxy
             )
-        }
-        .overlay(alignment: .topTrailing) {
-            // Jump-button stack: @mention + scroll-to-bottom with
-            // unread badge. Animation is scoped here so the composer
-            // doesn't re-render on every isAtBottom flip.
-            JumpButtonStack(
-                isAtBottom: isAtBottom,
-                unreadCount: jumpUnreadCount,
-                mentionCount: jumpMentionCount,
-                onJumpToBottom: { scrollToBottomToken &+= 1 },
-                onJumpToMention: {
-                    if let firstMention = pendingMentionIds.first {
-                        pendingJumpId = firstMention
-                    } else {
-                        scrollToBottomToken &+= 1
-                    }
-                }
-            )
-            .padding(.trailing, 6)
-            .offset(y: -52)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }

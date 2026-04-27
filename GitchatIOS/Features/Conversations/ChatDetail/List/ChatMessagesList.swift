@@ -1,6 +1,20 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Scroll proxy
+
+/// Lets SwiftUI views call scroll commands directly on the
+/// UITableView without going through the updateUIView cycle.
+final class ChatScrollProxy: ObservableObject {
+    weak var tableView: UITableView?
+
+    func scrollToBottom(animated: Bool = true) {
+        guard let tv = tableView else { return }
+        let target = CGPoint(x: 0, y: -tv.contentInset.top)
+        tv.setContentOffset(target, animated: animated)
+    }
+}
+
 // MARK: - Synthetic row identifiers
 
 /// Stable identifier for the typing-indicator row pinned to the end
@@ -66,6 +80,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     let isLoadingMore: Bool
     let bottomInset: CGFloat
     let scrollToBottomToken: Int
+    let scrollProxy: ChatScrollProxy?
+    let composerHeight: CGFloat
+    let jumpMentionCount: Int
+    let jumpReactionCount: Int
+    var onJumpToMention: (() -> Void)? = nil
+    var onJumpToReaction: (() -> Void)? = nil
     @Binding var isAtBottom: Bool
     let onScrollToIdConsumed: () -> Void
     let onTopReached: () -> Void
@@ -194,6 +214,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         tv.delegate = context.coordinator
         tv.prefetchDataSource = context.coordinator
         context.coordinator.attach(table: tv)
+        scrollProxy?.tableView = tv
         context.coordinator.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: false)
         return tv
     }
@@ -201,6 +222,21 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     func updateUIView(_ tv: UITableView, context: Context) {
         let coord = context.coordinator
         coord.parent = self
+        scrollProxy?.tableView = tv
+
+        // Setup jump button on first superview availability
+        if let superview = tv.superview, coord.jumpHostVC == nil {
+            coord.setupJumpButtons(in: superview)
+        }
+        coord.onJumpToMention = onJumpToMention
+        coord.onJumpToReaction = onJumpToReaction
+        coord.updateJumpButtons(
+            isAtBottom: isAtBottom,
+            composerHeight: composerHeight,
+            unreadCount: unreadCount,
+            mentionCount: jumpMentionCount,
+            reactionCount: jumpReactionCount
+        )
 
         let prevIDs = coord.lastItems.map(\.id)
         let newIDs = items.map(\.id)
@@ -369,12 +405,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         }
 
         // Imperative scroll-to-bottom token (send button, etc.).
+        // Must run AFTER contentInset sync above, and synchronously —
+        // async dispatch loses the race against preference-triggered
+        // re-renders that reset contentOffset.
         if coord.lastScrollToBottomToken != scrollToBottomToken {
             coord.lastScrollToBottomToken = scrollToBottomToken
-            DispatchQueue.main.async { [weak tv] in
-                guard let tv else { return }
-                coord.scrollToBottom(in: tv, animated: true)
-            }
+            coord.scrollToBottom(in: tv, animated: true)
         }
     }
 
@@ -423,8 +459,84 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         /// left-aligned (incoming) bubble and prevents reply-swipe.
         private weak var suspendedNavPopGR: UIGestureRecognizer?
 
+        // MARK: Jump button (UIHostingController-hosted JumpButtonStack)
+        private var jumpHostVC: UIHostingController<JumpButtonStack>?
+        private var jumpBottomConstraint: NSLayoutConstraint?
+        var isProgrammaticScroll = false
+
+        /// Callbacks wired from ChatView via parent. These update state
+        /// (remove from pending list) and set pendingJumpId which triggers
+        /// scrollTo in updateUIView.
+        var onJumpToMention: (() -> Void)?
+        var onJumpToReaction: (() -> Void)?
+
         init(parent: ChatMessagesList) {
             self.parent = parent
+        }
+
+        func setupJumpButtons(in container: UIView) {
+            guard jumpHostVC == nil else { return }
+
+            let stack = JumpButtonStack(
+                isAtBottom: true,
+                unreadCount: 0,
+                mentionCount: 0,
+                reactionCount: 0,
+                onJumpToBottom: { [weak self] in self?.scrollToBottomTapped() },
+                onJumpToMention: { [weak self] in self?.onJumpToMention?() },
+                onJumpToReaction: { [weak self] in self?.onJumpToReaction?() }
+            )
+            let host = UIHostingController(rootView: stack)
+            host.view.translatesAutoresizingMaskIntoConstraints = false
+            host.view.backgroundColor = .clear
+            host.sizingOptions = .intrinsicContentSize
+
+            container.addSubview(host.view)
+            let bottomConstraint = host.view.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
+            NSLayoutConstraint.activate([
+                host.view.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+                bottomConstraint
+            ])
+            jumpBottomConstraint = bottomConstraint
+            jumpHostVC = host
+        }
+
+        func updateJumpButtons(isAtBottom: Bool, composerHeight: CGFloat,
+                               unreadCount: Int, mentionCount: Int, reactionCount: Int) {
+            guard let host = jumpHostVC else { return }
+            host.rootView = JumpButtonStack(
+                isAtBottom: isAtBottom,
+                unreadCount: unreadCount,
+                mentionCount: mentionCount,
+                reactionCount: reactionCount,
+                onJumpToBottom: { [weak self] in self?.scrollToBottomTapped() },
+                onJumpToMention: { [weak self] in self?.onJumpToMention?() },
+                onJumpToReaction: { [weak self] in self?.onJumpToReaction?() }
+            )
+            jumpBottomConstraint?.constant = -(composerHeight + 8)
+        }
+
+        private func scrollToBottomTapped() {
+            Haptics.selection()
+            guard let tv = table else { return }
+
+            // If there's an unread divider, scroll to it first
+            if parent.unreadCount > 0,
+               scrollTo(id: ChatUnreadDividerID, in: tv, animated: true) {
+                return
+            }
+
+            // Otherwise scroll to bottom
+            let target = CGPoint(x: 0, y: -tv.contentInset.top)
+            isProgrammaticScroll = true
+            UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseInOut) {
+                tv.contentOffset = target
+            } completion: { [weak self] _ in
+                self?.isProgrammaticScroll = false
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.isAtBottom = true
+                }
+            }
         }
 
         // Private cell reuse identifier. All rows use a single
@@ -700,13 +812,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
         /// "Bottom" visually = section 0, row 0 in the rotated table.
         func scrollToBottom(in tv: UITableView, animated: Bool) {
-            let snap = dataSource.snapshot()
-            guard let firstSection = snap.sectionIdentifiers.first else { return }
-            guard snap.numberOfItems(inSection: firstSection) > 0 else { return }
-            let indexPath = IndexPath(row: 0, section: 0)
-            // `.top` in rotated-table space maps to `.bottom` in
-            // visual space.
-            tv.scrollToRow(at: indexPath, at: .top, animated: animated)
+            // Rotated table: visual bottom (newest messages) is at
+            // contentOffset.y == -contentInset.top (adjustment behavior
+            // is .never, so adjustedContentInset may include unexpected
+            // safe-area additions).
+            let target = CGPoint(x: 0, y: -tv.contentInset.top)
+            tv.setContentOffset(target, animated: animated)
         }
 
         /// Returns true if the row was found and scrolled to.
@@ -748,18 +859,10 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 0 }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            // Rotation-aware "at bottom" detection — visually at the
-            // bottom means content-offset near 0 (section 0 row 0 is
-            // just above the viewport's top edge, which is the
-            // screen's bottom after rotation).
-            //
-            // Hysteresis: we only flip to "not at bottom" past 120
-            // and back to "at bottom" under 40. A single threshold
-            // toggled on every tiny bounce, which in turn re-rendered
-            // the whole ChatView mid-scroll and felt like a jerk.
-            // Normalize offset: with contentInset for composer overlay,
-            // the resting point is -contentInset.top, not 0. Adding
-            // contentInset.top makes thresholds (40/120) work unchanged.
+            // Skip isAtBottom updates during programmatic scroll to
+            // prevent re-render → contentInset change → offset reset.
+            guard !isProgrammaticScroll else { return }
+
             let offset = scrollView.contentOffset.y + scrollView.contentInset.top
             let current = parent.isAtBottom
             let next: Bool
