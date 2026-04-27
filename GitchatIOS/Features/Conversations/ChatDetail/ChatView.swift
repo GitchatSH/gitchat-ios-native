@@ -434,9 +434,14 @@ struct ChatView: View {
     @ViewBuilder
     private func groupedMessageRow(for messages: [Message]) -> some View {
         HStack(alignment: .bottom, spacing: 8) {
-            // Avatar column — 32pt spacer; the floating overlay handles
-            // the actual avatar with sticky scroll behavior.
-            Color.clear.frame(width: 32, height: 32)
+            // Avatar column — bottom-aligned with the group
+            AvatarView(
+                url: messages.first?.sender_avatar,
+                size: 32,
+                login: messages.first?.sender ?? ""
+            )
+            .frame(width: 32, height: 32)
+            .onTapGesture { actions.onAvatarTap(messages.first?.sender ?? "") }
 
             // Bubbles column
             VStack(alignment: .leading, spacing: 2) {
