@@ -47,17 +47,22 @@ struct MessageMenu<Preview: View>: View {
                         .opacity(appeared ? 1 : 0)
                         .position(x: geo.size.width / 2, y: layout.reactionsY)
 
-                    // Bubble preview at exact original position + width
-                    preview()
-                        .frame(width: layout.bubbleW)
-                        .scaleEffect(appeared ? 1.015 : 1)
-                        .animation(
-                            appeared
-                                ? .spring(response: 0.3, dampingFraction: 0.6).delay(0.1)
-                                : .spring(response: 0.28, dampingFraction: 0.85),
-                            value: appeared
-                        )
-                        .position(x: layout.bubbleCenterX, y: layout.bubbleCenterY)
+                    // Bubble preview — renders at natural width (same message = same size).
+                    // Positioned at original bubble's Y, aligned to sender side.
+                    HStack {
+                        if target.isMe { Spacer(minLength: 0) }
+                        preview()
+                        if !target.isMe { Spacer(minLength: 0) }
+                    }
+                    .padding(.horizontal, 8)
+                    .scaleEffect(appeared ? 1.015 : 1)
+                    .animation(
+                        appeared
+                            ? .spring(response: 0.3, dampingFraction: 0.6).delay(0.1)
+                            : .spring(response: 0.28, dampingFraction: 0.85),
+                        value: appeared
+                    )
+                    .position(x: geo.size.width / 2, y: layout.bubbleCenterY)
 
                     // Action dropdown
                     MessageMenuActionList(
@@ -105,9 +110,7 @@ struct MessageMenu<Preview: View>: View {
     // MARK: - Layout computation
 
     private struct Layout {
-        let bubbleCenterX: CGFloat
         let bubbleCenterY: CGFloat
-        let bubbleW: CGFloat
         let reactionsY: CGFloat
         let dropdownY: CGFloat
     }
@@ -120,9 +123,7 @@ struct MessageMenu<Preview: View>: View {
 
         // Convert source frame from window coords to geo-local coords
         let bubbleTop = source.minY - geoOrigin.minY
-        let bubbleCenterX = source.midX - geoOrigin.minX
         let bubbleH = source.height
-        let bubbleW = source.width
 
         let reactionsH = reactionsSize.height > 0 ? reactionsSize.height : 44
         let dropdownH = dropdownSize.height > 0 ? dropdownSize.height : 200
@@ -156,9 +157,7 @@ struct MessageMenu<Preview: View>: View {
         let dropdownY = adjustedBubbleTop + bubbleH + gap + dropdownH / 2
 
         return Layout(
-            bubbleCenterX: bubbleCenterX,
             bubbleCenterY: bubbleCenterY,
-            bubbleW: bubbleW,
             reactionsY: reactionsY,
             dropdownY: dropdownY
         )
