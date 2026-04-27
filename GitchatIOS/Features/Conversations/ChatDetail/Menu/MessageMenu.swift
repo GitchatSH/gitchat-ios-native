@@ -73,9 +73,7 @@ struct MessageMenu<Preview: View>: View {
                             x: layout.avatarX,
                             y: layout.avatarY
                         )
-                        .scaleEffect(appeared ? 1 : 0)
                         .opacity(appeared ? 1 : 0)
-                        .animation(.spring(response: 0.32, dampingFraction: 0.75), value: appeared)
                     }
 
                     // Action dropdown
