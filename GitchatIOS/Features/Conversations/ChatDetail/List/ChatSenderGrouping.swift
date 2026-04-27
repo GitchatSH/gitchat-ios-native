@@ -76,16 +76,14 @@ enum ChatSenderGrouping {
         _ avatar: inout String?
     ) {
         guard !run.isEmpty else { return }
-        if run.count == 1 {
-            result.append(.single(run[0]))
-        } else {
-            result.append(.group(MessageGroup(
-                id: "\(groupPrefix)\(run[0])",
-                messageIDs: run,
-                sender: sender ?? "unknown",
-                senderAvatar: avatar
-            )))
-        }
+        // Always wrap incoming messages as groups (even singles)
+        // so they use the consistent 2-column avatar layout.
+        result.append(.group(MessageGroup(
+            id: "\(groupPrefix)\(run[0])",
+            messageIDs: run,
+            sender: sender ?? "unknown",
+            senderAvatar: avatar
+        )))
         run = []
         sender = nil
         avatar = nil
