@@ -51,21 +51,6 @@ struct MessageMenu<Preview: View>: View {
                     HStack {
                         if target.isMe { Spacer(minLength: 0) }
                         preview()
-                            .overlay(alignment: .bottomLeading) {
-                                // Avatar 8px left of bubble, bottom-aligned
-                                if !target.isMe {
-                                    AvatarView(
-                                        url: target.message.sender_avatar
-                                            ?? "https://github.com/\(target.message.sender).png",
-                                        size: 32,
-                                        login: target.message.sender
-                                    )
-                                    .frame(width: 32, height: 32)
-                                    .offset(x: -40) // 32 avatar + 8 gap
-                                    .scaleEffect(appeared ? 1 : 0)
-                                    .opacity(appeared ? 1 : 0)
-                                }
-                            }
                         if !target.isMe { Spacer(minLength: 0) }
                     }
                     .padding(.horizontal, 8)
@@ -74,6 +59,24 @@ struct MessageMenu<Preview: View>: View {
                         y: appeared ? layout.adjustedBubbleCenterY : layout.originalBubbleCenterY
                     )
                     .animation(.spring(response: 0.32, dampingFraction: 0.75), value: appeared)
+
+                    // Avatar — bottom-left of bubble, 8px gap
+                    if !target.isMe {
+                        AvatarView(
+                            url: target.message.sender_avatar
+                                ?? "https://github.com/\(target.message.sender).png",
+                            size: 32,
+                            login: target.message.sender
+                        )
+                        .frame(width: 32, height: 32)
+                        .position(
+                            x: layout.avatarX,
+                            y: layout.avatarY
+                        )
+                        .scaleEffect(appeared ? 1 : 0)
+                        .opacity(appeared ? 1 : 0)
+                        .animation(.spring(response: 0.32, dampingFraction: 0.75), value: appeared)
+                    }
 
                     // Action dropdown
                     MessageMenuActionList(
@@ -121,10 +124,12 @@ struct MessageMenu<Preview: View>: View {
     // MARK: - Layout computation
 
     private struct Layout {
-        let originalBubbleCenterY: CGFloat // exact original position
-        let adjustedBubbleCenterY: CGFloat // after edge adjustments
+        let originalBubbleCenterY: CGFloat
+        let adjustedBubbleCenterY: CGFloat
         let reactionsY: CGFloat
         let dropdownY: CGFloat
+        let avatarX: CGFloat
+        let avatarY: CGFloat
     }
 
     private func computeLayout(in geo: GeometryProxy) -> Layout {
@@ -169,11 +174,18 @@ struct MessageMenu<Preview: View>: View {
         let reactionsY = adjustedBubbleTop - gap - reactionsH / 2
         let dropdownY = adjustedBubbleTop + bubbleH + gap + dropdownH / 2
 
+        // Avatar: bottom-left of bubble, 8px gap left
+        let bubbleLeft = source.minX - geoOrigin.minX
+        let avatarX = bubbleLeft - 8 - 16 // 8px gap + 16 (half avatar)
+        let avatarY = adjustedBubbleTop + bubbleH - 16 // bottom-aligned, center of 32pt avatar
+
         return Layout(
             originalBubbleCenterY: originalCenterY,
             adjustedBubbleCenterY: adjustedCenterY,
             reactionsY: reactionsY,
-            dropdownY: dropdownY
+            dropdownY: dropdownY,
+            avatarX: avatarX,
+            avatarY: avatarY
         )
     }
 
