@@ -777,6 +777,13 @@ struct ChatDetailView: View {
         socket.currentConversationId = vm.conversation.id
         ActiveConversationTracker.shared.id = vm.conversation.id
         await vm.load()
+        // After load, the composer has definitely measured by now.
+        // Force scroll to bottom so the latest message isn't hidden
+        // behind the composer (initial scroll may have fired before
+        // composerOverlayHeight was known).
+        if pendingJumpId == nil {
+            scrollToBottomToken &+= 1
+        }
         // After load completes, if there's a pending jump target
         // (from search result / deep link), load the page containing
         // it. This runs AFTER vm.load() so there's no race condition.
