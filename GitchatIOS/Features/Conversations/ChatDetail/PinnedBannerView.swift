@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Telegram-style pinned message banner: rounded pill with accent bar left,
-/// title + preview, unpin icon right. Floats below nav header.
+/// Telegram-style pinned message banner: rounded pill with multi-segment
+/// indicator left, title + preview, list icon right. Floats below nav header.
 struct PinnedBannerView: View {
     let pinnedMessages: [Message]
     let onTap: (Message) -> Void
@@ -11,16 +11,19 @@ struct PinnedBannerView: View {
     var body: some View {
         if let msg = pinnedMessages[safe: currentIndex] ?? pinnedMessages.first {
             HStack(spacing: 0) {
-                // Accent bar left
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(Color("AccentColor"))
-                    .frame(width: 3)
-                    .padding(.vertical, 8)
-                    .padding(.leading, 12)
+                // Indicator bar left
+                PinnedIndicatorBar(
+                    totalCount: pinnedMessages.count,
+                    currentIndex: currentIndex
+                )
+                .padding(.vertical, 8)
+                .padding(.leading, 12)
 
                 // Title + preview
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Pinned Message")
+                    Text(pinnedMessages.count > 1
+                         ? "Pinned Message #\(currentIndex + 1)"
+                         : "Pinned Message")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(Color("AccentColor"))
                     Text(msg.content)
@@ -33,14 +36,15 @@ struct PinnedBannerView: View {
                 .contentShape(Rectangle())
                 .onTapGesture {
                     if pinnedMessages.count > 1 {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            currentIndex = (currentIndex + 1) % pinnedMessages.count
+                        let nextIndex = (currentIndex + 1) % pinnedMessages.count
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                            currentIndex = nextIndex
                         }
                     }
                     onTap(msg)
                 }
 
-                // Unpin / list icon
+                // List icon
                 Button {
                     onShowList()
                 } label: {
@@ -55,6 +59,11 @@ struct PinnedBannerView: View {
             .modifier(GlassPill())
             .padding(.horizontal, 16)
             .padding(.vertical, 4)
+            .onChange(of: pinnedMessages.count) { newCount in
+                if currentIndex >= newCount {
+                    currentIndex = max(0, newCount - 1)
+                }
+            }
         }
     }
 }

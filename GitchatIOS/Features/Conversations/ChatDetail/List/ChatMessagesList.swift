@@ -398,6 +398,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         var lastUnreadCount: Int = 0
         var lastMyReadAt: String?
         var didInitialScroll = false
+        let avatarOverlay = AvatarOverlayManager()
         var initialScrollAt: Date?
         private var loadingMore = false
 
@@ -743,6 +744,87 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 let date = foundDate
                 DispatchQueue.main.async { cb?(date) }
             }
+
+            // Sticky avatar overlays for group conversations.
+            if parent.isGroup {
+                updateAvatarOverlays(tv: tv, visiblePaths: visiblePaths)
+            }
+        }
+
+        /// Build sender groups from visible cells and update avatar overlays.
+        private func updateAvatarOverlays(tv: UITableView, visiblePaths: [IndexPath]) {
+            guard let container = avatarOverlay.container else {
+                // Lazily set up container: use the table's superview
+                if let sup = tv.superview {
+                    let overlay = UIView(frame: sup.bounds)
+                    overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+                    overlay.isUserInteractionEnabled = false
+                    overlay.backgroundColor = .clear
+                    sup.addSubview(overlay)
+                    avatarOverlay.setContainer(overlay)
+                }
+                return
+            }
+
+            // Walk visible paths, group consecutive same-sender message rows.
+            // In rotated table: first indexPath = visual bottom (newest),
+            // last = visual top (oldest). We build groups in visual order.
+            var groups: [AvatarOverlayManager.SenderGroup] = []
+            var currentLogin: String?
+            var currentURL: String?
+            var currentTopY: CGFloat = 0
+            var currentBottomY: CGFloat = 0
+
+            for path in visiblePaths {
+                guard let id = dataSource.itemIdentifier(for: path) else { continue }
+                // Skip synthetic rows
+                if id == ChatTypingRowID || id == ChatSeenRowID
+                    || id == ChatUnreadDividerID || chatIsDateRow(id) { continue }
+                guard let msg = itemById[id] else { continue }
+                // Skip system messages
+                if let t = msg.type, t != "user" { continue }
+                // Skip outgoing messages (only incoming have avatars)
+                if parent.isMe(msg) { continue }
+
+                guard let cell = tv.cellForRow(at: path) else { continue }
+                let frame = tv.convert(cell.frame, to: container)
+
+                if msg.sender == currentLogin {
+                    // Extend current group
+                    currentTopY = min(currentTopY, frame.minY)
+                    currentBottomY = max(currentBottomY, frame.maxY)
+                } else {
+                    // Close previous group
+                    if let login = currentLogin {
+                        groups.append(.init(
+                            login: login,
+                            avatarURL: currentURL,
+                            topY: currentTopY,
+                            bottomY: currentBottomY
+                        ))
+                    }
+                    // Start new group
+                    currentLogin = msg.sender
+                    currentURL = msg.sender_avatar
+                        ?? "https://github.com/\(msg.sender).png?size=64"
+                    currentTopY = frame.minY
+                    currentBottomY = frame.maxY
+                }
+            }
+            // Close last group
+            if let login = currentLogin {
+                groups.append(.init(
+                    login: login,
+                    avatarURL: currentURL,
+                    topY: currentTopY,
+                    bottomY: currentBottomY
+                ))
+            }
+
+            avatarOverlay.update(
+                groups: groups,
+                composerInset: parent.composerOverlayHeight
+            )
         }
 
         private func fireLoadMore() {

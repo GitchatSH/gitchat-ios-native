@@ -51,6 +51,7 @@
 		4BC3E5401B7248FA52B0CB26 /* AppsFlyerLib in Frameworks */ = {isa = PBXBuildFile; productRef = BC2B90ECA96F101778114ECA /* AppsFlyerLib */; };
 		4F15046CCB7A9CA0952031AB /* AnalyticsTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9946C8E877CD39F30375750D /* AnalyticsTracker.swift */; };
 		4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */; };
+		E1A2B3C4D5E6F7089012AB34 /* PinnedIndicatorBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F607891234AB56 /* PinnedIndicatorBar.swift */; };
 		64664A90303E8CD63AD1E838 /* PinnedBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810F757BBC3E0891110E0B95 /* PinnedBannerView.swift */; };
 		513BD4079D585EAFD82684E7 /* ChatClipboardChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F559E3CB229DF8F4F6CA5C9 /* ChatClipboardChip.swift */; };
 		531DEE508D58C8A62DB94393 /* FacebookCore in Frameworks */ = {isa = PBXBuildFile; productRef = 47DE335175F71C2369260202 /* FacebookCore */; };
@@ -110,6 +111,7 @@
 		AC3DF2D2EBA66464D53D71CC /* GitHubWebOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE9078C15E5B9CC4441DCE26 /* GitHubWebOAuth.swift */; };
 		AECA351FBDBD09565E295CA7 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1AC72B0B806B50EB64E82E8 /* Config.swift */; };
 		AF15E9E4378F8ABF7A0478E4 /* ChatMessagesList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA9859CC82C63F864B8F8D8 /* ChatMessagesList.swift */; };
+		B2C3D4E5F6071234ABCD5678 /* AvatarOverlayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F607891234ABCDEF01 /* AvatarOverlayManager.swift */; };
 		B089CE1EDCE2E0EB3376D18E /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED882894AD818DBFB0421E96 /* APIClient.swift */; };
 		B0B18C5496F44AAAD9F81491 /* Mantis in Frameworks */ = {isa = PBXBuildFile; productRef = A5170A9760C8770AB86AE021 /* Mantis */; };
 		B1B30DC0148E5897B1F64CE0 /* MacBottomNav.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE8E6059D989F62927E22A1A /* MacBottomNav.swift */; };
@@ -223,6 +225,7 @@
 		1783963F200334C12032F6C9 /* MessageMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageMenu.swift; sourceTree = "<group>"; };
 		1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MembersSheet.swift; sourceTree = "<group>"; };
 		1AA9859CC82C63F864B8F8D8 /* ChatMessagesList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessagesList.swift; sourceTree = "<group>"; };
+		C3D4E5F607891234ABCDEF01 /* AvatarOverlayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarOverlayManager.swift; sourceTree = "<group>"; };
 		1DB962F04AC5A1A18B09A85E /* MessageMenuTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageMenuTarget.swift; sourceTree = "<group>"; };
 		1FF77661873F7ECBA61F6EEC /* ShareRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareRootView.swift; sourceTree = "<group>"; };
 		242AC390D468D5CCF42A810D /* JumpToBottomButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JumpToBottomButton.swift; sourceTree = "<group>"; };
@@ -308,6 +311,7 @@
 		C2B26B063AB6FD5899CF40E0 /* GroupManagementSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupManagementSheets.swift; sourceTree = "<group>"; };
 		C300A84467231D3D6475F5E0 /* Geist-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Bold.ttf"; sourceTree = "<group>"; };
 		C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedMessagesSheet.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F607891234AB56 /* PinnedIndicatorBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedIndicatorBar.swift; sourceTree = "<group>"; };
 		810F757BBC3E0891110E0B95 /* PinnedBannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedBannerView.swift; sourceTree = "<group>"; };
 		C3B238A579BDAC391159C493 /* GitchatShareExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = GitchatShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C3B4E0D7FC5BEBE8BD771C03 /* DesktopReturnToSend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopReturnToSend.swift; sourceTree = "<group>"; };
@@ -674,6 +678,7 @@
 		B6FAC07F558C3475A661DFAB /* List */ = {
 			isa = PBXGroup;
 			children = (
+				C3D4E5F607891234ABCDEF01 /* AvatarOverlayManager.swift */,
 				1AA9859CC82C63F864B8F8D8 /* ChatMessagesList.swift */,
 				627F4895536B968BBC4A02DD /* ChatSectioning.swift */,
 			);
@@ -751,6 +756,7 @@
 				59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */,
 				781AD42CB2F6BD7F8C084678 /* MessageSearchSheet.swift */,
 				810F757BBC3E0891110E0B95 /* PinnedBannerView.swift */,
+				A1B2C3D4E5F607891234AB56 /* PinnedIndicatorBar.swift */,
 				C31727F6BC2344EA5D9005D3 /* PinnedMessagesSheet.swift */,
 				2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */,
 				A066E307A07B247124125B04 /* Routes.swift */,
@@ -1036,6 +1042,7 @@
 				B8FDA609D8161EA4A77671E1 /* ChatMessageText.swift in Sources */,
 				AA1BB5SHAPE0001BUILDFILE1 /* BubbleShape.swift in Sources */,
 				FFC12D56CF9CA8BFAE363A20 /* ChatMessageView.swift in Sources */,
+				B2C3D4E5F6071234ABCD5678 /* AvatarOverlayManager.swift in Sources */,
 				AF15E9E4378F8ABF7A0478E4 /* ChatMessagesList.swift in Sources */,
 				BEE4C46D98A25FE9C189B31A /* ChatReactionsRow.swift in Sources */,
 				9DA10C8E16781CD5DA07629B /* ChatReplyEditBar.swift in Sources */,
@@ -1105,6 +1112,7 @@
 				3A9789932CCFBFDA26FCA4CB /* PasteableUITextView.swift in Sources */,
 				EC901521FFF8953EEB00DC9B /* PeekHostWindow.swift in Sources */,
 				64664A90303E8CD63AD1E838 /* PinnedBannerView.swift in Sources */,
+				E1A2B3C4D5E6F7089012AB34 /* PinnedIndicatorBar.swift in Sources */,
 				4FB18A5937E48A0AF3923739 /* PinnedMessagesSheet.swift in Sources */,
 				A7396B793DDA8316A187E165 /* PresenceStore.swift in Sources */,
 				2A4E2644658850573AD267CD /* ProfileView.swift in Sources */,
