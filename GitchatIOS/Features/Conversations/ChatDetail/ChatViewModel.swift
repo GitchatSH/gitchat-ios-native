@@ -445,7 +445,9 @@ final class ChatViewModel: ObservableObject {
             pinned_at: c.pinned_at,
             is_request: c.is_request,
             updated_at: c.updated_at,
-            is_muted: c.is_muted
+            is_muted: c.is_muted,
+            has_mention: c.has_mention,
+            has_reaction: c.has_reaction
         )
     }
 
@@ -769,4 +771,5 @@ final class ChatViewModel: ObservableObject {
             return (jpeg, filename, "image/jpeg")
         }.value
     }
+
 }

@@ -225,9 +225,8 @@ struct ChatView: View {
         .onChange(of: isAtBottom) { atBottom in
             if atBottom {
                 newWhileScrolledUp = 0
-                newMentionsWhileScrolledUp = 0
-                pendingMentionIds.removeAll()
-                pendingReactionIds.removeAll()
+                // Only clear mention/reaction when user manually scrolls to bottom,
+                // not on initial load. They persist until user taps through them.
             }
         }
         // Track new messages arriving while scrolled up.
@@ -354,15 +353,14 @@ struct ChatView: View {
                 jumpMentionCount: pendingMentionIds.count,
                 jumpReactionCount: pendingReactionIds.count,
                 onJumpToMention: {
-                    guard !pendingMentionIds.isEmpty else { return }
+                    guard !pendingMentionIds.isEmpty else { return nil }
                     let id = pendingMentionIds.removeFirst()
-                    pendingJumpId = id
                     newMentionsWhileScrolledUp = max(0, newMentionsWhileScrolledUp - 1)
+                    return id
                 },
                 onJumpToReaction: {
-                    guard !pendingReactionIds.isEmpty else { return }
-                    let id = pendingReactionIds.removeFirst()
-                    pendingJumpId = id
+                    guard !pendingReactionIds.isEmpty else { return nil }
+                    return pendingReactionIds.removeFirst()
                 },
                 isAtBottom: $isAtBottom,
                 onScrollToIdConsumed: { pendingJumpId = nil },

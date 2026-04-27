@@ -84,8 +84,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     let composerHeight: CGFloat
     let jumpMentionCount: Int
     let jumpReactionCount: Int
-    var onJumpToMention: (() -> Void)? = nil
-    var onJumpToReaction: (() -> Void)? = nil
+    var onJumpToMention: (() -> String?)? = nil
+    var onJumpToReaction: (() -> String?)? = nil
     @Binding var isAtBottom: Bool
     let onScrollToIdConsumed: () -> Void
     let onTopReached: () -> Void
@@ -228,8 +228,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         if let superview = tv.superview, coord.jumpHostVC == nil {
             coord.setupJumpButtons(in: superview)
         }
-        coord.onJumpToMention = onJumpToMention
-        coord.onJumpToReaction = onJumpToReaction
+        coord.consumeMention = onJumpToMention
+        coord.consumeReaction = onJumpToReaction
         coord.updateJumpButtons(
             isAtBottom: isAtBottom,
             composerHeight: composerHeight,
@@ -460,15 +460,14 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         private weak var suspendedNavPopGR: UIGestureRecognizer?
 
         // MARK: Jump button (UIHostingController-hosted JumpButtonStack)
-        private var jumpHostVC: UIHostingController<JumpButtonStack>?
+        fileprivate var jumpHostVC: UIHostingController<JumpButtonStack>?
         private var jumpBottomConstraint: NSLayoutConstraint?
         var isProgrammaticScroll = false
 
-        /// Callbacks wired from ChatView via parent. These update state
-        /// (remove from pending list) and set pendingJumpId which triggers
-        /// scrollTo in updateUIView.
-        var onJumpToMention: (() -> Void)?
-        var onJumpToReaction: (() -> Void)?
+        /// Callbacks that consume the next pending ID and return it.
+        /// Coordinator scrolls directly to the returned ID.
+        var consumeMention: (() -> String?)?
+        var consumeReaction: (() -> String?)?
 
         init(parent: ChatMessagesList) {
             self.parent = parent
@@ -483,8 +482,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 mentionCount: 0,
                 reactionCount: 0,
                 onJumpToBottom: { [weak self] in self?.scrollToBottomTapped() },
-                onJumpToMention: { [weak self] in self?.onJumpToMention?() },
-                onJumpToReaction: { [weak self] in self?.onJumpToReaction?() }
+                onJumpToMention: { [weak self] in self?.mentionTapped() },
+                onJumpToReaction: { [weak self] in self?.reactionTapped() }
             )
             let host = UIHostingController(rootView: stack)
             host.view.translatesAutoresizingMaskIntoConstraints = false
@@ -510,8 +509,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 mentionCount: mentionCount,
                 reactionCount: reactionCount,
                 onJumpToBottom: { [weak self] in self?.scrollToBottomTapped() },
-                onJumpToMention: { [weak self] in self?.onJumpToMention?() },
-                onJumpToReaction: { [weak self] in self?.onJumpToReaction?() }
+                onJumpToMention: { [weak self] in self?.mentionTapped() },
+                onJumpToReaction: { [weak self] in self?.reactionTapped() }
             )
             jumpBottomConstraint?.constant = -(composerHeight + 8)
         }
@@ -528,6 +527,22 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
             // Otherwise scroll to bottom
             let target = CGPoint(x: 0, y: -tv.contentInset.top)
+            scrollToOffset(target, in: tv)
+        }
+
+        private func mentionTapped() {
+            Haptics.selection()
+            guard let tv = table, let id = consumeMention?() else { return }
+            _ = scrollTo(id: id, in: tv, animated: true)
+        }
+
+        private func reactionTapped() {
+            Haptics.selection()
+            guard let tv = table, let id = consumeReaction?() else { return }
+            _ = scrollTo(id: id, in: tv, animated: true)
+        }
+
+        private func scrollToOffset(_ target: CGPoint, in tv: UITableView) {
             isProgrammaticScroll = true
             UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseInOut) {
                 tv.contentOffset = target

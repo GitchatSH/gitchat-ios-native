@@ -76,7 +76,9 @@ final class ConversationsViewModel: ObservableObject {
             pinned_at: c.pinned_at,
             is_request: c.is_request,
             updated_at: c.updated_at,
-            is_muted: c.is_muted
+            is_muted: c.is_muted,
+            has_mention: c.has_mention,
+            has_reaction: c.has_reaction
         )
         ConversationsCache.shared.store(conversations)
     }
@@ -268,6 +270,7 @@ final class ConversationsViewModel: ObservableObject {
             ToastCenter.shared.show(.error, "Couldn't delete", error.localizedDescription)
         }
     }
+
 }
 
 struct ConversationsListView: View {
@@ -979,13 +982,21 @@ struct ConversationRow: View {
     }
 
     private var hasMention: Bool {
-        guard displayedUnread > 0,
-              conversation.isGroup,
+        guard displayedUnread > 0 else { return false }
+        // Use BE flag if available
+        if conversation.hasMentionFromBE { return true }
+        // Fallback: check last message content
+        guard conversation.isGroup,
               let content = conversation.last_message?.content,
               !content.isEmpty,
               let login = AuthStore.shared.login else { return false }
         let pattern = "(?<![\\w])@\(NSRegularExpression.escapedPattern(for: login))(?![\\w])"
         return content.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private var hasReaction: Bool {
+        guard displayedUnread > 0 else { return false }
+        return conversation.hasReactionFromBE
     }
 
     private var checkmarkState: CheckmarkState {
@@ -1183,6 +1194,14 @@ struct ConversationRow: View {
                         .foregroundStyle(.white)
                         .transition(.scale.combined(with: .opacity))
                 }
+                if hasReaction {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 10))
+                        .frame(width: mentionBadgeSize, height: mentionBadgeSize)
+                        .background(Color("AccentColor"), in: Circle())
+                        .foregroundStyle(.white)
+                        .transition(.scale.combined(with: .opacity))
+                }
                 Text(displayedUnread > 99 ? "99+" : "\(displayedUnread)")
                     .font(.footnote.bold())
                     .padding(.horizontal, 8).padding(.vertical, 2)
@@ -1217,6 +1236,7 @@ struct ConversationRow: View {
         }
         .animation(.spring(response: 0.3), value: displayedUnread)
         .animation(.spring(response: 0.3), value: hasMention)
+        .animation(.spring(response: 0.3), value: hasReaction)
     }
 
     @ViewBuilder

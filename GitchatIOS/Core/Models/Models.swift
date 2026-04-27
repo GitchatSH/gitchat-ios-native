@@ -46,8 +46,12 @@ struct Conversation: Codable, Identifiable, Hashable {
     let is_request: Bool?
     let updated_at: String?
     let is_muted: Bool?
+    let has_mention: Bool?
+    let has_reaction: Bool?
 
     var isGroup: Bool { is_group == true || type == "group" || type == "community" || type == "team" }
+    var hasMentionFromBE: Bool { has_mention == true }
+    var hasReactionFromBE: Bool { has_reaction == true }
 
     var participantsOrEmpty: [ConversationParticipant] { participants ?? [] }
     var unreadCount: Int { unread_count ?? 0 }
@@ -95,7 +99,9 @@ struct Conversation: Codable, Identifiable, Hashable {
             pinned_at: pinned_at,
             is_request: is_request,
             updated_at: updated_at,
-            is_muted: is_muted
+            is_muted: is_muted,
+            has_mention: has_mention,
+            has_reaction: has_reaction
         )
     }
 }
