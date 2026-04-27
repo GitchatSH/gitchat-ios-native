@@ -59,21 +59,24 @@ struct MessageMenu<Preview: View>: View {
         let screenW = geo.size.width
         let screenH = geo.size.height
         let source = target.sourceFrame
-        let bubbleMaxWidth = min(screenW - 40, max(source.width, 260))
+        // source.width may include avatar col + spacers — use 70% screen as max
+        let bubbleMaxWidth = min(screenW * 0.7, max(source.width, 260))
 
-        // Keep the VStack centered on the bubble's original midY,
-        // but clamp so all elements fit on screen.
-        let safeTop = geo.safeAreaInsets.top
-        let safeBottom = geo.safeAreaInsets.bottom
-        let minY = screenH * 0.15
-        let maxY = screenH * 0.75
-        // sourceFrame is in window coords; geo origin may be offset by safeArea.
-        // Convert source.midY to geo-local by subtracting geo's global origin.
+        // Convert source.midY from window coords to geo-local coords.
         let geoOriginY = geo.frame(in: .global).minY
         let localMidY = source.midY - geoOriginY
 
+        // Position the VStack so the BUBBLE (middle element) lands near
+        // the original Y. Reactions bar (~44pt + 12pt spacing) sits above,
+        // so shift the VStack center DOWN by ~half the reactions height
+        // to compensate.
+        let reactionsOffset: CGFloat = 28 // ~(44 + 12) / 2
+        let targetY = localMidY + reactionsOffset
+        let minY = screenH * 0.2
+        let maxY = screenH * 0.8
+
         let clampedY = appeared
-            ? max(minY, min(localMidY, maxY))
+            ? max(minY, min(targetY, maxY))
             : localMidY
 
         VStack(spacing: 12) {
