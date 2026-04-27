@@ -47,22 +47,25 @@ struct MessageMenu<Preview: View>: View {
                         .opacity(appeared ? 1 : 0)
                         .position(x: geo.size.width / 2, y: layout.reactionsY)
 
-                    // Bubble preview — starts at original position, animates
-                    // to adjusted position if edges need accommodation.
-                    HStack(alignment: .bottom, spacing: 8) {
+                    // Bubble preview — stays at exact original position.
+                    HStack {
                         if target.isMe { Spacer(minLength: 0) }
-                        if !target.isMe {
-                            AvatarView(
-                                url: target.message.sender_avatar
-                                    ?? "https://github.com/\(target.message.sender).png",
-                                size: 32,
-                                login: target.message.sender
-                            )
-                            .frame(width: 32, height: 32)
-                            .scaleEffect(appeared ? 1 : 0)
-                            .opacity(appeared ? 1 : 0)
-                        }
                         preview()
+                            .overlay(alignment: .bottomLeading) {
+                                // Avatar 8px left of bubble, bottom-aligned
+                                if !target.isMe {
+                                    AvatarView(
+                                        url: target.message.sender_avatar
+                                            ?? "https://github.com/\(target.message.sender).png",
+                                        size: 32,
+                                        login: target.message.sender
+                                    )
+                                    .frame(width: 32, height: 32)
+                                    .offset(x: -40) // 32 avatar + 8 gap
+                                    .scaleEffect(appeared ? 1 : 0)
+                                    .opacity(appeared ? 1 : 0)
+                                }
+                            }
                         if !target.isMe { Spacer(minLength: 0) }
                     }
                     .padding(.horizontal, 8)
