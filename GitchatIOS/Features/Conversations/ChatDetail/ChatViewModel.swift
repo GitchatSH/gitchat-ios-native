@@ -535,7 +535,7 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Attachments
 
-    func uploadAndSendMany(items: [(Data, String, String)], senderLogin: String?) async {
+    func uploadAndSendMany(items: [(Data, String, String)], senderLogin: String?, caption: String = "") async {
         guard !items.isEmpty else { return }
         var compressed: [(Data, String, String)] = []
         compressed.reserveCapacity(items.count)
@@ -544,7 +544,7 @@ final class ChatViewModel: ObservableObject {
                 await Self.compressIfImageOffMain(data: item.0, filename: item.1, mimeType: item.2)
             )
         }
-        await sendEncodedAttachments(compressed, senderLogin: senderLogin)
+        await sendEncodedAttachments(compressed, senderLogin: senderLogin, caption: caption)
     }
 
     /// UIImage entry point for drop/paste/picker flows. Encodes each image
@@ -552,7 +552,7 @@ final class ChatViewModel: ObservableObject {
     /// pipeline. Avoids the previous pattern where the caller would
     /// `jpegData(...)` on MainActor and `uploadAndSendMany` would then
     /// decode + re-encode via `compressIfImage`.
-    func uploadImagesAndSend(images: [UIImage], senderLogin: String?) async {
+    func uploadImagesAndSend(images: [UIImage], senderLogin: String?, caption: String = "") async {
         guard !images.isEmpty else { return }
         var encoded: [(Data, String, String)] = []
         encoded.reserveCapacity(images.count)
@@ -561,12 +561,13 @@ final class ChatViewModel: ObservableObject {
                 encoded.append(tuple)
             }
         }
-        await sendEncodedAttachments(encoded, senderLogin: senderLogin)
+        await sendEncodedAttachments(encoded, senderLogin: senderLogin, caption: caption)
     }
 
     private func sendEncodedAttachments(
         _ encoded: [(Data, String, String)],
-        senderLogin: String?
+        senderLogin: String?,
+        caption: String = ""
     ) async {
         guard !encoded.isEmpty else { return }
         AnalyticsTracker.trackMessageSent(
@@ -593,7 +594,7 @@ final class ChatViewModel: ObservableObject {
             conversation_id: conversation.id,
             sender: senderLogin ?? "me",
             sender_avatar: nil,
-            content: "",
+            content: caption,
             created_at: ISO8601DateFormatter().string(from: Date()),
             edited_at: nil,
             reactions: nil,
@@ -624,7 +625,7 @@ final class ChatViewModel: ObservableObject {
             }
             let msg = try await APIClient.shared.sendMessage(
                 conversationId: conversation.id,
-                body: "",
+                body: caption,
                 attachmentURLs: urls
             )
             // Honor the seenIds dedupe contract that the WebSocket

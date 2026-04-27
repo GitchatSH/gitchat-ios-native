@@ -317,48 +317,19 @@ struct ChatMessageView: View {
 
     @ViewBuilder
     private var textAndAttachmentBubble: some View {
-        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
-            // Attachments — grid (iMessage-style 1/2/3/4+).
-            if let atts = message.attachments, !atts.isEmpty {
-                ChatAttachmentsGrid(
-                    attachments: atts,
-                    maxWidth: 260,
-                    isUploading: message.id.hasPrefix("local-"),
-                    onTap: { url in onAttachmentTap?(url) },
-                    matchedNamespace: imageMatchedNS,
-                    activePreviewURL: activeImagePreviewURL
-                )
+        if isAttachmentOnly {
+            // Attachment-only: no text bubble, timestamp overlays the image
+            attachmentContent
                 .overlay(alignment: .bottomTrailing) {
-                    if isAttachmentOnly {
-                        imageTimestampMeta
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.4), in: Capsule())
-                            .padding(6)
-                    }
+                    imageTimestampMeta
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.black.opacity(0.4), in: Capsule())
+                        .padding(6)
                 }
-            } else if let s = message.attachment_url,
-                      let url = URL(string: s) {
-                legacySingleAttachment(url: url, urlString: s)
-                    .overlay(alignment: .bottomTrailing) {
-                        if isAttachmentOnly {
-                            imageTimestampMeta
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.black.opacity(0.4), in: Capsule())
-                                .padding(6)
-                        }
-                    }
-            }
-
-            // Text body. Render the bubble when there's text OR
-            // when this is a reply (the inline quote lives inside
-            // the bubble as part of its content, not as a separate
-            // pre-bubble element).
-            if !message.content.isEmpty ||
-                (message.reply != nil && !hideReplyPreview) {
-                textBubble
-            }
+        } else {
+            // Has text (possibly with attachment): everything in one bubble
+            textBubble
         }
     }
 
@@ -419,6 +390,57 @@ struct ChatMessageView: View {
         .onTapGesture { onAttachmentTap?(urlString) }
     }
 
+    /// Attachment content with its own clip (for standalone use).
+    @ViewBuilder
+    private var attachmentContent: some View {
+        if let atts = message.attachments, !atts.isEmpty {
+            ChatAttachmentsGrid(
+                attachments: atts,
+                maxWidth: 260,
+                isUploading: message.id.hasPrefix("local-"),
+                onTap: { url in onAttachmentTap?(url) },
+                matchedNamespace: imageMatchedNS,
+                activePreviewURL: activeImagePreviewURL
+            )
+        } else if let s = message.attachment_url,
+                  let url = URL(string: s) {
+            legacySingleAttachment(url: url, urlString: s)
+        }
+    }
+
+    /// Attachment content WITHOUT clip — used inside a bubble so the
+    /// bubble's own clipShape handles corners seamlessly.
+    @ViewBuilder
+    private var attachmentContentUnclipped: some View {
+        if let atts = message.attachments, !atts.isEmpty {
+            ChatAttachmentsGrid(
+                attachments: atts,
+                maxWidth: 260,
+                isUploading: message.id.hasPrefix("local-"),
+                onTap: { url in onAttachmentTap?(url) },
+                matchedNamespace: imageMatchedNS,
+                activePreviewURL: activeImagePreviewURL,
+                applyClip: false
+            )
+        } else if let s = message.attachment_url,
+                  let url = URL(string: s) {
+            CachedAsyncImage(
+                url: url,
+                contentMode: .fit,
+                placeholder: .filled,
+                fitMaxWidth: 260,
+                fitMaxHeight: 220
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { onAttachmentTap?(s) }
+        }
+    }
+
+    private var hasAttachment: Bool {
+        (message.attachments != nil && !message.attachments!.isEmpty)
+            || message.attachment_url != nil
+    }
+
     @ViewBuilder
     private var textBubble: some View {
         let parsed = ChatMessageText.parseForwarded(message.content)
@@ -429,6 +451,10 @@ struct ChatMessageView: View {
         let hasReactions = message.reactions?.isEmpty == false
         let showSenderName = showHeader && !isMe && isGroup
         let bubble = VStack(alignment: .leading, spacing: 0) {
+            // Attachment inside bubble (when there's also text)
+            if hasAttachment {
+                attachmentContentUnclipped
+            }
             if showSenderName {
                 Text(message.sender)
                     .font(.footnote.weight(.semibold))
