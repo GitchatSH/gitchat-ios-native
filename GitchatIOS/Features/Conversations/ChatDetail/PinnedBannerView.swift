@@ -37,7 +37,7 @@ struct PinnedBannerView: View {
                 .onTapGesture {
                     if pinnedMessages.count > 1 {
                         let nextIndex = (currentIndex + 1) % pinnedMessages.count
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             currentIndex = nextIndex
                         }
                     }

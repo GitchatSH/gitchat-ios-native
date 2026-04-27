@@ -10,9 +10,9 @@ struct PinnedIndicatorBar: View {
     let totalCount: Int
     let currentIndex: Int
 
-    private let barWidth: CGFloat = 3
+    private let barWidth: CGFloat = 2
     private let segmentGap: CGFloat = 2
-    private let cornerRadius: CGFloat = 1.5
+    private let cornerRadius: CGFloat = 1
 
     /// How many visual segments to render (capped at 3).
     private var segmentCount: Int {
@@ -43,7 +43,7 @@ struct PinnedIndicatorBar: View {
                         .frame(width: barWidth)
                 }
             }
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: activeSegment)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: activeSegment)
         }
     }
 }

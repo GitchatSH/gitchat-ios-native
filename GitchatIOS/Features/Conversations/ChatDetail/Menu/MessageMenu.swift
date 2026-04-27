@@ -121,7 +121,7 @@ struct MessageMenu<Preview: View>: View {
             if !target.isMe { Spacer(minLength: 0) }
         }
         .padding(.horizontal, 20)
-        .scaleEffect(appeared ? 1.02 : 1)
+        .scaleEffect(appeared ? 1.015 : 1)
         .animation(
             appeared
                 ? .spring(response: 0.3, dampingFraction: 0.6).delay(0.1)
