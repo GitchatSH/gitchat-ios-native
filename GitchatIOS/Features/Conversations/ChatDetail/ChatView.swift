@@ -433,17 +433,36 @@ struct ChatView: View {
 
     @ViewBuilder
     private func groupedMessageRow(for messages: [Message]) -> some View {
+        let avatarURL = resolveAvatar(messages[0])
+            ?? messages[0].sender_avatar
+            ?? "https://github.com/\(messages[0].sender).png"
+        let avatarLogin = messages[0].sender
+        let composerH = composerOverlayHeight
+
         HStack(alignment: .bottom, spacing: 8) {
-            // Avatar column — bottom-aligned with the group
-            AvatarView(
-                url: resolveAvatar(messages[0])
-                    ?? messages[0].sender_avatar
-                    ?? "https://github.com/\(messages[0].sender).png",
-                size: 32,
-                login: messages[0].sender
-            )
-            .frame(width: 32, height: 32)
-            .onTapGesture { actions.onAvatarTap(messages.first?.sender ?? "") }
+            // Avatar column — sticky: floats to viewport bottom,
+            // clamped within column bounds.
+            GeometryReader { geo in
+                let columnFrame = geo.frame(in: .global)
+                let screenH = UIScreen.main.bounds.height
+                let safeBottom = geo.safeAreaInsets.bottom
+                let viewportBottom = screenH - safeBottom - composerH
+
+                // How far the column bottom extends past the viewport bottom
+                let excess = max(0, columnFrame.maxY - viewportBottom)
+                // Don't push avatar above the column top
+                let maxOffset = max(0, columnFrame.height - 32)
+                let offset = min(excess, maxOffset)
+
+                VStack {
+                    Spacer()
+                    AvatarView(url: avatarURL, size: 32, login: avatarLogin)
+                        .frame(width: 32, height: 32)
+                        .onTapGesture { actions.onAvatarTap(avatarLogin) }
+                }
+                .offset(y: -offset)
+            }
+            .frame(width: 32)
 
             // Bubbles column
             VStack(alignment: .leading, spacing: 2) {
