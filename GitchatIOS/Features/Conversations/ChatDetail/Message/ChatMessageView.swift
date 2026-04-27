@@ -221,7 +221,6 @@ struct ChatMessageView: View {
             }
         }
         .fixedSize()
-        .padding(.trailing, 12)
     }
 
     /// Timestamp for image-only messages — always white on dark overlay.
@@ -521,7 +520,8 @@ struct ChatMessageView: View {
                         timestampMeta
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.top, 8)
+                    .padding(.bottom, 12)
                 } else {
                     // Long message: text with reserved bottom space for overlay timestamp
                     Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
@@ -534,7 +534,7 @@ struct ChatMessageView: View {
                         .textSelection(.enabled)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .padding(.bottom, hasReactions ? 4 : 20)
+                        .padding(.bottom, hasReactions ? 4 : 24)
                 }
             }
             if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
@@ -564,7 +564,8 @@ struct ChatMessageView: View {
             // short messages have it inline in the HStack.
             if !isShortText {
                 timestampMeta
-                    .padding(.bottom, 4)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 12)
             }
         }
         .background(isMe ? theme.bubbleOutgoing : theme.bubbleIncoming)
