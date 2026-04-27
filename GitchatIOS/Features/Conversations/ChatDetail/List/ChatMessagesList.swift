@@ -1057,32 +1057,32 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
             if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { return }
             if chatIsDateRow(id) { return }
-            // Grouped cell: determine which bubble was tapped by Y position.
+            // Grouped cell: determine which bubble was tapped using
+            // touch Y in window coordinates.
             if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
                 guard let messageIDs = groupById[id], !messageIDs.isEmpty else { return }
-                // Convert touch point to cell-local coords
-                let localPoint = tv.convert(point, to: cell)
-                // Each bubble occupies roughly equal height in the cell.
-                // The cell content is rotated 180°, so top in cell = bottom visually.
-                let cellH = cell.bounds.height
+                // Touch point in window (visual) coordinates
+                let touchInWindow = tv.convert(point, to: nil)
+                // Cell visual frame in window coordinates
+                let cellFrameInWindow = cell.convert(cell.bounds, to: nil)
+                let cellH = cellFrameInWindow.height
                 let count = messageIDs.count
-                // In rotated cell: visual bottom = cell Y=0, visual top = cell Y=cellH.
-                // Messages are ordered oldest-first in messageIDs.
-                // Visual layout (after rotation): newest at bottom, oldest at top.
-                // localPoint.y near 0 = visual bottom = newest message.
-                // localPoint.y near cellH = visual top = oldest message.
-                let ratio = localPoint.y / max(cellH, 1)
-                let idx = min(Int(ratio * CGFloat(count)), count - 1)
-                // ratio 0 → newest (last in array), ratio 1 → oldest (first in array)
-                let reversedIdx = max(0, count - 1 - idx)
-                let targetId = messageIDs[reversedIdx]
+                // Messages ordered oldest-first. Visually: oldest at top, newest at bottom.
+                let relY = touchInWindow.y - cellFrameInWindow.minY
+                let ratio = relY / max(cellH, 1)
+                let idx = max(0, min(Int(ratio * CGFloat(count)), count - 1))
+                let targetId = messageIDs[idx]
                 guard let msg = itemById[targetId] else { return }
                 if haptic { Haptics.impact(.medium) }
-                // Approximate the tapped bubble's frame (portion of cell)
+                // Build approximate bubble frame in window coords
                 let bubbleH = cellH / CGFloat(count)
-                let bubbleY = CGFloat(idx) * bubbleH
-                let bubbleFrame = CGRect(x: cell.bounds.minX, y: bubbleY, width: cell.bounds.width, height: bubbleH)
-                let frame = cell.convert(bubbleFrame, to: nil)
+                let bubbleMinY = cellFrameInWindow.minY + CGFloat(idx) * bubbleH
+                let frame = CGRect(
+                    x: cellFrameInWindow.minX,
+                    y: bubbleMinY,
+                    width: cellFrameInWindow.width,
+                    height: bubbleH
+                )
                 parent.onCellLongPressed(msg, frame)
                 return
             }
