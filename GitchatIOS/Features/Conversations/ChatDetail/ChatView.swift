@@ -137,7 +137,7 @@ struct ChatView: View {
                             startPoint: .top,
                             endPoint: .bottom
                         )
-                        .frame(height: composerOverlayHeight + 20)
+                        .frame(height: composerOverlayHeight * 0.5)
                     }
                 }
 
@@ -150,8 +150,8 @@ struct ChatView: View {
                 .background {
                     LinearGradient(
                         colors: [
-                            Color("ChatBackground"),
-                            Color("ChatBackground").opacity(0)
+                            Color(.systemBackground),
+                            Color(.systemBackground).opacity(0)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -179,8 +179,8 @@ struct ChatView: View {
                         .background {
                             LinearGradient(
                                 colors: [
-                                    Color("ChatBackground").opacity(0),
-                                    Color("ChatBackground")
+                                    Color(.systemBackground).opacity(0),
+                                    Color(.systemBackground)
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom
