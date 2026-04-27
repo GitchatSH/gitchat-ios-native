@@ -46,7 +46,7 @@ struct ChatAttachmentsGrid: View {
     /// bubble's clipShape handles corners instead.
     var applyClip: Bool = true
 
-    private let spacing: CGFloat = 3
+    private var spacing: CGFloat { applyClip ? 3 : 2 }
     private var corner: CGFloat { applyClip ? 14 : 0 }
 
     var body: some View {
@@ -121,6 +121,7 @@ struct ChatAttachmentsGrid: View {
             .onTapGesture { onTap(a.url) }
         } else {
             // Inside bubble: fill width, parent clips corners
+            let imgHeight = min(maxWidth * 0.75, 320)
             ZStack {
                 CachedAsyncImage(
                     url: url,
@@ -130,14 +131,14 @@ struct ChatAttachmentsGrid: View {
                     fitMaxHeight: nil,
                     maxPixelSize: maxWidth
                 )
-                .frame(width: maxWidth, height: 260)
+                .frame(width: maxWidth, height: imgHeight)
                 .clipped()
                 if isUploading {
                     Color.black.opacity(0.25)
                     ProgressView().tint(.white).controlSize(.large)
                 }
             }
-            .frame(width: maxWidth, height: 260)
+            .frame(width: maxWidth, height: imgHeight)
             .contentShape(Rectangle())
             .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
             .onTapGesture { onTap(a.url) }

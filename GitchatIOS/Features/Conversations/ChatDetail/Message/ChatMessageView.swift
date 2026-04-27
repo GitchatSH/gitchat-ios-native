@@ -410,30 +410,39 @@ struct ChatMessageView: View {
 
     /// Attachment content WITHOUT clip — used inside a bubble so the
     /// bubble's own clipShape handles corners seamlessly.
+    /// 2px padding around, fills full bubble width.
     @ViewBuilder
     private var attachmentContentUnclipped: some View {
-        if let atts = message.attachments, !atts.isEmpty {
-            ChatAttachmentsGrid(
-                attachments: atts,
-                maxWidth: 260,
-                isUploading: message.id.hasPrefix("local-"),
-                onTap: { url in onAttachmentTap?(url) },
-                matchedNamespace: imageMatchedNS,
-                activePreviewURL: activeImagePreviewURL,
-                applyClip: false
-            )
-        } else if let s = message.attachment_url,
-                  let url = URL(string: s) {
-            CachedAsyncImage(
-                url: url,
-                contentMode: .fit,
-                placeholder: .filled,
-                fitMaxWidth: 260,
-                fitMaxHeight: 220
-            )
-            .contentShape(Rectangle())
-            .onTapGesture { onAttachmentTap?(s) }
+        let imgWidth = bubbleMaxWidth - 4 // 2px padding each side
+        Group {
+            if let atts = message.attachments, !atts.isEmpty {
+                ChatAttachmentsGrid(
+                    attachments: atts,
+                    maxWidth: imgWidth,
+                    isUploading: message.id.hasPrefix("local-"),
+                    onTap: { url in onAttachmentTap?(url) },
+                    matchedNamespace: imageMatchedNS,
+                    activePreviewURL: activeImagePreviewURL,
+                    applyClip: false
+                )
+            } else if let s = message.attachment_url,
+                      let url = URL(string: s) {
+                CachedAsyncImage(
+                    url: url,
+                    contentMode: .fill,
+                    placeholder: .filled,
+                    fitMaxWidth: nil,
+                    fitMaxHeight: nil,
+                    maxPixelSize: imgWidth
+                )
+                .frame(width: imgWidth, height: imgWidth * 0.75)
+                .clipped()
+                .contentShape(Rectangle())
+                .onTapGesture { onAttachmentTap?(s) }
+            }
         }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(2)
     }
 
     private var hasAttachment: Bool {
@@ -531,7 +540,7 @@ struct ChatMessageView: View {
                 .padding(.bottom, 12)
             }
         }
-        .frame(minWidth: 80, alignment: .leading)
+        .frame(minWidth: 80, maxWidth: hasAttachment ? bubbleMaxWidth : nil, alignment: .leading)
         .overlay(alignment: .bottomTrailing) {
             // Only show overlay timestamp for long messages —
             // short messages have it inline in the HStack.
