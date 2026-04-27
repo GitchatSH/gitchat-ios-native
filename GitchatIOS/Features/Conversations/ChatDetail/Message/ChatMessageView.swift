@@ -132,9 +132,19 @@ struct ChatMessageView: View {
     @ViewBuilder
     private var avatarColumn: some View {
         if isGroup {
-            // Always render clear spacer — floating overlay handles avatar
-            // positioning with sticky behavior during scroll.
-            Color.clear.frame(width: 32, height: 32)
+            if showTail {
+                AvatarView(
+                    url: resolvedAvatar ?? message.sender_avatar,
+                    size: 32,
+                    login: message.sender
+                )
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle().inset(by: -6))
+                .onTapGesture { onAvatarTap?() }
+                .instantTooltip("@\(message.sender)")
+            } else {
+                Color.clear.frame(width: 32, height: 32)
+            }
         }
     }
 
