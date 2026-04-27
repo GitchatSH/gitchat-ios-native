@@ -521,8 +521,7 @@ struct ChatMessageView: View {
                         timestampMeta
                     }
                     .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                    .padding(.bottom, 12)
+                    .padding(.vertical, 8)
                 } else {
                     // Long message: text with reserved bottom space for overlay timestamp
                     Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
