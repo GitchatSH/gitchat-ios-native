@@ -154,6 +154,14 @@ struct ChatMessageView: View {
     private var bubbleColumn: some View {
         VStack(alignment: isMe ? .trailing : .leading, spacing: 0) {
             bubble
+                .background(GeometryReader { geo in
+                    Color.clear.onChange(of: geo.frame(in: .global)) { frame in
+                        BubbleFrameCache.shared.set(frame, for: message.id)
+                    }
+                    .onAppear {
+                        BubbleFrameCache.shared.set(geo.frame(in: .global), for: message.id)
+                    }
+                })
                 .overlay(alignment: .topTrailing) { pinBadge }
                 .scaleEffect(isPulsing ? 1.08 : 1)
                 .animation(.spring(response: 0.3, dampingFraction: 0.55), value: isPulsing)

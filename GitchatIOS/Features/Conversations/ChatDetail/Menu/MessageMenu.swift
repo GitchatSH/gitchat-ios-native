@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Full-screen overlay shown when the user long-presses a message.
-/// The bubble stays near its original screen position. Reactions bar
-/// appears above, action dropdown below.
+/// The bubble stays at its original screen position. Reactions bar
+/// appears above, action dropdown below. Only adjusts position if
+/// reactions would overlap the header or dropdown would be clipped.
 struct MessageMenu<Preview: View>: View {
     @Environment(\.chatTheme) private var theme
 
@@ -18,9 +19,13 @@ struct MessageMenu<Preview: View>: View {
 
     @State private var appeared = false
     @State private var dragOffset: CGFloat = 0
+    @State private var reactionsSize: CGSize = .zero
+    @State private var dropdownSize: CGSize = .zero
 
     var body: some View {
         GeometryReader { geo in
+            let layout = computeLayout(in: geo)
+
             ZStack {
                 // Dimmed + blurred backdrop
                 Color.black.opacity(appeared ? 0.35 : 0)
@@ -29,22 +34,70 @@ struct MessageMenu<Preview: View>: View {
                     .contentShape(Rectangle())
                     .onTapGesture { dismiss() }
 
-                content(in: geo)
-                    .offset(y: dragOffset)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { v in
-                                dragOffset = max(0, v.translation.height)
-                            }
-                            .onEnded { v in
-                                if v.translation.height > 80 { dismiss() }
-                                else {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                        dragOffset = 0
-                                    }
+                Group {
+                    // Reactions bar
+                    reactionsBar
+                        .fixedSize()
+                        .background(GeometryReader { g in
+                            Color.clear.onAppear { reactionsSize = g.size }
+                        })
+                        .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
+                        .padding(.horizontal, 20)
+                        .scaleEffect(appeared ? 1 : 0.3, anchor: target.isMe ? .bottomTrailing : .bottomLeading)
+                        .opacity(appeared ? 1 : 0)
+                        .position(x: geo.size.width / 2, y: layout.reactionsY)
+
+                    // Bubble preview at exact original position + width
+                    HStack(spacing: 0) {
+                        if target.isMe { Spacer(minLength: 0) }
+                        preview()
+                            .frame(width: layout.bubbleW)
+                        if !target.isMe { Spacer(minLength: 0) }
+                    }
+                    .padding(.horizontal, 20)
+                    .scaleEffect(appeared ? 1.015 : 1)
+                    .animation(
+                        appeared
+                            ? .spring(response: 0.3, dampingFraction: 0.6).delay(0.1)
+                            : .spring(response: 0.28, dampingFraction: 0.85),
+                        value: appeared
+                    )
+                    .position(x: geo.size.width / 2, y: layout.bubbleCenterY)
+
+                    // Action dropdown
+                    MessageMenuActionList(
+                        actions: actions,
+                        seenCount: seenCount,
+                        onAction: { action in
+                            onAction(action)
+                            dismiss()
+                        }
+                    )
+                    .frame(maxWidth: 260)
+                    .background(GeometryReader { g in
+                        Color.clear.onAppear { dropdownSize = g.size }
+                    })
+                    .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
+                    .padding(.horizontal, 20)
+                    .scaleEffect(appeared ? 1 : 0.4, anchor: target.isMe ? .topTrailing : .topLeading)
+                    .opacity(appeared ? 1 : 0)
+                    .position(x: geo.size.width / 2, y: layout.dropdownY)
+                }
+                .offset(y: dragOffset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { v in
+                            dragOffset = max(0, v.translation.height)
+                        }
+                        .onEnded { v in
+                            if v.translation.height > 80 { dismiss() }
+                            else {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                    dragOffset = 0
                                 }
                             }
-                    )
+                        }
+                )
             }
         }
         .onAppear {
@@ -54,83 +107,80 @@ struct MessageMenu<Preview: View>: View {
         }
     }
 
-    @ViewBuilder
-    private func content(in geo: GeometryProxy) -> some View {
-        let screenW = geo.size.width
-        let screenH = geo.size.height
+    // MARK: - Layout computation
+
+    private struct Layout {
+        let bubbleCenterY: CGFloat
+        let bubbleW: CGFloat
+        let reactionsY: CGFloat
+        let dropdownY: CGFloat
+    }
+
+    private func computeLayout(in geo: GeometryProxy) -> Layout {
         let source = target.sourceFrame
-        // source.width may include avatar col + spacers — use 70% screen as max
-        let bubbleMaxWidth = min(screenW * 0.7, max(source.width, 260))
-
-        // Convert source.midY from window coords to geo-local coords.
         let geoOriginY = geo.frame(in: .global).minY
-        let localMidY = source.midY - geoOriginY
+        let safeTop = geo.safeAreaInsets.top
+        let screenH = geo.size.height
 
-        // Position the VStack so the BUBBLE (middle element) lands near
-        // the original Y. Reactions bar (~44pt + 12pt spacing) sits above,
-        // so shift the VStack center DOWN by ~half the reactions height
-        // to compensate.
-        let reactionsOffset: CGFloat = 28 // ~(44 + 12) / 2
-        let targetY = localMidY + reactionsOffset
-        let minY = screenH * 0.2
-        let maxY = screenH * 0.8
+        // Convert source frame from window coords to geo-local coords
+        let bubbleTop = source.minY - geoOriginY
+        let bubbleH = source.height
+        let bubbleW = source.width
 
-        let clampedY = appeared
-            ? max(minY, min(targetY, maxY))
-            : localMidY
+        let reactionsH = reactionsSize.height > 0 ? reactionsSize.height : 44
+        let dropdownH = dropdownSize.height > 0 ? dropdownSize.height : 200
+        let gap: CGFloat = 8
 
-        VStack(spacing: 12) {
-            ReactionSelectionView(
-                currentReactions: currentReactions,
-                onPick: { emoji in
-                    onReact(emoji)
-                    dismiss()
-                },
-                onMore: {
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-                        onMoreReactions()
-                    }
-                }
-            )
-            .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
-            .padding(.horizontal, 20)
-            .scaleEffect(appeared ? 1 : 0.3, anchor: target.isMe ? .topTrailing : .topLeading)
-            .opacity(appeared ? 1 : 0)
+        // Default: bubble at original position
+        var adjustedBubbleTop = bubbleTop
 
-            HStack {
-                if target.isMe { Spacer(minLength: 0) }
-                preview()
-                    .frame(maxWidth: bubbleMaxWidth)
-                if !target.isMe { Spacer(minLength: 0) }
-            }
-            .padding(.horizontal, 20)
-            .scaleEffect(appeared ? 1.015 : 1)
-            .animation(
-                appeared
-                    ? .spring(response: 0.3, dampingFraction: 0.6).delay(0.1)
-                    : .spring(response: 0.28, dampingFraction: 0.85),
-                value: appeared
-            )
-
-            MessageMenuActionList(
-                actions: actions,
-                seenCount: seenCount,
-                onAction: { action in
-                    onAction(action)
-                    dismiss()
-                }
-            )
-            .frame(maxWidth: 260)
-            .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
-            .padding(.horizontal, 20)
-            .scaleEffect(appeared ? 1 : 0.4, anchor: target.isMe ? .topTrailing : .topLeading)
-            .opacity(appeared ? 1 : 0)
+        // Case 1: reactions would overlap header (safe area top)
+        let reactionsTop = adjustedBubbleTop - gap - reactionsH
+        if reactionsTop < safeTop {
+            adjustedBubbleTop = safeTop + reactionsH + gap
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .position(
-            x: geo.size.width / 2,
-            y: clampedY
+
+        // Case 2: dropdown would be clipped at bottom
+        let dropdownBottom = adjustedBubbleTop + bubbleH + gap + dropdownH
+        if dropdownBottom > screenH {
+            let overflow = dropdownBottom - screenH
+            adjustedBubbleTop -= overflow
+        }
+
+        // Re-check reactions after adjustment
+        let finalReactionsTop = adjustedBubbleTop - gap - reactionsH
+        if finalReactionsTop < safeTop {
+            adjustedBubbleTop = safeTop + reactionsH + gap
+        }
+
+        // .position() uses center point
+        let bubbleCenterY = adjustedBubbleTop + bubbleH / 2
+        let reactionsY = adjustedBubbleTop - gap - reactionsH / 2
+        let dropdownY = adjustedBubbleTop + bubbleH + gap + dropdownH / 2
+
+        return Layout(
+            bubbleCenterY: bubbleCenterY,
+            bubbleW: bubbleW,
+            reactionsY: reactionsY,
+            dropdownY: dropdownY
+        )
+    }
+
+    // MARK: - Subviews
+
+    private var reactionsBar: some View {
+        ReactionSelectionView(
+            currentReactions: currentReactions,
+            onPick: { emoji in
+                onReact(emoji)
+                dismiss()
+            },
+            onMore: {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                    onMoreReactions()
+                }
+            }
         )
     }
 

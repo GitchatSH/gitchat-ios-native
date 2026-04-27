@@ -1057,38 +1057,35 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
             if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { return }
             if chatIsDateRow(id) { return }
-            // Grouped cell: determine which bubble was tapped using
-            // touch Y in window coordinates.
+            // Grouped cell: find which message was tapped by touch Y.
             if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
                 guard let messageIDs = groupById[id], !messageIDs.isEmpty else { return }
-                // Touch point in window (visual) coordinates
                 let touchInWindow = tv.convert(point, to: nil)
-                // Cell visual frame in window coordinates
-                let cellFrameInWindow = cell.convert(cell.bounds, to: nil)
-                let cellH = cellFrameInWindow.height
-                let count = messageIDs.count
-                // Messages ordered oldest-first. Visually: oldest at top, newest at bottom.
-                let relY = touchInWindow.y - cellFrameInWindow.minY
-                let ratio = relY / max(cellH, 1)
-                let idx = max(0, min(Int(ratio * CGFloat(count)), count - 1))
-                let targetId = messageIDs[idx]
-                guard let msg = itemById[targetId] else { return }
+                // Find the message whose cached bubble frame contains the touch Y
+                var targetMsg: Message?
+                for mid in messageIDs {
+                    if let f = BubbleFrameCache.shared.frame(for: mid),
+                       touchInWindow.y >= f.minY && touchInWindow.y <= f.maxY {
+                        targetMsg = itemById[mid]
+                        break
+                    }
+                }
+                // Fallback: last message if no cache hit
+                if targetMsg == nil, let lastId = messageIDs.last {
+                    targetMsg = itemById[lastId]
+                }
+                guard let msg = targetMsg else { return }
                 if haptic { Haptics.impact(.medium) }
-                // Build approximate bubble frame in window coords
-                let bubbleH = cellH / CGFloat(count)
-                let bubbleMinY = cellFrameInWindow.minY + CGFloat(idx) * bubbleH
-                let frame = CGRect(
-                    x: cellFrameInWindow.minX,
-                    y: bubbleMinY,
-                    width: cellFrameInWindow.width,
-                    height: bubbleH
-                )
+                let frame = BubbleFrameCache.shared.frame(for: msg.id)
+                    ?? cell.convert(cell.bounds, to: nil)
                 parent.onCellLongPressed(msg, frame)
                 return
             }
             guard let msg = itemById[id] else { return }
             if haptic { Haptics.impact(.medium) }
-            let frame = cell.convert(cell.bounds, to: nil)
+            // Use cached bubble frame for exact position, fallback to cell frame
+            let frame = BubbleFrameCache.shared.frame(for: msg.id)
+                ?? cell.convert(cell.bounds, to: nil)
             parent.onCellLongPressed(msg, frame)
         }
 
