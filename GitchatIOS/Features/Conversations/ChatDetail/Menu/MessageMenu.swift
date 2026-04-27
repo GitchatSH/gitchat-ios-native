@@ -47,15 +47,19 @@ struct MessageMenu<Preview: View>: View {
                         .opacity(appeared ? 1 : 0)
                         .position(x: geo.size.width / 2, y: layout.reactionsY)
 
-                    // Bubble preview — renders at natural width (same message = same size).
-                    // Positioned at original bubble's Y, aligned to sender side.
+                    // Bubble preview — starts at original position, animates
+                    // to adjusted position if edges need accommodation.
                     HStack {
                         if target.isMe { Spacer(minLength: 0) }
                         preview()
                         if !target.isMe { Spacer(minLength: 0) }
                     }
                     .padding(.horizontal, 8)
-                    .position(x: geo.size.width / 2, y: layout.bubbleCenterY)
+                    .position(
+                        x: geo.size.width / 2,
+                        y: appeared ? layout.adjustedBubbleCenterY : layout.originalBubbleCenterY
+                    )
+                    .animation(.spring(response: 0.32, dampingFraction: 0.75), value: appeared)
 
                     // Action dropdown
                     MessageMenuActionList(
@@ -103,7 +107,8 @@ struct MessageMenu<Preview: View>: View {
     // MARK: - Layout computation
 
     private struct Layout {
-        let bubbleCenterY: CGFloat
+        let originalBubbleCenterY: CGFloat // exact original position
+        let adjustedBubbleCenterY: CGFloat // after edge adjustments
         let reactionsY: CGFloat
         let dropdownY: CGFloat
     }
@@ -145,12 +150,14 @@ struct MessageMenu<Preview: View>: View {
         }
 
         // .position() uses center point
-        let bubbleCenterY = adjustedBubbleTop + bubbleH / 2
+        let originalCenterY = bubbleTop + bubbleH / 2
+        let adjustedCenterY = adjustedBubbleTop + bubbleH / 2
         let reactionsY = adjustedBubbleTop - gap - reactionsH / 2
         let dropdownY = adjustedBubbleTop + bubbleH + gap + dropdownH / 2
 
         return Layout(
-            bubbleCenterY: bubbleCenterY,
+            originalBubbleCenterY: originalCenterY,
+            adjustedBubbleCenterY: adjustedCenterY,
             reactionsY: reactionsY,
             dropdownY: dropdownY
         )
