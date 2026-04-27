@@ -627,9 +627,21 @@ final class ChatViewModel: ObservableObject {
                 body: "",
                 attachmentURLs: urls
             )
-            ChatMessageView.seenIds.insert(msg.id)
-            if let idx = messages.firstIndex(where: { $0.id == localID }) {
-                messages[idx] = msg
+            // Honor the seenIds dedupe contract that the WebSocket
+            // and OutboxStore handlers also follow (ChatDetailView
+            // lines ~719 and ~728). If the WebSocket already delivered
+            // this message and appended it to `messages`, the optimistic
+            // entry is now alongside it — replacing the optimistic with
+            // `msg` would produce two entries with the same id and crash
+            // UIDiffableDataSource at snapshot time. Branch on insert
+            // result: first sighting → replace; already-seen → drop the
+            // optimistic.
+            if ChatMessageView.seenIds.insert(msg.id).inserted {
+                if let idx = messages.firstIndex(where: { $0.id == localID }) {
+                    messages[idx] = msg
+                }
+            } else {
+                messages.removeAll { $0.id == localID }
             }
             for u in localURLs { try? FileManager.default.removeItem(at: u) }
         } catch {
@@ -674,11 +686,17 @@ final class ChatViewModel: ObservableObject {
                 body: "",
                 attachmentURL: url
             )
-            ChatMessageView.seenIds.insert(msg.id)
-            if let idx = messages.firstIndex(where: { $0.id == localID }) {
-                messages[idx] = msg
+            // See note in `sendEncodedAttachments`. If the WebSocket
+            // raced ahead, the message is already in `messages`; drop
+            // the optimistic instead of replacing.
+            if ChatMessageView.seenIds.insert(msg.id).inserted {
+                if let idx = messages.firstIndex(where: { $0.id == localID }) {
+                    messages[idx] = msg
+                } else {
+                    messages.append(msg)
+                }
             } else {
-                messages.append(msg)
+                messages.removeAll { $0.id == localID }
             }
             try? FileManager.default.removeItem(at: tmpURL)
         } catch {

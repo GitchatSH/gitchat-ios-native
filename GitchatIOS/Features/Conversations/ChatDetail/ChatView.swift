@@ -32,7 +32,6 @@ struct ChatView: View {
     @Binding var isAtBottom: Bool
     @Binding var scrollToBottomToken: Int
     @Binding var photoItems: [PhotosPickerItem]
-    @Binding var pendingClipboardImage: UIImage?
     @Binding var composerVisible: Bool
     /// Namespace owned by the host view (ChatDetailView) and used for
     /// the image viewer's zoom transition. Threaded through the cell
@@ -71,8 +70,7 @@ struct ChatView: View {
         var onPinBadgeTap: (Message) -> Void = { _ in }
         var onAvatarTap: (String) -> Void = { _ in }
         var onInsertMention: (ConversationParticipant) -> Void = { _ in }
-        var onClipboardPaste: (UIImage) -> Void = { _ in }
-        var onClipboardDismiss: () -> Void = {}
+        var onPasteImage: (UIImage) -> Void = { _ in }
         var onMacCatalystSubmit: () -> Void = {}
         var onShowPinnedList: () -> Void = {}
         var onRetryPending: (Message) -> Void = { _ in }
@@ -485,13 +483,6 @@ struct ChatView: View {
                     onPick: { actions.onInsertMention($0) }
                 )
             }
-            if let img = pendingClipboardImage {
-                ChatClipboardChip(
-                    image: img,
-                    onPaste: { actions.onClipboardPaste(img) },
-                    onDismiss: { actions.onClipboardDismiss() }
-                )
-            }
             ChatInputView(
                 draft: $vm.draft,
                 photoItems: $photoItems,
@@ -499,6 +490,7 @@ struct ChatView: View {
                 isUploading: vm.uploading,
                 onSend: actions.onSend,
                 onSubmitMacCatalyst: actions.onMacCatalystSubmit,
+                onPasteImage: actions.onPasteImage,
                 focusProxy: focusProxy
             )
         }

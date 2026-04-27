@@ -11,8 +11,8 @@ import UIKit
 ///   flight).
 ///
 /// Auxiliary surfaces that sit ABOVE the composer (reply/edit bar,
-/// mention suggestions, clipboard chip) live in dedicated files in
-/// this folder and are composed by the owning view.
+/// mention suggestions) live in dedicated files in this folder and
+/// are composed by the owning view.
 ///
 /// Keyboard glue: the composer itself does not own keyboard state —
 /// the enclosing `ChatView` drives the bottom inset via
@@ -28,6 +28,7 @@ struct ChatInputView: View {
     let isUploading: Bool
     let onSend: () -> Void
     let onSubmitMacCatalyst: () -> Void
+    let onPasteImage: (UIImage) -> Void
 
     /// Controls the placeholder + send glyph semantics.
     enum Mode {
@@ -36,15 +37,13 @@ struct ChatInputView: View {
         case replying
     }
 
-    @FocusState private var focused: Bool
-
     /// External bridge so the parent view can gate focus explicitly
     /// (e.g. after a Reply action completes). Mirrors the bubbleless
     /// `@FocusState.Binding` pattern without leaking focus state.
     let focusProxy: FocusProxy
 
     final class FocusProxy: ObservableObject {
-        fileprivate var setter: ((Bool) -> Void)?
+        var setter: ((Bool) -> Void)?
         func focus() { setter?(true) }
         func blur() { setter?(false) }
     }
@@ -68,8 +67,6 @@ struct ChatInputView: View {
         HStack(alignment: .bottom, spacing: 8) {
             attachButton
             textField
-                .onAppear { focusProxy.setter = { focused = $0 } }
-                .onDisappear { focusProxy.setter = nil }
             sendButton
         }
         .padding(.horizontal, 16)
@@ -89,6 +86,7 @@ struct ChatInputView: View {
                 .modifier(GlassCircle())
         }
         .disabled(isUploading)
+        .accessibilityLabel("Attach")
     }
 
     // MARK: Text field
@@ -102,31 +100,27 @@ struct ChatInputView: View {
             case .replying: return "Reply…"
             }
         }()
-        #if targetEnvironment(macCatalyst)
-        // UITextField wrapper — SwiftUI's `focusEffectDisabled()`
-        // doesn't suppress Catalyst's native focus ring, so we bridge
-        // to UIKit and set `focusEffect = nil` directly.
-        // Height pinned to the body line-height because UITextField's
-        // intrinsic size doesn't propagate through UIViewRepresentable
-        // and the capsule otherwise stretches to fill available space.
-        CatalystPlainTextField(
+        PasteableTextField(
             placeholder: placeholder,
             text: $draft,
             onSubmit: onSubmitMacCatalyst,
+            onPasteImage: onPasteImage,
             focusProxy: focusProxy
         )
-        .frame(height: 22)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, catalystOrIOS(catalyst: 10, ios: 16))
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity)
+        #if !targetEnvironment(macCatalyst)
+        .modifier(GlassPill())
+        #endif
+        .accessibilityIdentifier("composer")
+    }
+
+    private func catalystOrIOS<T>(catalyst: T, ios: T) -> T {
+        #if targetEnvironment(macCatalyst)
+        return catalyst
         #else
-        TextField(placeholder, text: $draft, axis: .vertical)
-            .focused($focused)
-            .lineLimit(1...5)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 11)
-            .frame(maxWidth: .infinity)
-            .modifier(GlassPill())
+        return ios
         #endif
     }
 
@@ -163,69 +157,3 @@ struct ChatInputView: View {
         }
     }
 }
-
-#if targetEnvironment(macCatalyst)
-/// `UITextField` wrapper used on Catalyst. SwiftUI's
-/// `focusEffectDisabled()` doesn't suppress the native macOS focus
-/// ring that appears around `UITextField` on Catalyst, so we bridge to
-/// UIKit and set `focusEffect = nil` directly. Visual treatment
-/// (background, padding, shape) is owned by the outer pill — this
-/// field is transparent and unstyled.
-struct CatalystPlainTextField: UIViewRepresentable {
-    let placeholder: String
-    @Binding var text: String
-    let onSubmit: () -> Void
-    let focusProxy: ChatInputView.FocusProxy
-
-    func makeUIView(context: Context) -> UITextField {
-        let tf = UITextField()
-        tf.placeholder = placeholder
-        tf.text = text
-        tf.borderStyle = .none
-        tf.backgroundColor = .clear
-        tf.focusEffect = nil
-        tf.returnKeyType = .send
-        tf.font = UIFont.preferredFont(forTextStyle: .body)
-        tf.delegate = context.coordinator
-        tf.addTarget(
-            context.coordinator,
-            action: #selector(Coordinator.textChanged(_:)),
-            for: .editingChanged
-        )
-        // Route the external focus proxy straight to first-responder
-        // calls on this field. No SwiftUI `@FocusState` in the loop.
-        focusProxy.setter = { [weak tf] focus in
-            guard let tf else { return }
-            if focus { tf.becomeFirstResponder() }
-            else { tf.resignFirstResponder() }
-        }
-        context.coordinator.ownedFocusProxy = focusProxy
-        return tf
-    }
-
-    func updateUIView(_ tf: UITextField, context: Context) {
-        if tf.text != text { tf.text = text }
-        if tf.placeholder != placeholder { tf.placeholder = placeholder }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    final class Coordinator: NSObject, UITextFieldDelegate {
-        var parent: CatalystPlainTextField
-        weak var ownedFocusProxy: ChatInputView.FocusProxy?
-
-        init(_ parent: CatalystPlainTextField) { self.parent = parent }
-
-        deinit { ownedFocusProxy?.setter = nil }
-
-        @objc func textChanged(_ tf: UITextField) {
-            parent.text = tf.text ?? ""
-        }
-
-        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-            parent.onSubmit()
-            return true
-        }
-    }
-}
-#endif

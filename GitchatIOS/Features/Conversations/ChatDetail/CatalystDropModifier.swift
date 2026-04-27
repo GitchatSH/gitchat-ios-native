@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import Foundation
 
 /// Drag-and-drop image receiver + hover overlay. Enabled on iPad and
 /// Mac Catalyst — the two platforms where dragging between apps is a
@@ -49,5 +50,13 @@ struct CatalystDropModifier<Overlay: View>: ViewModifier {
                 onDrop(providers)
                 return true
             }
+#if DEBUG
+            .onReceive(NotificationCenter.default.publisher(
+                for: NSNotification.Name("UITestDropSimulated"))
+            ) { note in
+                guard let providers = note.userInfo?["providers"] as? [NSItemProvider] else { return }
+                onDrop(providers)
+            }
+#endif
     }
 }

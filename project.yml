@@ -14,6 +14,8 @@ schemes:
       config: Debug
     test:
       config: Debug
+      targets:
+        - GitchatIOSUITests
     profile:
       config: Release
     analyze:
@@ -105,7 +107,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.5"
-        CFBundleVersion: "75"
+        CFBundleVersion: "76"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -180,7 +182,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.5"
-        CFBundleVersion: "75"
+        CFBundleVersion: "76"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
@@ -217,7 +219,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.5"
-        CFBundleVersion: "75"
+        CFBundleVersion: "76"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -239,3 +241,22 @@ targets:
         INFOPLIST_FILE: GitchatShareExtension/Info.plist
         SKIP_INSTALL: NO
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  GitchatIOSUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: GitchatIOSUITests
+    dependencies:
+      - target: GitchatIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: chat.git.uitests
+        TEST_TARGET_NAME: GitchatIOS
+        SUPPORTS_MACCATALYST: YES
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    info:
+      path: GitchatIOSUITests/Info.plist
+      properties:
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: BNDL
