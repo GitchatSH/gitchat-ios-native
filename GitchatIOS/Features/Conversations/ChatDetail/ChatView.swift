@@ -636,12 +636,20 @@ struct ChatView: View {
     /// unit — we just render the same bubble the chat shows.
     @ViewBuilder
     private func repliedPreviewContent(for t: MessageMenuTarget) -> some View {
-        ChatMessageView(
+        // Determine if this bubble originally showed a sender header
+        // by checking if the previous message has a different sender.
+        let showHeader: Bool = {
+            guard let idx = visibleMessages.firstIndex(where: { $0.id == t.message.id }),
+                  idx > 0 else { return true }
+            let prev = visibleMessages[idx - 1]
+            return prev.sender != t.message.sender || (prev.type ?? "user") != "user"
+        }()
+        return ChatMessageView(
             message: t.message,
             isMe: t.isMe,
             myLogin: myLogin,
             resolvedAvatar: resolveAvatar(t.message),
-            showHeader: true,
+            showHeader: showHeader,
             isPinned: vm.pinnedIds.contains(t.message.id),
             isGroup: vm.conversation.isGroup,
             otherReadAt: vm.otherReadAt,
