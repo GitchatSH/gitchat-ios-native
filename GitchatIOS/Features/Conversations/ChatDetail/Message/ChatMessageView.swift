@@ -470,7 +470,8 @@ struct ChatMessageView: View {
     @ViewBuilder
     private var textBubble: some View {
         let parsed = ChatMessageText.parseForwarded(message.content)
-        let hasLink = ChatMessageText.firstURL(in: parsed.body) != nil
+        let detectedURL = ChatMessageText.firstURL(in: parsed.body)
+        let hasLink = detectedURL != nil && !ComposerLinkPreview.suppressedURLs.contains(detectedURL!.absoluteString)
         let showInlineReply = (message.reply != nil) && !hideReplyPreview
         let hasText = !message.content.isEmpty
         let isShortText = hasText && parsed.body.count <= 20 && !parsed.body.contains("\n")
@@ -537,7 +538,8 @@ struct ChatMessageView: View {
                         .padding(.bottom, hasLink ? 0 : (hasReactions ? 4 : 24))
                 }
             }
-            if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
+            if let linkURL = ChatMessageText.firstURL(in: parsed.body),
+               !ComposerLinkPreview.suppressedURLs.contains(linkURL.absoluteString) {
                 LinkPreviewCard(url: linkURL, isMe: isMe)
                     .padding(.horizontal, 12)
                     .padding(.bottom, hasReactions ? 8 : 40)
@@ -590,12 +592,12 @@ struct ChatMessageView: View {
             }
         }
         #if targetEnvironment(macCatalyst)
-        BubbleHugLayout(maxWidth: hasLink ? 312 : bubbleMaxWidth) {
+        BubbleHugLayout(maxWidth: bubbleMaxWidth) {
             bubble
         }
         #else
         bubble
-            .frame(maxWidth: hasLink ? 312 : bubbleMaxWidth, alignment: isMe ? .trailing : .leading)
+            .frame(maxWidth: bubbleMaxWidth, alignment: isMe ? .trailing : .leading)
         #endif
     }
 

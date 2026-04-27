@@ -109,6 +109,10 @@ struct ChatView: View {
     @State private var composerOverlayHeight: CGFloat = 0
     @State private var bannerOverlayHeight: CGFloat = 0
 
+    // MARK: Composer link preview
+    @State private var dismissedPreviewURLs: Set<String> = []
+    @State private var detectedDraftURL: URL?
+
     var body: some View {
         ZStack {
             ChatBackground()
@@ -177,14 +181,20 @@ struct ChatView: View {
                 } else if composerVisible {
                     composerStack
                         .background {
-                            LinearGradient(
-                                colors: [
-                                    Color(.systemBackground).opacity(0),
+                            Group {
+                                if showingLinkPreview {
                                     Color(.systemBackground)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
+                                } else {
+                                    LinearGradient(
+                                        colors: [
+                                            Color(.systemBackground).opacity(0),
+                                            Color(.systemBackground)
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                }
+                            }
                             .ignoresSafeArea(.container, edges: .bottom)
                         }
                         .background(
@@ -223,6 +233,22 @@ struct ChatView: View {
             if let login = myLogin, newest.content.localizedCaseInsensitiveContains("@\(login)") {
                 newMentionsWhileScrolledUp += 1
                 pendingMentionIds.append(newest.id)
+            }
+        }
+        .onChange(of: vm.draft) { newDraft in
+            let trimmed = newDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                dismissedPreviewURLs.removeAll()
+                if detectedDraftURL != nil {
+                    withAnimation(.easeInOut(duration: 0.2)) { detectedDraftURL = nil }
+                }
+                return
+            }
+            let url = ChatMessageText.firstURL(in: newDraft)
+            if url?.absoluteString != detectedDraftURL?.absoluteString {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    detectedDraftURL = url
+                }
             }
         }
     }
@@ -548,6 +574,14 @@ struct ChatView: View {
                     }
                 )
             }
+            if let previewURL = detectedDraftURL,
+               !dismissedPreviewURLs.contains(previewURL.absoluteString) {
+                ComposerLinkPreview(url: previewURL) {
+                    dismissedPreviewURLs.insert(previewURL.absoluteString)
+                    ComposerLinkPreview.suppressedURLs.insert(previewURL.absoluteString)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             if !mentionSuggestions.isEmpty {
                 ChatMentionSuggestionRow(
                     suggestions: mentionSuggestions,
@@ -592,6 +626,11 @@ struct ChatView: View {
         if vm.editingMessage != nil { return .editing }
         if vm.replyingTo != nil { return .replying }
         return .message
+    }
+
+    private var showingLinkPreview: Bool {
+        guard let url = detectedDraftURL else { return false }
+        return !dismissedPreviewURLs.contains(url.absoluteString)
     }
 
     // MARK: Jump button computed counts
