@@ -885,7 +885,7 @@ struct ConversationRow: View {
     private var lastSenderLogin: String? {
         guard conversation.isGroup else { return nil }
         if let cached = cachedEntry?.messages,
-           let last = cached.last, last.type == nil || last.type == "user" {
+           let last = cached.last(where: { $0.type == nil || $0.type == "user" }) {
             return last.sender
         }
         return conversation.last_message?.sender
@@ -971,7 +971,7 @@ struct ConversationRow: View {
         guard let login = AuthStore.shared.login else { return false }
         // Check cache first (may have newer messages than last_message)
         if let cached = cachedEntry?.messages,
-           let last = cached.last, last.type == nil || last.type == "user" {
+           let last = cached.last(where: { $0.type == nil || $0.type == "user" }) {
             return last.sender == login
         }
         guard let sender = conversation.last_message?.sender else { return false }
