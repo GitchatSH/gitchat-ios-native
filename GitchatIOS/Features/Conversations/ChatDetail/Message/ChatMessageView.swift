@@ -321,11 +321,11 @@ struct ChatMessageView: View {
             if let login = reply.sender_login {
                 Text("@\(login)")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(isMe ? Color.white : theme.replyAccent)
+                    .foregroundStyle(isMe ? .white : theme.replyAccent)
             }
             Text(reply.body ?? "…")
                 .font(.caption)
-                .foregroundStyle(isMe ? Color.white.opacity(0.85) : .secondary)
+                .foregroundStyle(isMe ? .white.opacity(0.85) : .secondary)
                 .lineLimit(2)
         }
         .padding(.leading, 8)
@@ -333,7 +333,7 @@ struct ChatMessageView: View {
         .padding(.vertical, 4)
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(isMe ? Color.white : theme.replyAccent)
+                .fill(isMe ? .white : theme.replyAccent)
                 .frame(width: 3)
                 .padding(.vertical, 4)
         }
@@ -367,6 +367,7 @@ struct ChatMessageView: View {
         let showInlineReply = (message.reply != nil) && !hideReplyPreview
         let hasText = !message.content.isEmpty
         let isShortText = hasText && parsed.body.count <= 20 && !parsed.body.contains("\n")
+        let hasReactions = message.reactions?.isEmpty == false
         let showSenderName = showHeader && !isMe && isGroup
         let bubble = VStack(alignment: .leading, spacing: 0) {
             if showSenderName {
@@ -384,7 +385,7 @@ struct ChatMessageView: View {
                     Text("Forwarded from @\(from)")
                         .font(.caption2.weight(.semibold))
                 }
-                .foregroundStyle(isMe ? Color.white.opacity(0.85) : .secondary)
+                .foregroundStyle(isMe ? .white.opacity(0.85) : .secondary)
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
                 .padding(.bottom, 4)
@@ -400,7 +401,7 @@ struct ChatMessageView: View {
                     // Short message: text + pin + timestamp inline same row
                     HStack(alignment: .lastTextBaseline, spacing: 8) {
                         Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
-                            .tint(isMe ? .white : theme.replyAccent)
+                            .tint(isMe ? .white : Color(.systemBlue))
                             #if targetEnvironment(macCatalyst)
                             .font(.scaledSystem(size: 17))
                             #endif
@@ -412,7 +413,7 @@ struct ChatMessageView: View {
                 } else {
                     // Long message: text with reserved bottom space for overlay timestamp
                     Text(ChatMessageText.attributed(parsed.body, isMe: isMe))
-                        .tint(isMe ? .white : theme.replyAccent)
+                        .tint(isMe ? .white : Color(.systemBlue))
                     #if targetEnvironment(macCatalyst)
                         .font(.scaledSystem(size: 17))
                     #endif
@@ -421,7 +422,7 @@ struct ChatMessageView: View {
                         .textSelection(.enabled)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .padding(.bottom, 20)
+                        .padding(.bottom, hasReactions ? 4 : 20)
                 }
             }
             if let linkURL = ChatMessageText.firstURL(in: parsed.body) {
@@ -433,6 +434,7 @@ struct ChatMessageView: View {
             if let reactions = message.reactions, !reactions.isEmpty {
                 ChatReactionsRow(
                     reactions: reactions,
+                    reactionRows: message.reactionRows ?? [],
                     myLogin: myLogin,
                     myReactionEmojis: myReactionEmojis,
                     isOutgoing: isMe,
@@ -440,8 +442,8 @@ struct ChatMessageView: View {
                     onLongPress: { onMoreReactions?() },
                     onTap: { onReactionsTap?() }
                 )
-                .padding(.horizontal, 8)
-                .padding(.bottom, 4)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             }
         }
         .frame(minWidth: 80, alignment: .leading)

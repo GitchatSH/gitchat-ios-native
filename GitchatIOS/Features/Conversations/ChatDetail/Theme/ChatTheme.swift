@@ -11,12 +11,12 @@ import SwiftUI
 /// user-type styles).
 struct ChatTheme: Equatable {
     // MARK: Bubble surfaces
-    var bubbleIncoming: Color = Color(.secondarySystemGroupedBackground)
+    var bubbleIncoming: Color = Color(.systemGray6)
     var bubbleOutgoing: Color = Color("AccentColor")
     var bubbleIncomingText: Color = Color(.label)
     var bubbleOutgoingText: Color = .white
     /// Timestamp + checkmark color inside outgoing bubbles.
-    var bubbleMetaOut: Color = Color("BubbleMetaOut")
+    var bubbleMetaOut: Color = .white.opacity(0.7)
     /// Timestamp + checkmark color inside incoming bubbles.
     var bubbleMetaIn: Color = Color(.secondaryLabel)
 

@@ -204,18 +204,15 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         let prevIDs = coord.lastItems.map(\.id)
         let newIDs = items.map(\.id)
 
-        // In-place edits (reactions, edit, unsend): reconfigure the
-        // specific rows so the cell re-renders with fresh content.
+        // In-place edits (reactions, edit, unsend): detect which rows
+        // changed content (same ID, different value). Reconfigure runs
+        // AFTER the structural snapshot apply to avoid being overshadowed.
+        var contentChangedIDs: [String] = []
         if !coord.lastItems.isEmpty {
             let prevById = Dictionary(uniqueKeysWithValues: coord.lastItems.map { ($0.id, $0) })
-            let changedIDs = items.compactMap { m -> String? in
+            contentChangedIDs = items.compactMap { m -> String? in
                 if let prev = prevById[m.id], prev != m { return m.id }
                 return nil
-            }
-            if !changedIDs.isEmpty {
-                coord.lastItems = items
-                coord.itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
-                coord.reconfigure(ids: changedIDs)
             }
         }
 
@@ -256,6 +253,17 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         } else {
             coord.lastItems = items
             coord.itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        }
+
+        // Reconfigure content-changed rows AFTER the structural apply
+        // so the update is never overshadowed by a concurrent snapshot.
+        // Force immediate layout so UIHostingConfiguration commits the
+        // new SwiftUI content without waiting for the next display link.
+        if !contentChangedIDs.isEmpty {
+            coord.lastItems = items
+            coord.itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+            coord.reconfigure(ids: contentChangedIDs)
+            tv.layoutIfNeeded()
         }
 
         // Pinned changes: reconfigure so the pin badge flips without
@@ -617,7 +625,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             var snap = dataSource.snapshot()
             let present = ids.filter { snap.itemIdentifiers.contains($0) }
             guard !present.isEmpty else { return }
-            snap.reconfigureItems(present)
+            snap.reloadItems(present)
             dataSource.apply(snap, animatingDifferences: false)
         }
 

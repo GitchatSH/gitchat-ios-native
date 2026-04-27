@@ -824,6 +824,10 @@ struct ChatDetailView: View {
             vm.otherReadAt = ts
             vm.readCursors[login] = ts
         }
+        socket.onReactionUpdated = { msgId in
+            guard vm.messages.contains(where: { $0.id == msgId }) else { return }
+            Task { await vm.load() }
+        }
         socket.onMessagePinned = { convId, msgId in
             guard convId == vm.conversation.id else { return }
             vm.pinnedIds.insert(msgId)
