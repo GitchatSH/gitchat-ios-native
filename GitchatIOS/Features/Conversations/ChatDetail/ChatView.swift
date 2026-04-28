@@ -46,6 +46,7 @@ struct ChatView: View {
     let participants: [ConversationParticipant]
     let blockedBannerLogin: String?
     let onUnblock: (String) -> Void
+    var totalUnreadCount: Int = 0
 
     /// Imperative actions wired from the caller.
     struct Actions {
@@ -276,6 +277,17 @@ struct ChatView: View {
                     .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .modifier(GlassCircle())
+                    .overlay(alignment: .topTrailing) {
+                        if totalUnreadCount > 0 {
+                            Text(totalUnreadCount > 99 ? "99+" : "\(totalUnreadCount)")
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .frame(minWidth: 22, minHeight: 22)
+                                .background(Color("AccentColor"), in: Capsule())
+                                .offset(x: 6, y: -6)
+                        }
+                    }
             }
             .buttonStyle(.plain)
 

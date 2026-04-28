@@ -216,6 +216,7 @@ struct ChatDetailView: View {
                 blocks.unblock(login)
                 ToastCenter.shared.show(.success, "Unblocked", "@\(login)")
             },
+            totalUnreadCount: otherUnreadCount,
             actions: chatViewActions
         )
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
@@ -300,6 +301,15 @@ struct ChatDetailView: View {
             #endif
             return .handled
         })
+    }
+
+    // MARK: - Unread badge (other conversations)
+
+    private var otherUnreadCount: Int {
+        let convos = ConversationsCache.shared.get() ?? []
+        return convos
+            .filter { $0.id != vm.conversation.id }
+            .reduce(0) { $0 + $1.unreadCount }
     }
 
     // MARK: - ChatView Actions wiring
