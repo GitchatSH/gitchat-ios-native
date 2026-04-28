@@ -302,6 +302,13 @@ final class OutboxStore: ObservableObject {
             )
             p.state = .delivered
             updatePending(p)
+            // Persist to cache regardless of whether a vm is registered,
+            // so re-entering the conversation shows the message immediately
+            // without waiting for vm.load() to complete a BE roundtrip.
+            MessageCache.shared.upsertDelivered(
+                conversationID: p.conversationID,
+                message: stamped
+            )
             markDelivered(conversationID: p.conversationID, clientMessageID: p.clientMessageID)
             // Hand off to the active view (if any). The handler dedupes via
             // its own atomic `seenIds.insert(...).inserted` against any

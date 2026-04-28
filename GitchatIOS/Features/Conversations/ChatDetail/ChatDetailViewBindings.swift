@@ -30,12 +30,14 @@ enum ChatDetailViewBindings {
                let idx = vm.messages.firstIndex(where: { $0.client_message_id == cmid }) {
                 vm.messages[idx] = msg
                 ChatMessageView.seenIds.insert(msg.id)
+                vm.persistCache()
                 return
             }
 
             // 2. Inbound dedup by server id.
             guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
             vm.messages.append(msg)
+            vm.persistCache()
 
             // 3. markRead for messages from other senders.
             if msg.sender != AuthStore.shared.login {
@@ -56,12 +58,14 @@ enum ChatDetailViewBindings {
                let idx = vm.messages.firstIndex(where: { $0.client_message_id == cmid }) {
                 vm.messages[idx] = msg
                 ChatMessageView.seenIds.insert(msg.id)
+                vm.persistCache()
                 return
             }
 
             // 2. Inbound dedup by server id.
             guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
             vm.messages.append(msg)
+            vm.persistCache()
         }
     }
 }
