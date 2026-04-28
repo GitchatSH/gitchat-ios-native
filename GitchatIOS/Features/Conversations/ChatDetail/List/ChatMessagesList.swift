@@ -529,14 +529,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         private func scrollToBottomTapped() {
             Haptics.selection()
             guard let tv = table else { return }
-
-            // If there's an unread divider, scroll to it first
-            if parent.unreadCount > 0,
-               scrollTo(id: ChatUnreadDividerID, in: tv, animated: true) {
-                return
-            }
-
-            // Otherwise scroll to bottom
+            // Always scroll to the latest message (bottom).
             let target = CGPoint(x: 0, y: -tv.contentInset.top)
             scrollToOffset(target, in: tv)
         }

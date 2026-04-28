@@ -50,7 +50,7 @@ struct JumpButtonStack: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(.secondary)
                     },
-                    badge: unreadCount > 0 ? unreadCount : nil,
+                    badge: nil,
                     tooltip: "Jump to latest",
                     action: onJumpToBottom
                 )
