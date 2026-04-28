@@ -2237,83 +2237,530 @@ Expected: green (regression check from previous spec).
 
 ---
 
-## Phase 3 — End-to-end manual verification
+## Local development & E2E infrastructure
 
-These checks require a running BE deploy + a fresh iOS build. Execute against the dev environment.
+The user has already wired the simulator into a local backend for live E2E testing. Confirm the following before starting Phase 3:
 
-### Task 3.1: Stress paste regression (bug #1, already patched)
+- **Xcode scheme `GitchatIOS local`** — sets environment variable `API_BASE_URL=http://localhost:3000/api/v1` on Run. Visible in Xcode → Edit Scheme → Run → Arguments → Environment Variables. **Use this scheme for all Phase 3 runs.**
+- **Backend running locally** — `cd gitchat-webapp/backend && pnpm start:dev` (with `docker-compose.infra.yml` providing Postgres + Redis).
+- **Postgres reachable** — `psql "$DEV_DB_URL" -c "select 1"` succeeds. Used in Phase 3 to assert row counts.
+- **Booted iOS simulator** — `xcrun simctl list devices booted`. The screenshot shows iPhone 17 Pro on iOS 26.4 logged in as a test user.
+- **(Optional) Mac Catalyst + 2nd account** — needed for Phase 4 (two-sided realtime). User confirmed they can spin this up on demand.
+- **(Optional) WebSocket pointing local** — confirm the iOS Socket.IO client uses the same `API_BASE_URL` host. If not, configure during Phase 4 setup. User has signaled they can wire this if needed.
 
-- [ ] Open a chat
-- [ ] Paste 5 images in <2 seconds (Cmd+V on Mac Catalyst, or simulator paste)
-- [ ] Send each
-- [ ] **Expected:** 0 crashes, 0 duplicate bubbles. All 5 images render.
+**BE work lives on its own branch in the BE repo:**
+```bash
+cd /Users/hieu/Documents/Companies/Lab3/GitstarAI/gitchat-webapp/backend
+# Already created in Task 1.1: feat/issue-88-cmid-roundtrip (in BE repo, separate from iOS repo of same name)
+git branch --show-current   # should print: feat/issue-88-cmid-roundtrip
+```
 
-### Task 3.2: Back-out + re-enter mid-upload (bug #2)
+Each BE task in Phase 1 commits to that BE-repo branch. iOS tasks (Phase 0, 2) commit to the iOS-repo branch of the same name. Two repos, two branches, both named `feat/issue-88-cmid-roundtrip`.
 
-- [ ] Open chat A
-- [ ] Paste a large image (>2MB), tap Send
-- [ ] While the bubble is still in `uploading` (spinner visible), navigate back to chat list
-- [ ] Wait 5 seconds (let upload + send complete in background)
-- [ ] Re-open chat A
-- [ ] **Expected:** the image bubble shows server id (no spinner), one copy. No stuck `local-*`.
+---
 
-### Task 3.3: Force-quit mid-upload
+## Phase 3 — Automated E2E (single device + local BE)
 
-- [ ] Open chat A
-- [ ] Paste a large image, tap Send
-- [ ] During `uploading`, force-quit the app (swipe up)
-- [ ] Re-launch the app, open chat A
-- [ ] **Expected:** the optimistic bubble is gone (filtered on cache load). No ghost. If the upload had reached BE before kill, the message arrives via `vm.load()`.
+Each task drives the simulator through `xcrun simctl` + `xcodebuild test` and asserts both UI state and DB state. Run with the **`GitchatIOS local`** scheme so the build hits `localhost:3000`.
 
-### Task 3.4: Image + caption send (bug #3)
+### Task 3.0: Pre-flight check
 
-- [ ] Open chat A
-- [ ] Type "look at this" in the composer
-- [ ] Paste 2 images
-- [ ] Tap Send
-- [ ] **Expected:** ONE bubble containing the caption + 2 images. Same on receiver. Same order.
+**Files:** none
 
-### Task 3.5: Cache leak cleanup (bug #5)
+- [ ] **Step 1: Verify BE health**
 
-- [ ] On a device with the OLD app, paste an image and force-quit before send completes (creates leaked `local-*` in cache)
-- [ ] Install the NEW build (TestFlight or Xcode Run)
-- [ ] Open the same chat
-- [ ] **Expected:** the leaked `local-*` is filtered out on cache load; user sees clean message list.
+```bash
+curl -fsS http://localhost:3000/api/v1/health | jq .
+```
+Expected: 200 with healthy status. If fails: start BE (`pnpm start:dev` in `gitchat-webapp/backend`).
 
-### Task 3.6: Network drop + recover
+- [ ] **Step 2: Verify simulator is booted**
 
-- [ ] Open chat A, type a long message
-- [ ] Enable airplane mode
-- [ ] Tap Send
-- [ ] **Expected:** bubble shows "sending" → "failed (retriable)" → exponential backoff
-- [ ] Disable airplane mode
-- [ ] **Expected:** auto-retry succeeds, bubble settles to delivered
+```bash
+xcrun simctl list devices booted
+```
+Expected: at least one device under `Booted`. Note its UUID — used as `$SIM_UDID` below.
 
-### Task 3.7: Double-tap send
+```bash
+SIM_UDID=$(xcrun simctl list devices booted -j | jq -r '.devices | to_entries[] | .value[] | select(.state=="Booted") | .udid' | head -1)
+echo "Using simulator: $SIM_UDID"
+```
 
-- [ ] Open chat A
-- [ ] Type a message
-- [ ] Double-tap Send rapidly (try to fire 2 sends)
-- [ ] **Expected:** ONE bubble. BE dedup may have hit; verify only 1 row in DB for that conversation around that timestamp.
+- [ ] **Step 3: Verify schema column exists**
 
-### Task 3.8: Receive from extension (no cmid in payload)
+```bash
+psql "$DEV_DB_URL" -c "\d messages" | grep client_message_id
+```
+Expected: nullable `uuid` row.
 
-- [ ] On a second account, send a message via Chrome extension to the iOS user
-- [ ] **Expected:** message renders correctly on iOS. `client_message_id == nil` doesn't crash.
+- [ ] **Step 4: Verify the `GitchatIOS local` scheme is in place**
 
-### Task 3.9: New iOS → extension receive
+```bash
+xcodebuild -project /Users/hieu/Documents/Companies/Lab3/GitstarAI/gitchat-ios-native/GitchatIOS.xcodeproj -list | grep "GitchatIOS local"
+```
+Expected: scheme listed. If missing, add it in Xcode (Product → Scheme → Manage Schemes → Duplicate `GitchatIOS` and set the env var per the screenshot above).
 
-- [ ] From iOS, send a text message to a peer who is online via Chrome extension
-- [ ] **Expected:** extension renders the message (extension ignores extra `client_message_id` field per Phase 0 verification)
+### Task 3.1: Stress paste — 5 images in 2s (regression bug #1)
 
-### Task 3.10: Open PR, fill checklist
+Drives the simulator via `xcrun simctl pbcopy` to inject images into the clipboard, then runs an XCUITest that pastes + sends 5 times in rapid succession.
 
-- [ ] Push iOS branch:
+**Files:**
+- Create: `GitchatIOSUITests/E2E/StressPasteE2ETests.swift`
+
+- [ ] **Step 1: Author the XCUITest**
+
+```swift
+import XCTest
+
+final class StressPasteE2ETests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
+    func test_pasteFiveImagesIn2Seconds_noCrashNoDuplicate() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["UITEST_DEEP_LINK"] = "gitchat://chat/<TEST_CONV_ID>"  // pre-known test conversation
+        app.launchForUITests()
+
+        try ChatNav.openFirstChat(app)
+
+        for _ in 0..<5 {
+            UIPasteboard.general.image = UIImage(data: PasteboardFixture.screenshotPNGData())
+            app.textViews["composer"].firstMatch.typeKey("v", modifierFlags: .command)
+            // Send button accessibility id
+            app.buttons["composer-send"].firstMatch.tap()
+            usleep(200_000)  // 200 ms between sends → fires 5 within ~1.2s
+        }
+
+        // Assert: no crash dialog
+        XCTAssertFalse(app.alerts.element.waitForExistence(timeout: 1))
+
+        // Assert: 5 distinct bubbles (no duplicates) — match by accessibility id pattern
+        let bubbles = app.cells.matching(identifier: "message-bubble")
+        let count = bubbles.count
+        XCTAssertEqual(count, 5, "Expected 5 message bubbles, got \(count)")
+    }
+}
+```
+
+(`UITEST_DEEP_LINK` and `composer-send` accessibility id assume existing UITest conventions — adapt to whatever `PasteImageFromClipboardTests` uses today.)
+
+- [ ] **Step 2: Run the test**
+
+```bash
+xcodebuild test \
+  -project GitchatIOS.xcodeproj \
+  -scheme "GitchatIOS local" \
+  -destination "platform=iOS Simulator,id=$SIM_UDID" \
+  -only-testing:GitchatIOSUITests/StressPasteE2ETests/test_pasteFiveImagesIn2Seconds_noCrashNoDuplicate
+```
+Expected: PASS, no crash report.
+
+- [ ] **Step 3: Assert DB row count equals 5**
+
+After the UI test, query Postgres directly to confirm BE inserted exactly 5 rows for this user in the last minute:
+```bash
+psql "$DEV_DB_URL" -c "
+SELECT COUNT(*) FROM messages
+ WHERE sender_login = '<TEST_USER_LOGIN>'
+   AND created_at > NOW() - INTERVAL '1 minute';
+"
+```
+Expected: `5`.
+
+- [ ] **Step 4: Assert all 5 rows have distinct `client_message_id`**
+
+```bash
+psql "$DEV_DB_URL" -c "
+SELECT COUNT(DISTINCT client_message_id) FROM messages
+ WHERE sender_login = '<TEST_USER_LOGIN>'
+   AND created_at > NOW() - INTERVAL '1 minute';
+"
+```
+Expected: `5` (all distinct).
+
+- [ ] **Step 5: Commit the new test file**
+
+```bash
+git add GitchatIOSUITests/E2E/
+git commit -m "test(ios): E2E stress-paste regression for bug #1
+
+Drives the simulator through 5 paste+send cycles in <2s and
+asserts both UI state (5 bubbles, no crash) and DB state
+(5 distinct rows with unique client_message_id).
+
+Refs #88
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
+```
+
+### Task 3.2: Force-quit mid-upload (bug #2 worst case)
+
+Uses `xcrun simctl terminate` to kill the app while an upload is in flight, then re-launches and asserts the cache is clean.
+
+**Files:**
+- Create: `GitchatIOSUITests/E2E/ForceQuitMidUploadE2ETests.swift`
+
+- [ ] **Step 1: Author the test**
+
+```swift
+final class ForceQuitMidUploadE2ETests: XCTestCase {
+    func test_forceQuitMidUpload_cacheHasNoOrphanLocal() throws {
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+
+        // Use a large image (>2 MB) so upload is observable
+        UIPasteboard.general.image = UIImage(data: PasteboardFixture.largeImagePNGData())
+        app.textViews["composer"].firstMatch.typeKey("v", modifierFlags: .command)
+        app.buttons["composer-send"].firstMatch.tap()
+
+        // Wait until uploading visible (spinner or progress indicator)
+        let spinner = app.activityIndicators["upload-spinner"].firstMatch
+        XCTAssertTrue(spinner.waitForExistence(timeout: 2))
+
+        // Kill app via simctl from a Process
+        let bundleId = "chat.git"
+        let task = Process()
+        task.launchPath = "/usr/bin/xcrun"
+        task.arguments = ["simctl", "terminate", "booted", bundleId]
+        try task.run(); task.waitUntilExit()
+
+        sleep(1)
+
+        // Re-launch
+        app.launch()
+        try ChatNav.openFirstChat(app)
+
+        // Assert: no bubble with id starting "local-"
+        // (UI hint exposed via accessibility id "bubble-id-<full-id>")
+        let allBubbles = app.cells.matching(identifier: "message-bubble").allElementsBoundByIndex
+        for bubble in allBubbles {
+            let id = bubble.accessibilityIdentifier ?? ""
+            XCTAssertFalse(id.hasPrefix("bubble-id-local-"),
+                           "Found orphan local-* bubble after force-quit + relaunch: \(id)")
+        }
+    }
+}
+```
+
+(Requires composer/bubble views to expose accessibility ids — add them in Task 2.1 onward if not present.)
+
+- [ ] **Step 2: Run**
+
+```bash
+xcodebuild test \
+  -project GitchatIOS.xcodeproj \
+  -scheme "GitchatIOS local" \
+  -destination "platform=iOS Simulator,id=$SIM_UDID" \
+  -only-testing:GitchatIOSUITests/ForceQuitMidUploadE2ETests
+```
+Expected: PASS.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add GitchatIOSUITests/E2E/
+git commit -m "test(ios): E2E force-quit mid-upload — verify cache is clean
+
+Refs #88
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
+```
+
+### Task 3.3: Back-out + re-enter mid-upload (bug #2 happy path)
+
+**Files:**
+- Create: `GitchatIOSUITests/E2E/BackoutMidUploadE2ETests.swift`
+
+- [ ] **Step 1: Author the test**
+
+```swift
+final class BackoutMidUploadE2ETests: XCTestCase {
+    func test_backoutMidUpload_thenReenter_bubbleReconciles() throws {
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+
+        UIPasteboard.general.image = UIImage(data: PasteboardFixture.largeImagePNGData())
+        app.textViews["composer"].firstMatch.typeKey("v", modifierFlags: .command)
+        app.buttons["composer-send"].firstMatch.tap()
+
+        // Wait until upload starts
+        XCTAssertTrue(app.activityIndicators["upload-spinner"].firstMatch.waitForExistence(timeout: 2))
+
+        // Navigate back
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        sleep(5)  // let upload + send complete in background
+
+        // Re-enter chat
+        try ChatNav.openFirstChat(app)
+
+        // Assert bubble exists, is NOT local-*, and no spinner
+        let bubbles = app.cells.matching(identifier: "message-bubble").allElementsBoundByIndex
+        let lastBubble = bubbles.last!
+        let id = lastBubble.accessibilityIdentifier ?? ""
+        XCTAssertFalse(id.hasPrefix("bubble-id-local-"), "Bubble still optimistic after upload should have completed")
+
+        XCTAssertFalse(app.activityIndicators["upload-spinner"].firstMatch.exists, "No spinner expected")
+    }
+}
+```
+
+- [ ] **Step 2: Run + commit (same as Task 3.2)**
+
+### Task 3.4: Cache leak cleanup (bug #5)
+
+Verifies that a pre-existing `local-*` in the cache (simulating an old-app leak) gets cleaned by the new load-filter.
+
+**Files:**
+- Create: `GitchatIOSUITests/E2E/CacheLeakCleanupE2ETests.swift`
+- Create: `GitchatIOSUITests/Helpers/MessageCacheSeeder.swift`
+
+- [ ] **Step 1: Helper to seed a leaked entry**
+
+```swift
+import XCTest
+
+enum MessageCacheSeeder {
+    /// Writes a `local-*` entry directly to the simulator's app container
+    /// to mimic a cache leak from an older app version.
+    static func seedLeakedLocalEntry(udid: String, bundleId: String, conversationId: String) throws {
+        // Get app container path
+        let containerProcess = Process()
+        containerProcess.launchPath = "/usr/bin/xcrun"
+        containerProcess.arguments = ["simctl", "get_app_container", udid, bundleId, "data"]
+        let pipe = Pipe(); containerProcess.standardOutput = pipe
+        try containerProcess.run(); containerProcess.waitUntilExit()
+        let containerPath = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)!
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let cacheURL = URL(fileURLWithPath: containerPath)
+            .appendingPathComponent("Documents/MessageCache/\(conversationId).json")
+
+        let leakedEntry: [String: Any] = [
+            "messages": [
+                ["id": "local-leaked-uuid", "client_message_id": "leaked-uuid",
+                 "conversation_id": conversationId, "sender": "test",
+                 "content": "should be filtered", "created_at": "2026-04-28T10:00:00Z"]
+            ],
+            "fetchedAt": "2026-04-28T10:00:00Z"
+        ]
+        let data = try JSONSerialization.data(withJSONObject: leakedEntry)
+        try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: cacheURL)
+    }
+}
+```
+
+- [ ] **Step 2: Author the test**
+
+```swift
+final class CacheLeakCleanupE2ETests: XCTestCase {
+    func test_legacyLocalEntryInCache_isFilteredOnLoad() throws {
+        let bundleId = "chat.git"
+        let convId = "<TEST_CONV_ID>"
+        let udid = ProcessInfo.processInfo.environment["SIMCTL_CHILD_UDID"] ?? "booted"
+
+        try MessageCacheSeeder.seedLeakedLocalEntry(udid: udid, bundleId: bundleId, conversationId: convId)
+
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openChat(app, conversationId: convId)
+
+        let bubbles = app.cells.matching(identifier: "message-bubble").allElementsBoundByIndex
+        for bubble in bubbles {
+            let id = bubble.accessibilityIdentifier ?? ""
+            XCTAssertNotEqual(id, "bubble-id-local-leaked-uuid",
+                              "Leaked local-* must be filtered on cache load")
+        }
+    }
+}
+```
+
+- [ ] **Step 3: Run + commit**
+
+### Task 3.5: Network drop & recover (retry test)
+
+Uses Network Link Conditioner programmatically (or the simctl status_bar override) to simulate connectivity loss.
+
+**Files:**
+- Create: `GitchatIOSUITests/E2E/NetworkDropRecoverE2ETests.swift`
+
+- [ ] **Step 1: Author the test**
+
+```swift
+final class NetworkDropRecoverE2ETests: XCTestCase {
+    func test_networkDrop_thenRecover_retryDelivers() throws {
+        let udid = ProcessInfo.processInfo.environment["SIMCTL_CHILD_UDID"] ?? "booted"
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+
+        // Simulate offline by pointing API_BASE_URL to a non-existent host.
+        // Easier: use simctl status_bar to set cellularMode to none for the duration.
+        Process.run("/usr/bin/xcrun", ["simctl", "status_bar", udid, "override",
+                                       "--dataNetwork", "wifi", "--wifiBars", "0",
+                                       "--cellularMode", "notSupported"])
+
+        app.textViews["composer"].firstMatch.tap()
+        app.textViews["composer"].firstMatch.typeText("offline message")
+        app.buttons["composer-send"].firstMatch.tap()
+
+        // Wait for failed-retriable bubble state via accessibility id
+        XCTAssertTrue(app.staticTexts["bubble-state-failed-retriable"].waitForExistence(timeout: 5))
+
+        // Restore network
+        Process.run("/usr/bin/xcrun", ["simctl", "status_bar", udid, "clear"])
+
+        // Wait for delivery (longest backoff is 32s; allow 60s)
+        let delivered = app.staticTexts["bubble-state-delivered"]
+        XCTAssertTrue(delivered.waitForExistence(timeout: 60))
+    }
+}
+
+extension Process {
+    static func run(_ path: String, _ args: [String]) {
+        let p = Process(); p.launchPath = path; p.arguments = args
+        try? p.run(); p.waitUntilExit()
+    }
+}
+```
+
+(Requires bubble views to expose state via `accessibilityIdentifier = "bubble-state-\(state.kind)"`. Add this in Task 2.4 / 2.5 to support test.)
+
+- [ ] **Step 2: Run + commit**
+
+### Task 3.6: Double-tap send dedup (BE idempotency)
+
+Tap Send twice rapidly. Expect 1 bubble + 1 DB row.
+
+**Files:**
+- Create: `GitchatIOSUITests/E2E/DoubleTapDedupE2ETests.swift`
+
+- [ ] **Step 1: Author the test**
+
+```swift
+final class DoubleTapDedupE2ETests: XCTestCase {
+    func test_doubleTapSend_resultsInSingleBubble_andSingleDBRow() throws {
+        let app = XCUIApplication()
+        app.launchForUITests()
+        try ChatNav.openFirstChat(app)
+
+        app.textViews["composer"].firstMatch.tap()
+        app.textViews["composer"].firstMatch.typeText("dedup-marker-\(UUID().uuidString)")
+
+        let send = app.buttons["composer-send"].firstMatch
+        send.tap(); send.tap()  // back-to-back
+
+        sleep(3)
+        let bubbles = app.cells.matching(identifier: "message-bubble").allElementsBoundByIndex
+        let matches = bubbles.filter { ($0.label).contains("dedup-marker") }
+        XCTAssertEqual(matches.count, 1, "Expected 1 bubble, got \(matches.count)")
+    }
+}
+```
+
+- [ ] **Step 2: Assert DB-side via psql**
+
+```bash
+psql "$DEV_DB_URL" -c "
+SELECT COUNT(*) FROM messages WHERE body LIKE 'dedup-marker-%' AND created_at > NOW() - INTERVAL '1 minute';
+"
+```
+Expected: `1`.
+
+- [ ] **Step 3: Run + commit**
+
+### Task 3.7: Phase 3 — full automated suite run
+
+- [ ] **Step 1: Run all E2E tests**
+
+```bash
+xcodebuild test \
+  -project GitchatIOS.xcodeproj \
+  -scheme "GitchatIOS local" \
+  -destination "platform=iOS Simulator,id=$SIM_UDID" \
+  -only-testing:GitchatIOSUITests/E2E
+```
+Expected: all green.
+
+- [ ] **Step 2: Capture run as evidence**
+
+```bash
+xcrun simctl io booted recordVideo /tmp/cmid-e2e-$(date +%s).mov &
+REC_PID=$!
+# (Re-run the suite to record)
+xcodebuild test ... -only-testing:GitchatIOSUITests/E2E
+kill -INT $REC_PID
+```
+Attach the resulting MOV to PR description as proof of green run.
+
+---
+
+## Phase 4 — Two-sided realtime manual verification
+
+These checks need a second client. User has Mac Catalyst + a 2nd account ready on demand. Run these once Phase 3 is green and a build is produced for both targets.
+
+### Task 4.1: Pre-flight — second client ready
+
+- [ ] Launch Mac Catalyst build (`xcodebuild -scheme "GitchatIOS local" -destination 'platform=macOS,variant=Mac Catalyst' run` or run from Xcode)
+- [ ] Log in as user B (the 2nd test account)
+- [ ] Confirm both clients are connected to the same local BE (check WS connection log: `xcrun simctl spawn booted log stream --process Gitchat | grep -i socket`)
+
+### Task 4.2: Bug #3 — image + caption ordering (receiver-side)
+
+- [ ] On simulator (user A): open chat with user B
+- [ ] Type "look at this" + paste 2 images + tap Send
+- [ ] On Mac Catalyst (user B): observe incoming message
+- [ ] **Expected:** ONE bubble on both sides containing caption + 2 images. Identical order. No race.
+
+### Task 4.3: Bug #2 — back-out then re-enter realtime (sender-side)
+
+- [ ] On user A: paste large image, tap Send. While `uploading`, navigate back.
+- [ ] On user B: observe message arrives within seconds.
+- [ ] On user A: re-enter chat.
+- [ ] **Expected (A):** one bubble, server id, no spinner. **Expected (B):** message rendered, has `client_message_id` populated (verify via WS log if needed).
+
+### Task 4.4: Compatibility — extension → iOS receive
+
+- [ ] Open Chrome with the gitchat extension. Log in as user B.
+- [ ] User B sends a text message to user A.
+- [ ] On simulator (user A): observe inbound message.
+- [ ] **Expected:** message renders, `client_message_id` is `null` on iOS Message object (no crash, normal seenIds-based dedup applies).
+
+### Task 4.5: Compatibility — iOS → extension receive
+
+- [ ] User A sends text from simulator.
+- [ ] User B (Chrome extension) observes inbound.
+- [ ] **Expected:** extension renders message. Per Phase 0 verification, the extra `client_message_id` field is silently ignored by the loose decoder.
+
+### Task 4.6: WS realtime stress
+
+- [ ] Both clients open the same conversation
+- [ ] User A sends 10 short messages in 5 seconds; user B sends 5 in parallel
+- [ ] **Expected:** both sides converge on identical message list and order within ~2s. No duplicates. No spinner kept dangling.
+
+---
+
+## Phase 5 — Open PRs
+
+### Task 5.1: BE PR
+
+(Already covered by Task 1.12. Verify the BE PR is open and approved before iOS PR is merged — iOS depends on BE deploy.)
+
+### Task 5.2: iOS PR
+
+- [ ] **Step 1: Push iOS branch**
+
 ```bash
 cd /Users/hieu/Documents/Companies/Lab3/GitstarAI/gitchat-ios-native
 git push -u origin feat/issue-88-cmid-roundtrip
 ```
-- [ ] Open PR:
+
+- [ ] **Step 2: Open PR**
+
 ```bash
 gh pr create --title "feat(ios): client_message_id round-trip — fix bugs #2, #3, #5 (#88)" --body "$(cat <<'EOF'
 ## Summary
@@ -2324,16 +2771,18 @@ Implements the iOS half of the client_message_id round-trip design (`docs/superp
 - **Bug #3**: text + image bundle into one `Message`; receiver sees identical order.
 - **Bug #5**: `MessageCache` filters `local-*` on save AND load; existing dirty caches clean themselves on next open.
 - New unit-test target `GitchatIOSTests` for FSM and view-model coverage.
+- New E2E suite `GitchatIOSUITests/E2E` driving simulator + local BE through stress paste, force-quit, network drop, and double-tap scenarios.
 
 ## Dependencies
 
-Requires the BE PR (`gitchat-webapp/backend#<NN>`) merged and deployed first. New iOS sends include `client_message_id`; old BE will accept the extra field (no DTO whitelist) but won't dedup.
+Requires the BE PR (`gitchat-webapp/backend#<NN>`) merged and deployed first. New iOS sends include `client_message_id`; old BE accepts the extra field (controllers use loose `@Body() body: { ... }` types — no whitelist) but won't dedup until the new code lands.
 
 ## Test plan
 
-- [ ] All unit tests pass (`GitchatIOSTests`)
-- [ ] UI smoke pass (`SmokeTests`, `PasteImageFromClipboardTests`)
-- [ ] Manual: §3.1–§3.9 in plan doc
+- [ ] All unit tests pass (`xcodebuild test -only-testing:GitchatIOSTests`)
+- [ ] All E2E tests pass against local BE (`xcodebuild test -scheme "GitchatIOS local" -only-testing:GitchatIOSUITests/E2E`)
+- [ ] UI smoke pass (`SmokeTests`, `PasteImageFromClipboardTests`, `ComposerRegressionTests`)
+- [ ] Phase 4 manual: two-sided realtime check (simulator + Mac Catalyst with 2nd account)
 - [ ] Compatibility: send from extension → iOS receives. Send from iOS → extension receives.
 
 Closes #88
@@ -2350,14 +2799,16 @@ EOF
 - §Backend → 1.2–1.11
 - §OutboxStore extension → 2.4–2.8
 - §iOS frontend changes → 2.1–2.13
-- §Migration & rollout → 1.2 (DB safety), 1.12 (BE PR), 2.15 + 3.10 (iOS PR), Phase 3 (manual)
-- §Testing strategy → covered per task plus Phase 3
+- §Migration & rollout → 1.2 (DB safety), 1.12 (BE PR), 2.15 + 5.2 (iOS PR), §Local development & E2E infrastructure, Phase 3, Phase 4
+- §Testing strategy → unit per task + Phase 3 automated E2E + Phase 4 two-sided realtime
 
 **Placeholder scan:** none of TBD/TODO/"add appropriate". Each test step has the actual test code; each implementation step shows the actual code.
 
 **Type consistency:** `clientMessageID` (Swift), `clientMessageId` (TS), `client_message_id` (JSON wire) — used consistently per language convention. `PendingMessage`, `PendingAttachment`, `UploadedRef`, `State.kind` consistent across tasks.
 
-**Open: Section 6 of spec listed several iOS unit tests not explicitly in the plan** (e.g., `test_concurrentEnqueue_serialFIFO_per_conversation`, `test_unregisteredHandler_doesNotCrash`). These are minor coverage adds; if needed, add inside Task 2.5 or 2.7 as additional `it(...)` tests without changing structure.
+**Open notes:**
+- Section 6 of spec listed several iOS unit tests not explicitly in the plan (e.g., `test_concurrentEnqueue_serialFIFO_per_conversation`, `test_unregisteredHandler_doesNotCrash`). These are minor coverage adds; if needed, add inside Task 2.5 or 2.7 as additional test methods without changing structure.
+- Phase 3 E2E tests assume the iOS UI exposes accessibility identifiers like `composer-send`, `message-bubble`, `upload-spinner`, `bubble-state-failed-retriable`, `bubble-state-delivered`, and `bubble-id-<full-id>`. Tasks 2.4 / 2.5 / 2.9 should set these `accessibilityIdentifier` values when they touch the relevant views — or open follow-up tickets if the existing UI doesn't surface them.
 
 ---
 
