@@ -444,7 +444,6 @@ struct ChatDetailView: View {
             }
         }
         Button { showSearch = true } label: { Label("Search", systemImage: "magnifyingglass") }
-        Button { showPinned = true } label: { Label("Pinned messages", systemImage: "pin") }
         Button {
             Task { await vm.toggleMute() }
         } label: {
@@ -496,7 +495,6 @@ struct ChatDetailView: View {
                     }
                 }
                 Button { showSearch = true } label: { Label("Search", systemImage: "magnifyingglass") }
-                Button { showPinned = true } label: { Label("Pinned messages", systemImage: "pin") }
                 Button {
                     Task { await vm.toggleMute() }
                 } label: {

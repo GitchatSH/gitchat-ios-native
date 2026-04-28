@@ -301,6 +301,7 @@ struct ChatView: View {
                     .frame(width: 44, height: 44)
                     .modifier(GlassCircle())
             }
+            .tint(.primary)
         }
         .padding(.horizontal, 16)
         .frame(height: 44)
