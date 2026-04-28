@@ -19,6 +19,7 @@
 		10832E2BD27509C69912DE76 /* ShareTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD425E44DCCAF06510180F2B /* ShareTokenStore.swift */; };
 		128B2F995B3C428FA137E15E /* HideScrollIndicators.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2FDD46F7AAB3B78242FF13A /* HideScrollIndicators.swift */; };
 		1297F23217D80C72EB69A324 /* OneSignalExtension in Frameworks */ = {isa = PBXBuildFile; productRef = A804AE540868411FDE202E67 /* OneSignalExtension */; };
+		146BD1CED03878B0132D7B34 /* SmokeUnitTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE324D6FCF99BB23CA4F6E62 /* SmokeUnitTest.swift */; };
 		15D2935141DC52D24193D42E /* MessageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */; };
 		1F64E756A95BD31E664AAEE9 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */; };
 		20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */; };
@@ -168,6 +169,13 @@
 			remoteGlobalIDString = 15D7A7746C96C0D956D835DF;
 			remoteInfo = GitchatIOS;
 		};
+		8DE6EA5BEEEE9A59F306EBE2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DE209328F4293473D3365D39 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 15D7A7746C96C0D956D835DF;
+			remoteInfo = GitchatIOS;
+		};
 		F05CDA2F190907952F592C0C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = DE209328F4293473D3365D39 /* Project object */;
@@ -234,6 +242,7 @@
 		3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		3CC840DF62F0D52265D6C401 /* GitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GitchatShareExtension.entitlements; sourceTree = "<group>"; };
 		3EACA3D0C53F605D0326E854 /* APIClient+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Group.swift"; sourceTree = "<group>"; };
+		3F65970AD6EC34B2CDB0EB98 /* GitchatIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GitchatIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		401FF094D33B8716885A5985 /* GitchatIOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GitchatIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		40DB657ADF1F6FC16C8A2BA9 /* ImageCropSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropSheet.swift; sourceTree = "<group>"; };
 		449D98B405970A2AF05994F1 /* ShareAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAPI.swift; sourceTree = "<group>"; };
@@ -283,8 +292,10 @@
 		A066E307A07B247124125B04 /* Routes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Routes.swift; sourceTree = "<group>"; };
 		A16BA9650859D21117E8FF1B /* ConversationsListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationsListView.swift; sourceTree = "<group>"; };
 		A3038C4EA39409E253FD85A0 /* MessageMenuActionList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageMenuActionList.swift; sourceTree = "<group>"; };
+		A5A9958A302F6492FA46D0F1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A5D27D2F5A412D74F579504B /* ChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelsView.swift; sourceTree = "<group>"; };
 		AD3E0E8748D50D70E74D6B35 /* PasteImageFromClipboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteImageFromClipboardTests.swift; sourceTree = "<group>"; };
+		AE324D6FCF99BB23CA4F6E62 /* SmokeUnitTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeUnitTest.swift; sourceTree = "<group>"; };
 		B07857501623E25CD298B606 /* StoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreManager.swift; sourceTree = "<group>"; };
 		B339A4FABDFD26D236D1E5CF /* APIClient+Discover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Discover.swift"; sourceTree = "<group>"; };
 		B558F48CABBE00017756E5FA /* GitchatIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GitchatIOS.entitlements; sourceTree = "<group>"; };
@@ -412,6 +423,7 @@
 			isa = PBXGroup;
 			children = (
 				0D9442EC8C4FC8F6B1095FEA /* GitchatIOS */,
+				D4AEBCCF6CC10B0916975AFD /* GitchatIOSTests */,
 				E6A34DD757B3D1347B9965D6 /* GitchatIOSUITests */,
 				BBFECFB08747D33409E0CDFA /* GitchatShareExtension */,
 				6AD5976CDA709D12CBDE670A /* OneSignalNotificationServiceExtension */,
@@ -460,6 +472,7 @@
 			isa = PBXGroup;
 			children = (
 				653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */,
+				3F65970AD6EC34B2CDB0EB98 /* GitchatIOSTests.xctest */,
 				401FF094D33B8716885A5985 /* GitchatIOSUITests.xctest */,
 				C3B238A579BDAC391159C493 /* GitchatShareExtension.appex */,
 				814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */,
@@ -711,6 +724,15 @@
 			path = Channels;
 			sourceTree = "<group>";
 		};
+		D4AEBCCF6CC10B0916975AFD /* GitchatIOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				A5A9958A302F6492FA46D0F1 /* Info.plist */,
+				AE324D6FCF99BB23CA4F6E62 /* SmokeUnitTest.swift */,
+			);
+			path = GitchatIOSTests;
+			sourceTree = "<group>";
+		};
 		D56E29712BD2BE0919147855 /* ChatDetail */ = {
 			isa = PBXGroup;
 			children = (
@@ -839,6 +861,24 @@
 			productReference = 401FF094D33B8716885A5985 /* GitchatIOSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		45A48EBFA571E78841077352 /* GitchatIOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5BA1D0E8FF10612DFC4A31F3 /* Build configuration list for PBXNativeTarget "GitchatIOSTests" */;
+			buildPhases = (
+				FA9AAF1FDA82FE1DA7675CF3 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				FCC644E743B189BAA351722C /* PBXTargetDependency */,
+			);
+			name = GitchatIOSTests;
+			packageProductDependencies = (
+			);
+			productName = GitchatIOSTests;
+			productReference = 3F65970AD6EC34B2CDB0EB98 /* GitchatIOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		6F43BFDA3F932B01CF0412E7 /* OneSignalNotificationServiceExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = DBA9CCB182E4CD108DE81D78 /* Build configuration list for PBXNativeTarget "OneSignalNotificationServiceExtension" */;
@@ -892,6 +932,9 @@
 						DevelopmentTeam = 9S5F8693FB;
 						TestTargetID = 15D7A7746C96C0D956D835DF;
 					};
+					45A48EBFA571E78841077352 = {
+						DevelopmentTeam = 9S5F8693FB;
+					};
 					6F43BFDA3F932B01CF0412E7 = {
 						DevelopmentTeam = 9S5F8693FB;
 						ProvisioningStyle = Automatic;
@@ -926,6 +969,7 @@
 			projectRoot = "";
 			targets = (
 				15D7A7746C96C0D956D835DF /* GitchatIOS */,
+				45A48EBFA571E78841077352 /* GitchatIOSTests */,
 				31FF3033EBD507A35E482DDA /* GitchatIOSUITests */,
 				EB0765B7BFA48EC0AC25A5E6 /* GitchatShareExtension */,
 				6F43BFDA3F932B01CF0412E7 /* OneSignalNotificationServiceExtension */,
@@ -1111,6 +1155,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FA9AAF1FDA82FE1DA7675CF3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				146BD1CED03878B0132D7B34 /* SmokeUnitTest.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1130,6 +1182,11 @@
 			platformFilter = ios;
 			target = 6F43BFDA3F932B01CF0412E7 /* OneSignalNotificationServiceExtension */;
 			targetProxy = F05CDA2F190907952F592C0C /* PBXContainerItemProxy */;
+		};
+		FCC644E743B189BAA351722C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 15D7A7746C96C0D956D835DF /* GitchatIOS */;
+			targetProxy = 8DE6EA5BEEEE9A59F306EBE2 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1238,6 +1295,26 @@
 			};
 			name = Release;
 		};
+		48DF6239B931C3D6E96281E2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = GitchatIOSTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = chat.git.unittests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Gitchat.app/Gitchat";
+			};
+			name = Debug;
+		};
 		55D18C3DC5EE18E9D4818C57 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1278,6 +1355,26 @@
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		9BF768C8A7D3FA9C48C2566E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				INFOPLIST_FILE = GitchatIOSTests/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = chat.git.unittests;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Gitchat.app/Gitchat";
 			};
 			name = Release;
 		};
@@ -1470,6 +1567,15 @@
 			buildConfigurations = (
 				D4A113A1779B666076BECA4C /* Debug */,
 				73E5EDB4599E6FFEF5E61B72 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5BA1D0E8FF10612DFC4A31F3 /* Build configuration list for PBXNativeTarget "GitchatIOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				48DF6239B931C3D6E96281E2 /* Debug */,
+				9BF768C8A7D3FA9C48C2566E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -15,6 +15,7 @@ schemes:
     test:
       config: Debug
       targets:
+        - GitchatIOSTests
         - GitchatIOSUITests
     profile:
       config: Release
@@ -241,6 +242,26 @@ targets:
         INFOPLIST_FILE: GitchatShareExtension/Info.plist
         SKIP_INSTALL: NO
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  GitchatIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: GitchatIOSTests
+    dependencies:
+      - target: GitchatIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: chat.git.unittests
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Gitchat.app/Gitchat
+        SUPPORTS_MACCATALYST: YES
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    info:
+      path: GitchatIOSTests/Info.plist
+      properties:
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: BNDL
   GitchatIOSUITests:
     type: bundle.ui-testing
     platform: iOS
