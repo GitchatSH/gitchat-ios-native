@@ -28,6 +28,7 @@
 		CC33DD44EE55FF66AA11BB23 /* Message+TestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC33DD44EE55FF66AA11BB22 /* Message+TestFixture.swift */; };
 		DD44EE55FF66AA11BB22CC34 /* OutboxStoreLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD44EE55FF66AA11BB22CC33 /* OutboxStoreLifecycleTests.swift */; };
 		EE55FF66AA11BB22CC33DD45 /* AsyncBlocker.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA11BB22CC33DD44 /* AsyncBlocker.swift */; };
+		AA11BB22CC33DD44EE55FF03 /* ChatViewModelSendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF01 /* ChatViewModelSendTests.swift */; };
 		15D2935141DC52D24193D42E /* MessageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */; };
 		1F64E756A95BD31E664AAEE9 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */; };
 		20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */; };
@@ -357,6 +358,7 @@
 		CC33DD44EE55FF66AA11BB22 /* Message+TestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Message+TestFixture.swift"; sourceTree = "<group>"; };
 		EE55FF66AA11BB22CC33DD44 /* AsyncBlocker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncBlocker.swift; sourceTree = "<group>"; };
 		DD44EE55FF66AA11BB22CC33 /* OutboxStoreLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxStoreLifecycleTests.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF01 /* ChatViewModelSendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModelSendTests.swift; sourceTree = "<group>"; };
 		F0D8FDDB6F6CDBB4122B7CFE /* ComposerRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRegressionTests.swift; sourceTree = "<group>"; };
 		F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		F5504187F7E16505485EECBE /* InvitePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvitePreviewSheet.swift; sourceTree = "<group>"; };
@@ -675,6 +677,14 @@
 			path = OutboxStore;
 			sourceTree = "<group>";
 		};
+		AA11BB22CC33DD44EE55FF02 /* Conversations */ = {
+			isa = PBXGroup;
+			children = (
+				AA11BB22CC33DD44EE55FF01 /* ChatViewModelSendTests.swift */,
+			);
+			path = Conversations;
+			sourceTree = "<group>";
+		};
 		7D374814E832CD239C7A4ED0 /* StoreKit */ = {
 			isa = PBXGroup;
 			children = (
@@ -791,6 +801,7 @@
 				45A48902EC0037D577CC5339 /* Models */,
 				7D16C6F7D3213561F9FAA611 /* Networking */,
 				55DC61A9954C4ED8A9E2F8DF /* OutboxStore */,
+				AA11BB22CC33DD44EE55FF02 /* Conversations */,
 			);
 			path = GitchatIOSTests;
 			sourceTree = "<group>";
@@ -1232,6 +1243,7 @@
 				CC33DD44EE55FF66AA11BB23 /* Message+TestFixture.swift in Sources */,
 				DD44EE55FF66AA11BB22CC34 /* OutboxStoreLifecycleTests.swift in Sources */,
 				EE55FF66AA11BB22CC33DD45 /* AsyncBlocker.swift in Sources */,
+				AA11BB22CC33DD44EE55FF03 /* ChatViewModelSendTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

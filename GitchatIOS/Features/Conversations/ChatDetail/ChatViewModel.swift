@@ -24,7 +24,10 @@ final class ChatViewModel: ObservableObject {
     @Published var conversation: Conversation
     private var draftKey: String { "gitchat.draft.\(conversation.id)" }
 
-    init(conversation: Conversation) {
+    private let outbox: OutboxStore
+
+    init(conversation: Conversation, outbox: OutboxStore = .shared) {
+        self.outbox = outbox
         self.conversation = conversation
         self.isMuted = conversation.is_muted == true
         if let saved = UserDefaults.standard.string(forKey: "gitchat.draft.\(conversation.id)") {
@@ -191,6 +194,41 @@ final class ChatViewModel: ObservableObject {
     }
 
     // MARK: - Send / edit / delete
+
+    /// Unified send entry point (Task 2.9). Creates an optimistic Message
+    /// with id="local-<cmid>" and client_message_id=cmid, appends it to
+    /// `messages`, persists the cache, and enqueues a PendingMessage to
+    /// the injected OutboxStore so the send pipeline can pick it up.
+    ///
+    /// Empty content (after trimming) + no attachments is a no-op.
+    /// Legacy uploadAndSend / sendEncodedAttachments / uploadImagesAndSend
+    /// are preserved until Task 2.13 reroutes their callers and removes them.
+    func send(content: String, attachments: [PendingAttachment] = [], replyTo: Message? = nil) {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || !attachments.isEmpty else { return }
+
+        let cmid = UUID().uuidString
+        let optimistic = Message.optimistic(
+            clientMessageID: cmid,
+            conversationID: conversation.id,
+            sender: AuthStore.shared.login ?? "me",
+            content: trimmed,
+            attachments: attachments
+        )
+        messages.append(optimistic)
+        persistCache()
+
+        outbox.enqueue(PendingMessage(
+            clientMessageID: cmid,
+            conversationID: conversation.id,
+            content: trimmed,
+            replyToID: replyTo?.id,
+            attachments: attachments,
+            attempts: 0,
+            createdAt: Date(),
+            state: .enqueued
+        ))
+    }
 
     func send() async {
         let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -663,3 +701,20 @@ final class ChatViewModel: ObservableObject {
         }.value
     }
 }
+
+// MARK: - Test helpers
+
+#if DEBUG
+extension ChatViewModel {
+    /// Test-only factory. Injects an isolated OutboxStore so tests can
+    /// inspect enqueued messages without touching OutboxStore.shared.
+    /// Call sites in test code pass a MockAPIClient-backed OutboxStore;
+    /// defaults to the real shared store when called from production DEBUG builds.
+    static func testInstance(
+        conversation: Conversation = .testFixture(),
+        outbox: OutboxStore = .shared
+    ) -> ChatViewModel {
+        ChatViewModel(conversation: conversation, outbox: outbox)
+    }
+}
+#endif
