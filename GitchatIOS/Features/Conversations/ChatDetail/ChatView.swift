@@ -340,8 +340,8 @@ struct ChatView: View {
                 items: visibleMessages,
                 typingUsers: Array(vm.typingUsers),
                 isGroup: vm.conversation.isGroup,
-                showSeen: showSeen,
-                seenAvatarURL: seenAvatarURL,
+                showSeen: false,
+                seenAvatarURL: nil,
                 pinnedIds: vm.pinnedIds,
                 readCursors: vm.readCursors,
                 pulsingId: pulsingId,
@@ -476,9 +476,6 @@ struct ChatView: View {
                 .padding(.top, showHeader ? 8 : 4)
                 .chatSwipeToReply(isMe: isMe, messageId: msg.id)
                 .onTapGesture(count: 2) { actions.onDoubleTapHeart(msg) }
-                if !cursors.isEmpty {
-                    seenByAvatarsRow(cursors: cursors, isMe: isMe, for: msg)
-                }
             }
         }
     }
