@@ -944,11 +944,17 @@ struct ConversationRow: View {
                 .font(.subheadline)
                 .foregroundStyle(secondaryTextColor)
                 .lineLimit(1)
-        } else {
+        } else if conversation.isGroup {
             Text(previewWithoutPhotoEmoji)
                 .font(.subheadline)
                 .foregroundStyle(secondaryTextColor)
                 .lineLimit(1)
+        } else {
+            // DM — allow 2 lines
+            Text(previewWithoutPhotoEmoji)
+                .font(.subheadline)
+                .foregroundStyle(secondaryTextColor)
+                .lineLimit(2)
         }
     }
 
