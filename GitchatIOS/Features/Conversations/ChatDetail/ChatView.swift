@@ -700,6 +700,7 @@ extension ChatView {
                 currentReactions: currentUserReactions(for: t.message),
                 seenCount: seenByLogins(t.message).count,
                 seenLogins: seenByLogins(t.message),
+                isReadByOthers: vm.isReadByOthers(for: t.message),
                 participants: participants,
                 onReact: { emoji in actions.onReact(t.message, emoji) },
                 onMoreReactions: { actions.onMoreReactions(t.message) },

@@ -1002,7 +1002,7 @@ private struct ChatDetailSheets: ViewModifier {
                 NavigationStack {
                     SeenBySheet(
                         message: msg,
-                        readCursors: vm.readCursors,
+                        seenLogins: vm.seenByLogins(for: msg),
                         participants: vm.conversation.participantsOrEmpty,
                         myLogin: auth.login
                     )

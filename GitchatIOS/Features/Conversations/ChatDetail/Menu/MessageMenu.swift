@@ -12,6 +12,7 @@ struct MessageMenu<Preview: View>: View {
     let currentReactions: Set<String>
     let seenCount: Int
     let seenLogins: [String]
+    var isReadByOthers: Bool = false
     let participants: [ConversationParticipant]
     let onReact: (String) -> Void
     let onMoreReactions: () -> Void
@@ -83,6 +84,7 @@ struct MessageMenu<Preview: View>: View {
                         actions: actions,
                         seenCount: seenCount,
                         seenLogins: seenLogins,
+                        isReadByOthers: isReadByOthers,
                         participants: participants,
                         onAction: { action in
                             onAction(action)
