@@ -23,6 +23,10 @@
 		146BD1CED03878B0132D7B34 /* SmokeUnitTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE324D6FCF99BB23CA4F6E62 /* SmokeUnitTest.swift */; };
 		B56AAA49659A448089400AB9 /* PendingAttachmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE97DC261BC547868B9E110F /* PendingAttachmentTests.swift */; };
 		5D4C5CF5736E4A6F96F8BAF3 /* PendingMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F028D515A74C45759E276E81 /* PendingMessageTests.swift */; };
+		AA11BB22CC33DD44EE55FF67 /* APIClient+Protocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11BB22CC33DD44EE55FF66 /* APIClient+Protocol.swift */; };
+		BB22CC33DD44EE55FF66AA12 /* MockAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF66AA11 /* MockAPIClient.swift */; };
+		CC33DD44EE55FF66AA11BB23 /* Message+TestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC33DD44EE55FF66AA11BB22 /* Message+TestFixture.swift */; };
+		DD44EE55FF66AA11BB22CC34 /* OutboxStoreLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD44EE55FF66AA11BB22CC33 /* OutboxStoreLifecycleTests.swift */; };
 		15D2935141DC52D24193D42E /* MessageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */; };
 		1F64E756A95BD31E664AAEE9 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */; };
 		20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */; };
@@ -347,6 +351,10 @@
 		DE8E6059D989F62927E22A1A /* MacBottomNav.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBottomNav.swift; sourceTree = "<group>"; };
 		E53A491227A1B50663F174A3 /* APIClient+Invite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Invite.swift"; sourceTree = "<group>"; };
 		ED882894AD818DBFB0421E96 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		AA11BB22CC33DD44EE55FF66 /* APIClient+Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Protocol.swift"; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF66AA11 /* MockAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAPIClient.swift; sourceTree = "<group>"; };
+		CC33DD44EE55FF66AA11BB22 /* Message+TestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Message+TestFixture.swift"; sourceTree = "<group>"; };
+		DD44EE55FF66AA11BB22CC33 /* OutboxStoreLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxStoreLifecycleTests.swift; sourceTree = "<group>"; };
 		F0D8FDDB6F6CDBB4122B7CFE /* ComposerRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRegressionTests.swift; sourceTree = "<group>"; };
 		F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		F5504187F7E16505485EECBE /* InvitePreviewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InvitePreviewSheet.swift; sourceTree = "<group>"; };
@@ -577,6 +585,7 @@
 			isa = PBXGroup;
 			children = (
 				ED882894AD818DBFB0421E96 /* APIClient.swift */,
+				AA11BB22CC33DD44EE55FF66 /* APIClient+Protocol.swift */,
 				B339A4FABDFD26D236D1E5CF /* APIClient+Discover.swift */,
 				3EACA3D0C53F605D0326E854 /* APIClient+Group.swift */,
 				E53A491227A1B50663F174A3 /* APIClient+Invite.swift */,
@@ -659,6 +668,7 @@
 			children = (
 				DE97DC261BC547868B9E110F /* PendingAttachmentTests.swift */,
 				F028D515A74C45759E276E81 /* PendingMessageTests.swift */,
+				DD44EE55FF66AA11BB22CC33 /* OutboxStoreLifecycleTests.swift */,
 			);
 			path = OutboxStore;
 			sourceTree = "<group>";
@@ -691,6 +701,8 @@
 			isa = PBXGroup;
 			children = (
 				6C2F57A00C4CFAFC24CD61DE /* StubURLProtocol.swift */,
+				BB22CC33DD44EE55FF66AA11 /* MockAPIClient.swift */,
+				CC33DD44EE55FF66AA11BB22 /* Message+TestFixture.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -1171,6 +1183,7 @@
 				D6F22BEEE3B7B425EE371B5A /* NewChatView.swift in Sources */,
 				20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */,
 				3A3E0B7B4AE4F296C6F0A4CD /* OutboxStore.swift in Sources */,
+				AA11BB22CC33DD44EE55FF67 /* APIClient+Protocol.swift in Sources */,
 				5C64CCED436F361067331C14 /* PasteableTextField.swift in Sources */,
 				3A9789932CCFBFDA26FCA4CB /* PasteableUITextView.swift in Sources */,
 				EC901521FFF8953EEB00DC9B /* PeekHostWindow.swift in Sources */,
@@ -1212,6 +1225,9 @@
 				D89FF53B49AC2EE3B3E54170 /* StubURLProtocol.swift in Sources */,
 				B56AAA49659A448089400AB9 /* PendingAttachmentTests.swift in Sources */,
 				5D4C5CF5736E4A6F96F8BAF3 /* PendingMessageTests.swift in Sources */,
+				BB22CC33DD44EE55FF66AA12 /* MockAPIClient.swift in Sources */,
+				CC33DD44EE55FF66AA11BB23 /* Message+TestFixture.swift in Sources */,
+				DD44EE55FF66AA11BB22CC34 /* OutboxStoreLifecycleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

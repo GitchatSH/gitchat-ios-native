@@ -239,9 +239,8 @@ final class ChatViewModel: ObservableObject {
                     createdAt: Date(),
                     state: .enqueued
                 )
-                OutboxStore.shared.enqueue(pending)
+                OutboxStore.shared.enqueue(pending)  // enqueue now auto-fires runSend
                 Haptics.impact(.light)
-                OutboxStore.shared.runSend(for: pending)
             }
         } catch {
             self.error = error.localizedDescription
