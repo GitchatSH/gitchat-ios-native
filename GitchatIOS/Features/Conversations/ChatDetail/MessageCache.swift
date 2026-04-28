@@ -110,4 +110,12 @@ final class MessageCache {
             }
         }
     }
+
+    #if DEBUG
+    /// Test-only helper to clear in-memory cache entries. Disk files are
+    /// left intact to avoid side effects on other tests.
+    func clearForTesting() {
+        entries.removeAll()
+    }
+    #endif
 }

@@ -34,13 +34,13 @@ final class ChatViewModel: ObservableObject {
             self.draft = saved
         }
         if let cached = MessageCache.shared.get(conversation.id) {
-            self.messages = cached.messages
+            self.messages = cached.messages.filter { !$0.id.hasPrefix("local-") }
             self.nextCursor = cached.nextCursor
             self.otherReadAt = cached.otherReadAt
             if let cursors = cached.readCursors {
                 self.readCursors = cursors
             }
-            ChatMessageView.markSeen(cached.messages.map(\.id))
+            ChatMessageView.markSeen(self.messages.map(\.id))
         }
     }
 
@@ -209,7 +209,7 @@ final class ChatViewModel: ObservableObject {
 
     private func persistCache() {
         MessageCache.shared.store(conversation.id, entry: MessageCache.Entry(
-            messages: self.messages,
+            messages: self.messages.filter { !$0.id.hasPrefix("local-") },
             nextCursor: self.nextCursor,
             otherReadAt: self.otherReadAt,
             readCursors: self.readCursors.isEmpty ? nil : self.readCursors,
