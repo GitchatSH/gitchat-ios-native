@@ -38,6 +38,17 @@
       </MacroExpansion>
       <Testables>
          <TestableReference
+            skipped = "NO"
+            parallelizable = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "45A48EBFA571E78841077352"
+               BuildableName = "GitchatIOSTests.xctest"
+               BlueprintName = "GitchatIOSTests"
+               ReferencedContainer = "container:GitchatIOS.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"

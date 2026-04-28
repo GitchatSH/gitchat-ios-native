@@ -26,21 +26,23 @@ final class ChatViewModel: ObservableObject {
     @Published var conversation: Conversation
     private var draftKey: String { "gitchat.draft.\(conversation.id)" }
 
-    init(conversation: Conversation) {
+    private let outbox: OutboxStore
+
+    init(conversation: Conversation, outbox: OutboxStore = .shared) {
+        self.outbox = outbox
         self.conversation = conversation
         self.isMuted = conversation.is_muted == true
         if let saved = UserDefaults.standard.string(forKey: "gitchat.draft.\(conversation.id)") {
             self.draft = saved
         }
         if let cached = MessageCache.shared.get(conversation.id) {
-            self.messages = cached.messages
+            self.messages = cached.messages.filter { !$0.id.hasPrefix("local-") }
             self.nextCursor = cached.nextCursor
             self.otherReadAt = cached.otherReadAt
             if let cursors = cached.readCursors {
                 self.readCursors = cursors
             }
-            print("[SEEN-CACHE] otherReadAt: \(cached.otherReadAt ?? "nil") | readCursors: \(cached.readCursors ?? [:])")
-            ChatMessageView.markSeen(cached.messages.map(\.id))
+            ChatMessageView.markSeen(self.messages.map(\.id))
         }
     }
 
@@ -58,7 +60,13 @@ final class ChatViewModel: ObservableObject {
         let pending = OutboxStore.shared.pendingFor(conversation.id)
             .map(OutboxStore.shared.toMessage)
         guard !pending.isEmpty else { return messages }
-        return (messages + pending).sorted {
+        // Pending projections share id "local-<cmid>" with optimistic placeholders
+        // already in `messages` (from vm.send(content:attachments:)). Skip pending
+        // whose id is already present to avoid UIDiffableDataSource duplicate-id crashes.
+        let existingIds = Set(messages.map(\.id))
+        let unique = pending.filter { !existingIds.contains($0.id) }
+        guard !unique.isEmpty else { return messages }
+        return (messages + unique).sorted {
             ($0.created_at ?? "") < ($1.created_at ?? "")
         }
     }
@@ -91,32 +99,20 @@ final class ChatViewModel: ObservableObject {
         }
         do {
             let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
-            let fetched = resp.messages.reversed()
+            let fetched = Array(resp.messages.reversed())
             // Merge the fetched newest page into our (possibly larger)
             // cached list instead of overwriting it. This preserves
             // older pages that the user already paged into via
             // scroll-up in a previous session.
             if messages.isEmpty {
-                self.messages = Array(fetched)
+                self.messages = fetched
                 self.nextCursor = resp.nextCursor
                 // Mark the initial page as already-seen so bubbles
                 // don't all pop in on first entry — only newly arrived
                 // messages should animate in.
                 ChatMessageView.markSeen(self.messages.map(\.id))
             } else {
-                var existing = messages
-                let existingIds = Set(existing.map(\.id))
-                // Replace edited/updated rows in place.
-                let fetchedById = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
-                for i in existing.indices {
-                    if let updated = fetchedById[existing[i].id] {
-                        existing[i] = updated
-                    }
-                }
-                // Append truly new (newer than cache) messages.
-                let newOnes = fetched.filter { !existingIds.contains($0.id) }
-                existing.append(contentsOf: newOnes)
-                self.messages = existing
+                mergeFromServer(fetched)
                 // nextCursor stays as-is — we still know about older
                 // pages from the previous session.
             }
@@ -138,22 +134,86 @@ final class ChatViewModel: ObservableObject {
             let resp = try await APIClient.shared.getConversationMessages(
                 id: conversation.id, cursor: cursor
             )
-            let older = resp.messages.reversed()
+            let older = Array(resp.messages.reversed())
             let known = Set(messages.map(\.id))
             let deduped = older.filter { !known.contains($0.id) }
             // Older paginated messages should appear immediately, not
             // pop in — mark them seen before they hit the UI.
             ChatMessageView.markSeen(deduped.map(\.id))
-            messages.insert(contentsOf: deduped, at: 0)
+            // mergeFromServer appends, then sorts by created_at ascending,
+            // so older-page messages naturally sort to the front.
+            mergeFromServer(deduped)
             nextCursor = resp.nextCursor
             persistCache()
         } catch { }
         await loadPinned()
     }
 
-    private func persistCache() {
+    // MARK: - Merge
+
+    /// Merges a batch of server-fetched messages into `self.messages` with
+    /// cmid-aware matching:
+    ///
+    /// 1. If `client_message_id` matches an existing message's cmid → REPLACE
+    ///    (clears the optimistic `local-*` placeholder with the stable server id).
+    /// 2. Else if `id` matches existing → REPLACE in-place (handles edits /
+    ///    re-fetches).
+    /// 3. Else → APPEND (first sighting of this message).
+    ///
+    /// After incorporating all fetched messages, sweeps and removes:
+    /// - Any `local-*` whose cmid matches one of the fetched server messages
+    ///   (defensive cleanup of orphans whose cmid-match above didn't fire).
+    /// - Any `local-*` with nil cmid (legacy junk from old builds, per spec §4.3).
+    ///
+    /// Finally, sorts `messages` by `created_at` ascending. This is the single
+    /// source of ordering truth; it makes prepend/append semantics for paginated
+    /// loads equivalent — older page messages sort to the front naturally because
+    /// their `created_at` is earlier.
+    func mergeFromServer(_ fetched: [Message]) {
+        var existing = self.messages
+        for srv in fetched {
+            // Match by client_message_id first (replaces optimistic with stable id).
+            // Case-insensitive: Swift's UUID().uuidString is UPPERCASE, BE's
+            // postgres uuid serialization is lowercase.
+            if let cmid = srv.client_message_id,
+               let idx = existing.firstIndex(where: { $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame }) {
+                existing[idx] = srv
+                continue
+            }
+            // Fall back to id match (handles edited / re-fetched server messages)
+            if let idx = existing.firstIndex(where: { $0.id == srv.id }) {
+                existing[idx] = srv
+                continue
+            }
+            // First sighting — append
+            existing.append(srv)
+        }
+
+        // Collect fetched cmids (lowercased) for the defensive sweep below.
+        let fetchedCmidsLower = Set(fetched.compactMap { $0.client_message_id?.lowercased() })
+
+        // Defensive sweep: remove any remaining local-* placeholder
+        //  - whose cmid matches a fetched server message (defensive against the
+        //    cmid-match path above missing it — e.g., if both cmid and id matched
+        //    different slots and the local-* was not the one replaced)
+        //  - OR whose cmid is nil (legacy junk from old builds — see spec §4.3)
+        existing.removeAll { msg in
+            guard msg.id.hasPrefix("local-") else { return false }
+            guard let cmid = msg.client_message_id else { return true }  // legacy junk
+            return fetchedCmidsLower.contains(cmid.lowercased())
+        }
+
+        // Sort by created_at ascending (ISO8601 strings are lexicographically
+        // ordered). This is stable relative to equal timestamps because Swift's
+        // sort is stable since Swift 5.
+        existing.sort { ($0.created_at ?? "") < ($1.created_at ?? "") }
+
+        self.messages = existing
+    }
+
+    func persistCache() {
         MessageCache.shared.store(conversation.id, entry: MessageCache.Entry(
-            messages: self.messages,
+            messages: self.messages.filter { !$0.id.hasPrefix("local-") },
             nextCursor: self.nextCursor,
             otherReadAt: self.otherReadAt,
             readCursors: self.readCursors.isEmpty ? nil : self.readCursors,
@@ -335,6 +395,43 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Send / edit / delete
 
+    /// Unified send entry point. Creates an optimistic Message with
+    /// id="local-<cmid>" and client_message_id=cmid, appends it to
+    /// `messages`, persists the cache, and enqueues a PendingMessage to
+    /// the injected OutboxStore so the send pipeline can pick it up.
+    ///
+    /// Empty content (after trimming) + no attachments is a no-op.
+    func send(content: String, attachments: [PendingAttachment] = [], replyTo: Message? = nil) {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || !attachments.isEmpty else { return }
+
+        // Lowercase to match BE Postgres uuid serialization. Swift's
+        // UUID().uuidString is UPPERCASE; BE returns lowercase. Case-sensitive
+        // string compare in the delivery handler would otherwise fail to
+        // match the optimistic placeholder against the server's echoed cmid.
+        let cmid = UUID().uuidString.lowercased()
+        let optimistic = Message.optimistic(
+            clientMessageID: cmid,
+            conversationID: conversation.id,
+            sender: AuthStore.shared.login ?? "me",
+            content: trimmed,
+            attachments: attachments
+        )
+        messages.append(optimistic)
+        persistCache()
+
+        outbox.enqueue(PendingMessage(
+            clientMessageID: cmid,
+            conversationID: conversation.id,
+            content: trimmed,
+            replyToID: replyTo?.id,
+            attachments: attachments,
+            attempts: 0,
+            createdAt: Date(),
+            state: .enqueued
+        ))
+    }
+
     func send() async {
         let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return }
@@ -371,19 +468,20 @@ final class ChatViewModel: ObservableObject {
                 }
                 editingMessage = nil
             } else {
-                let pending = OutboxStore.PendingMessage(
-                    localID: "local-\(UUID().uuidString)",
+                // Lowercase: see note in send(content:attachments:replyTo:).
+                let cmid = UUID().uuidString.lowercased()
+                let pending = PendingMessage(
+                    clientMessageID: cmid,
                     conversationID: conversation.id,
-                    senderLogin: AuthStore.shared.login ?? "me",
-                    senderAvatar: nil,
                     content: body,
                     replyToID: replyId,
+                    attachments: [],
+                    attempts: 0,
                     createdAt: Date(),
-                    state: .sending
+                    state: .enqueued
                 )
-                OutboxStore.shared.enqueue(pending)
+                OutboxStore.shared.enqueue(pending)  // enqueue now auto-fires runSend
                 Haptics.impact(.light)
-                OutboxStore.shared.runSend(for: pending)
             }
         } catch {
             self.error = error.localizedDescription
@@ -607,178 +705,6 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Attachments
 
-    func uploadAndSendMany(items: [(Data, String, String)], senderLogin: String?, caption: String = "") async {
-        guard !items.isEmpty else { return }
-        var compressed: [(Data, String, String)] = []
-        compressed.reserveCapacity(items.count)
-        for item in items {
-            compressed.append(
-                await Self.compressIfImageOffMain(data: item.0, filename: item.1, mimeType: item.2)
-            )
-        }
-        await sendEncodedAttachments(compressed, senderLogin: senderLogin, caption: caption)
-    }
-
-    /// UIImage entry point for drop/paste/picker flows. Encodes each image
-    /// exactly once, off MainActor, then hands off to the shared upload
-    /// pipeline. Avoids the previous pattern where the caller would
-    /// `jpegData(...)` on MainActor and `uploadAndSendMany` would then
-    /// decode + re-encode via `compressIfImage`.
-    func uploadImagesAndSend(images: [UIImage], senderLogin: String?, caption: String = "") async {
-        guard !images.isEmpty else { return }
-        var encoded: [(Data, String, String)] = []
-        encoded.reserveCapacity(images.count)
-        for (i, img) in images.enumerated() {
-            if let tuple = await Self.encodeForUploadOffMain(image: img, filename: "image-\(i).jpg") {
-                encoded.append(tuple)
-            }
-        }
-        await sendEncodedAttachments(encoded, senderLogin: senderLogin, caption: caption)
-    }
-
-    private func sendEncodedAttachments(
-        _ encoded: [(Data, String, String)],
-        senderLogin: String?,
-        caption: String = ""
-    ) async {
-        guard !encoded.isEmpty else { return }
-        AnalyticsTracker.trackMessageSent(
-            conversationId: conversation.id,
-            isGroup: conversation.isGroup,
-            hasAttachment: true
-        )
-        var localURLs: [URL] = []
-        var localAttachments: [MessageAttachment] = []
-        for (data, filename, _) in encoded {
-            let tmpURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(UUID().uuidString)-\(filename)")
-            try? data.write(to: tmpURL)
-            localURLs.append(tmpURL)
-            localAttachments.append(MessageAttachment(
-                attachment_id: nil, url: tmpURL.absoluteString, type: "image",
-                filename: filename, mime_type: "image/jpeg",
-                width: nil, height: nil
-            ))
-        }
-        let localID = "local-\(UUID().uuidString)"
-        let optimistic = Message(
-            id: localID,
-            conversation_id: conversation.id,
-            sender: senderLogin ?? "me",
-            sender_avatar: nil,
-            content: caption,
-            created_at: ISO8601DateFormatter().string(from: Date()),
-            edited_at: nil,
-            reactions: nil,
-            attachment_url: nil,
-            type: "user",
-            reply_to_id: nil,
-            attachments: localAttachments
-        )
-        messages.append(optimistic)
-        Haptics.impact(.light)
-
-        do {
-            let urls = try await withThrowingTaskGroup(of: (Int, String).self) { group -> [String] in
-                for (i, tuple) in encoded.enumerated() {
-                    group.addTask {
-                        let url = try await APIClient.shared.uploadAttachment(
-                            data: tuple.0,
-                            filename: tuple.1,
-                            mimeType: tuple.2,
-                            conversationId: self.conversation.id
-                        )
-                        return (i, url)
-                    }
-                }
-                var result = Array(repeating: "", count: encoded.count)
-                for try await (i, url) in group { result[i] = url }
-                return result
-            }
-            let msg = try await APIClient.shared.sendMessage(
-                conversationId: conversation.id,
-                body: caption,
-                attachmentURLs: urls
-            )
-            // Honor the seenIds dedupe contract that the WebSocket
-            // and OutboxStore handlers also follow (ChatDetailView
-            // lines ~719 and ~728). If the WebSocket already delivered
-            // this message and appended it to `messages`, the optimistic
-            // entry is now alongside it — replacing the optimistic with
-            // `msg` would produce two entries with the same id and crash
-            // UIDiffableDataSource at snapshot time. Branch on insert
-            // result: first sighting → replace; already-seen → drop the
-            // optimistic.
-            if ChatMessageView.seenIds.insert(msg.id).inserted {
-                if let idx = messages.firstIndex(where: { $0.id == localID }) {
-                    messages[idx] = msg
-                }
-            } else {
-                messages.removeAll { $0.id == localID }
-            }
-            for u in localURLs { try? FileManager.default.removeItem(at: u) }
-        } catch {
-            messages.removeAll { $0.id == localID }
-            ToastCenter.shared.show(.error, "Upload failed", error.localizedDescription)
-        }
-    }
-
-    func uploadAndSend(data: Data, filename: String, mimeType: String, senderLogin: String?) async {
-        let (compressed, usedFilename, usedMime) = await Self.compressIfImageOffMain(
-            data: data, filename: filename, mimeType: mimeType
-        )
-        let tmpURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(UUID().uuidString)-\(usedFilename)")
-        try? compressed.write(to: tmpURL)
-        let localID = "local-\(UUID().uuidString)"
-        let optimistic = Message(
-            id: localID,
-            conversation_id: conversation.id,
-            sender: senderLogin ?? "me",
-            sender_avatar: nil,
-            content: "",
-            created_at: ISO8601DateFormatter().string(from: Date()),
-            edited_at: nil,
-            reactions: nil,
-            attachment_url: tmpURL.absoluteString,
-            type: "user",
-            reply_to_id: nil
-        )
-        messages.append(optimistic)
-        Haptics.impact(.light)
-
-        do {
-            let url = try await APIClient.shared.uploadAttachment(
-                data: compressed,
-                filename: usedFilename,
-                mimeType: usedMime,
-                conversationId: conversation.id
-            )
-            let msg = try await APIClient.shared.sendMessage(
-                conversationId: conversation.id,
-                body: "",
-                attachmentURL: url
-            )
-            // See note in `sendEncodedAttachments`. If the WebSocket
-            // raced ahead, the message is already in `messages`; drop
-            // the optimistic instead of replacing.
-            if ChatMessageView.seenIds.insert(msg.id).inserted {
-                if let idx = messages.firstIndex(where: { $0.id == localID }) {
-                    messages[idx] = msg
-                } else {
-                    messages.append(msg)
-                }
-            } else {
-                messages.removeAll { $0.id == localID }
-            }
-            try? FileManager.default.removeItem(at: tmpURL)
-        } catch {
-            self.error = error.localizedDescription
-            messages.removeAll { $0.id == localID }
-            ToastCenter.shared.show(.error, "Upload failed", error.localizedDescription)
-        }
-    }
-
     nonisolated private static func compressIfImage(
         data: Data, filename: String, mimeType: String
     ) -> (Data, String, String) {
@@ -843,3 +769,20 @@ final class ChatViewModel: ObservableObject {
     }
 
 }
+
+// MARK: - Test helpers
+
+#if DEBUG
+extension ChatViewModel {
+    /// Test-only factory. Injects an isolated OutboxStore so tests can
+    /// inspect enqueued messages without touching OutboxStore.shared.
+    /// Call sites in test code pass a MockAPIClient-backed OutboxStore;
+    /// defaults to the real shared store when called from production DEBUG builds.
+    static func testInstance(
+        conversation: Conversation = .testFixture(),
+        outbox: OutboxStore = .shared
+    ) -> ChatViewModel {
+        ChatViewModel(conversation: conversation, outbox: outbox)
+    }
+}
+#endif

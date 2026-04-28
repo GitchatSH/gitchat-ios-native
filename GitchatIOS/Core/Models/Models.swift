@@ -165,6 +165,7 @@ struct MessageAttachment: Codable, Hashable, Identifiable {
 
 struct Message: Codable, Identifiable, Hashable {
     let id: String
+    let client_message_id: String?  // nil for legacy / extension-sent messages
     let conversation_id: String?
     let sender: String
     let sender_avatar: String?
@@ -184,6 +185,7 @@ struct Message: Codable, Identifiable, Hashable {
     // object `{ login, avatar_url }`, and may use slightly different keys.
     private enum CodingKeys: String, CodingKey {
         case id, sender, content, type, reply, attachments
+        case client_message_id
         case sender_login, senderLogin
         case conversation_id, conversationId
         case sender_avatar, senderAvatar, sender_avatar_url
@@ -203,6 +205,7 @@ struct Message: Codable, Identifiable, Hashable {
 
     init(
         id: String,
+        client_message_id: String? = nil,
         conversation_id: String?,
         sender: String,
         sender_avatar: String?,
@@ -219,6 +222,7 @@ struct Message: Codable, Identifiable, Hashable {
         reactionRows: [RawReactionRow]? = nil
     ) {
         self.id = id
+        self.client_message_id = client_message_id
         self.conversation_id = conversation_id
         self.sender = sender
         self.sender_avatar = sender_avatar
@@ -238,6 +242,7 @@ struct Message: Codable, Identifiable, Hashable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try c.decode(String.self, forKey: .id)
+        self.client_message_id = try c.decodeIfPresent(String.self, forKey: .client_message_id)
         self.conversation_id = try c.decodeIfPresent(String.self, forKey: .conversation_id)
             ?? c.decodeIfPresent(String.self, forKey: .conversationId)
 
@@ -302,6 +307,7 @@ struct Message: Codable, Identifiable, Hashable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(client_message_id, forKey: .client_message_id)
         try c.encodeIfPresent(conversation_id, forKey: .conversation_id)
         try c.encode(sender, forKey: .sender)
         try c.encodeIfPresent(sender_avatar, forKey: .sender_avatar)
@@ -528,3 +534,85 @@ struct ChannelListResponse: Decodable {
 struct PresenceResponse: Decodable {
     let presence: [String: String?]
 }
+
+// MARK: - Optimistic message factory
+
+extension Message {
+    /// Creates a local-only optimistic Message for immediate UI display
+    /// before the server confirms delivery. id = "local-<cmid>",
+    /// client_message_id = cmid. Used by ChatViewModel.send(content:attachments:replyTo:).
+    static func optimistic(
+        clientMessageID: String,
+        conversationID: String,
+        sender: String,
+        content: String,
+        attachments: [PendingAttachment]
+    ) -> Message {
+        let localAttachments: [MessageAttachment]? = attachments.isEmpty ? nil :
+            attachments.map { att in
+                MessageAttachment(
+                    attachment_id: att.clientAttachmentID,
+                    url: "",
+                    type: att.mimeType.hasPrefix("image/") ? "image" : "file",
+                    filename: nil,
+                    mime_type: att.mimeType,
+                    width: att.width,
+                    height: att.height
+                )
+            }
+        return Message(
+            id: "local-\(clientMessageID)",
+            client_message_id: clientMessageID,
+            conversation_id: conversationID,
+            sender: sender,
+            sender_avatar: nil,
+            content: content,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            edited_at: nil,
+            reactions: nil,
+            attachment_url: nil,
+            type: "user",
+            reply_to_id: nil,
+            reply: nil,
+            attachments: localAttachments,
+            unsent_at: nil,
+            reactionRows: nil
+        )
+    }
+}
+
+// MARK: - Test fixtures (DEBUG only)
+
+#if DEBUG
+extension Conversation {
+    /// Minimal Conversation for use in unit tests. Override only the fields
+    /// relevant to the test; all others are nil / empty.
+    static func testFixture(
+        id: String = "conv-test-1",
+        type: String? = "dm"
+    ) -> Conversation {
+        Conversation(
+            id: id,
+            type: type,
+            is_group: nil,
+            group_name: nil,
+            group_avatar_url: nil,
+            repo_full_name: nil,
+            participants: nil,
+            other_user: nil,
+            last_message: nil,
+            last_message_preview: nil,
+            last_message_text: nil,
+            last_message_at: nil,
+            unread_count: nil,
+            pinned: nil,
+            pinned_at: nil,
+            is_request: nil,
+            updated_at: nil,
+            is_muted: nil,
+            has_mention: nil,
+            has_reaction: nil
+        )
+    }
+}
+#endif

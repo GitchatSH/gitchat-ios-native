@@ -1,6 +1,76 @@
 import Foundation
 import Combine
 
+// MARK: - RetryClock (Task 2.7)
+
+protocol RetryClock {
+    func sleep(seconds: Double) async throws
+}
+
+struct RealRetryClock: RetryClock {
+    func sleep(seconds: Double) async throws {
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+}
+
+struct ImmediateClock: RetryClock {
+    func sleep(seconds: Double) async throws {
+        // no-op for tests — returns instantly
+    }
+}
+
+// MARK: - Attachment types (Task 2.3)
+
+struct PendingAttachment: Codable, Equatable {
+    let clientAttachmentID: String
+    var sourceData: Data
+    let mimeType: String
+    let width: Int?
+    let height: Int?
+    let blurhash: String?
+    var uploaded: UploadedRef?
+}
+
+struct UploadedRef: Codable, Equatable {
+    let url: String
+    let storagePath: String
+    let sizeBytes: Int
+}
+
+// MARK: - PendingMessage (Task 2.4)
+
+struct PendingMessage: Codable, Equatable {
+    let clientMessageID: String
+    let conversationID: String
+    var content: String
+    var replyToID: String?
+    var attachments: [PendingAttachment]
+    var attempts: Int
+    var createdAt: Date
+    var state: State
+
+    static func optimisticID(for clientMessageID: String) -> String {
+        "local-\(clientMessageID)"
+    }
+
+    /// Lifecycle states for the outbox FSM.
+    ///
+    /// - enqueued:            Queued but send task not yet started.
+    /// - uploading(progress): Attachment upload(s) in flight.
+    /// - uploaded:            All attachments uploaded; HTTP send not yet fired.
+    /// - sending:             HTTP send request in flight.
+    /// - delivered:           Server confirmed; entry is about to be removed.
+    /// - failed(reason, retriable): Terminal error; user can retry or discard.
+    enum State: Equatable, Codable {
+        case enqueued
+        case uploading(progress: Double)
+        case uploaded
+        case sending
+        case delivered
+        case failed(reason: String, retriable: Bool)
+    }
+}
+
 /// Lifetime-independent store of in-flight ("pending") sends, keyed by
 /// conversation id. Survives ChatDetailView dismissal so a re-entered
 /// conversation continues to show its pending bubbles.
@@ -14,7 +84,21 @@ import Combine
 @MainActor
 final class OutboxStore: ObservableObject {
     static let shared = OutboxStore()
-    private init() { loadFromDisk() }
+
+    private let api: APIClientProtocol
+    private let retryClock: RetryClock
+
+    /// Production singleton — uses the real APIClient and real clock.
+    convenience init() {
+        self.init(api: APIClient.shared, retryClock: RealRetryClock())
+    }
+
+    /// Designated init — injects any APIClientProtocol and RetryClock for testability.
+    init(api: APIClientProtocol, retryClock: RetryClock = RealRetryClock()) {
+        self.api = api
+        self.retryClock = retryClock
+        loadFromDisk()
+    }
 
     // MARK: - Disk persistence
 
@@ -59,24 +143,6 @@ final class OutboxStore: ObservableObject {
         return f
     }()
 
-    struct PendingMessage: Identifiable, Equatable, Codable {
-        let localID: String          // "local-<UUID>"
-        let conversationID: String
-        let senderLogin: String
-        let senderAvatar: String?
-        let content: String
-        let replyToID: String?
-        let createdAt: Date
-        var state: State
-
-        enum State: Equatable, Codable {
-            case sending
-            case failed(message: String)
-        }
-
-        var id: String { localID }
-    }
-
     /// Key: conversationID. Value: pending messages in enqueue order.
     @Published private(set) var pending: [String: [PendingMessage]] = [:]
 
@@ -95,14 +161,18 @@ final class OutboxStore: ObservableObject {
 
     // MARK: - Mutators
 
+    /// Adds a new pending message to the queue and immediately kicks off
+    /// its send pipeline. Call sites should NOT also call `runSend(for:)`
+    /// after enqueueing — that would fire a duplicate send.
     func enqueue(_ msg: PendingMessage) {
         pending[msg.conversationID, default: []].append(msg)
+        runSend(for: msg)
         saveToDisk()
     }
 
-    func markDelivered(conversationID: String, localID: String) {
+    func markDelivered(conversationID: String, clientMessageID: String) {
         guard var list = pending[conversationID] else { return }
-        list.removeAll { $0.localID == localID }
+        list.removeAll { $0.clientMessageID == clientMessageID }
         if list.isEmpty {
             pending.removeValue(forKey: conversationID)
         } else {
@@ -111,30 +181,56 @@ final class OutboxStore: ObservableObject {
         saveToDisk()
     }
 
-    func markFailed(conversationID: String, localID: String, error: String) {
+    func markFailed(conversationID: String, clientMessageID: String, error: String) {
         guard var list = pending[conversationID],
-              let idx = list.firstIndex(where: { $0.localID == localID }) else { return }
-        list[idx].state = .failed(message: error)
+              let idx = list.firstIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
+        list[idx].state = .failed(reason: error, retriable: true)
         pending[conversationID] = list
         saveToDisk()
     }
 
-    /// User-initiated discard of a `.failed` pending. Same wire effect as
-    /// `markDelivered` (entry leaves the store), but the distinct name lets
-    /// call sites express intent ("the user threw it away" vs "the server
-    /// confirmed it").
-    func discard(conversationID: String, localID: String) {
-        markDelivered(conversationID: conversationID, localID: localID)
+    /// User-initiated discard of a `.failed` pending (keyed by optimistic ID,
+    /// e.g. "local-<cmid>"). Same wire effect as `markDelivered` (entry
+    /// leaves the store), but the distinct name lets call sites express intent.
+    func discard(conversationID: String, optimisticID: String) {
+        guard var list = pending[conversationID] else { return }
+        list.removeAll { PendingMessage.optimisticID(for: $0.clientMessageID) == optimisticID }
+        if list.isEmpty {
+            pending.removeValue(forKey: conversationID)
+        } else {
+            pending[conversationID] = list
+        }
     }
 
     /// Flip a failed pending back to .sending and re-fire the send
     /// pipeline.
     func retry(_ pendingMsg: PendingMessage) {
         guard var list = pending[pendingMsg.conversationID],
-              let idx = list.firstIndex(where: { $0.localID == pendingMsg.localID }) else { return }
+              let idx = list.firstIndex(where: { $0.clientMessageID == pendingMsg.clientMessageID }) else { return }
         list[idx].state = .sending
         pending[pendingMsg.conversationID] = list
         runSend(for: list[idx])
+    }
+
+    /// Cancels a pending message by removing it from the queue, but ONLY
+    /// when its current state is `.enqueued` or `.failed(...)`. In-flight
+    /// states (uploading, uploaded, sending, delivered) are left untouched —
+    /// interrupting an active URLSession task is V2 work.
+    @MainActor
+    func cancel(clientMessageID cmid: String) {
+        for (convId, list) in pending {
+            guard let idx = list.firstIndex(where: { $0.clientMessageID == cmid }) else { continue }
+            switch list[idx].state {
+            case .enqueued, .failed:
+                pending[convId]?.remove(at: idx)
+                if pending[convId]?.isEmpty == true {
+                    pending.removeValue(forKey: convId)
+                }
+            case .uploading, .uploaded, .sending, .delivered:
+                return  // V1: no-op on in-flight states
+            }
+            return
+        }
     }
 
     /// Run the canonical send pipeline for an already-enqueued pending
@@ -143,64 +239,179 @@ final class OutboxStore: ObservableObject {
     /// at the BE. The chained Task survives `ChatDetailView` dismissal
     /// because it's owned by `OutboxStore.shared`, not by the view.
     /// Shared by first-attempt sends and retries.
-    func runSend(for pending: PendingMessage) {
-        let convId = pending.conversationID
+    func runSend(for msg: PendingMessage) {
+        let convId = msg.conversationID
         let prev = sendChain[convId]
         sendChain[convId] = Task { @MainActor [weak self] in
             await prev?.value
-            await self?.executeSend(for: pending)
+            await self?.executeSend(msg)
         }
     }
 
-    private func executeSend(for pending: PendingMessage) async {
-        let convId = pending.conversationID
-        let localID = pending.localID
+    // MARK: - FSM send pipeline (Tasks 2.5 + 2.6)
+
+    @MainActor
+    private func executeSend(_ pending: PendingMessage) async {
+        var p = pending
+
+        // Phase 1 — upload attachments if any are not yet uploaded
+        if !p.attachments.isEmpty && p.attachments.contains(where: { $0.uploaded == nil }) {
+            p.state = .uploading(progress: 0.0)
+            updatePending(p)
+
+            let total = Double(p.attachments.count)
+            var done = 0.0
+            for i in p.attachments.indices where p.attachments[i].uploaded == nil {
+                do {
+                    let ref = try await api.uploadAttachment(
+                        conversationID: p.conversationID,
+                        data: p.attachments[i].sourceData,
+                        mimeType: p.attachments[i].mimeType
+                    )
+                    p.attachments[i].uploaded = ref
+                    done += 1
+                    p.state = .uploading(progress: done / total)
+                    updatePending(p)
+                } catch {
+                    p.attempts += 1
+                    let retriable = isRetriableError(error) && p.attempts < 5
+                    p.state = .failed(reason: "Upload failed: \(error)", retriable: retriable)
+                    updatePending(p)
+                    if retriable {
+                        scheduleRetry(p)
+                    }
+                    return
+                }
+            }
+            p.state = .uploaded
+            updatePending(p)
+        }
+
+        // Phase 2 — send
+        p.state = .sending
+        updatePending(p)
         do {
-            let msg = try await APIClient.shared.sendMessage(
-                conversationId: convId,
-                body: pending.content,
-                replyTo: pending.replyToID
+            let attachmentDicts: [[String: Any]] = p.attachments.compactMap { att in
+                guard let u = att.uploaded else { return nil }
+                var dict: [String: Any] = [
+                    "type": att.mimeType.hasPrefix("image/") ? "image" : "file",
+                    "url": u.url,
+                    "storage_path": u.storagePath,
+                    "mime_type": att.mimeType,
+                    "size_bytes": u.sizeBytes
+                ]
+                if let w = att.width  { dict["width"]  = w }
+                if let h = att.height { dict["height"] = h }
+                if let bh = att.blurhash { dict["blurhash"] = bh }
+                return dict
+            }
+            let serverMsg = try await api.sendMessage(
+                conversationID: p.conversationID,
+                body: p.content,
+                attachments: attachmentDicts,
+                replyToID: p.replyToID,
+                clientMessageID: p.clientMessageID
             )
-            // Keep the bubble in its typed-order position across the
-            // pending→server transition: re-stamp `created_at` with the
-            // pending's client tap time (matching ms-precision format).
-            // BE INSERT time can be ~hundreds of ms later than the user's
-            // tap, which would otherwise cause the bubble to "jump" out of
-            // tap-order when it's sorted alongside still-pending siblings.
-            // On next vm.load() the BE time replaces this — but by then
-            // all sends in the burst have completed, so chain order = BE
-            // order = tap order; no visible re-sort.
+            // Re-stamp created_at with the client tap time (matching
+            // ms-precision format) so the bubble doesn't jump order
+            // relative to still-pending siblings. See original comment
+            // in the legacy executeSend for full rationale.
             let stamped = Message(
-                id: msg.id,
-                conversation_id: msg.conversation_id,
-                sender: msg.sender,
-                sender_avatar: msg.sender_avatar,
-                content: msg.content,
-                created_at: Self.iso8601.string(from: pending.createdAt),
-                edited_at: msg.edited_at,
-                reactions: msg.reactions,
-                attachment_url: msg.attachment_url,
-                type: msg.type,
-                reply_to_id: msg.reply_to_id,
-                reply: msg.reply,
-                attachments: msg.attachments,
-                unsent_at: msg.unsent_at,
-                reactionRows: msg.reactionRows
+                id: serverMsg.id,
+                client_message_id: serverMsg.client_message_id,
+                conversation_id: serverMsg.conversation_id,
+                sender: serverMsg.sender,
+                sender_avatar: serverMsg.sender_avatar,
+                content: serverMsg.content,
+                created_at: Self.iso8601.string(from: p.createdAt),
+                edited_at: serverMsg.edited_at,
+                reactions: serverMsg.reactions,
+                attachment_url: serverMsg.attachment_url,
+                type: serverMsg.type,
+                reply_to_id: serverMsg.reply_to_id,
+                reply: serverMsg.reply,
+                attachments: serverMsg.attachments,
+                unsent_at: serverMsg.unsent_at,
+                reactionRows: serverMsg.reactionRows
             )
-            markDelivered(conversationID: convId, localID: localID)
+            p.state = .delivered
+            updatePending(p)
+            // Persist to cache regardless of whether a vm is registered,
+            // so re-entering the conversation shows the message immediately
+            // without waiting for vm.load() to complete a BE roundtrip.
+            MessageCache.shared.upsertDelivered(
+                conversationID: p.conversationID,
+                message: stamped
+            )
+            markDelivered(conversationID: p.conversationID, clientMessageID: p.clientMessageID)
             // Hand off to the active view (if any). The handler dedupes via
             // its own atomic `seenIds.insert(...).inserted` against any
-            // socket arrival of the same id. Do NOT pre-insert into
-            // `ChatMessageView.seenIds` here — that would defeat the
-            // handler's dedup and the bubble would never render.
-            deliveryHandlers[convId]?(stamped)
+            // socket arrival of the same id.
+            deliveryHandlers[p.conversationID]?(stamped)
         } catch {
             Haptics.error()
             ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
-            markFailed(
-                conversationID: convId, localID: localID,
-                error: error.localizedDescription
-            )
+            p.attempts += 1
+            let retriable = isRetriableError(error) && p.attempts < 5
+            p.state = .failed(reason: "\(error)", retriable: retriable)
+            updatePending(p)
+            if retriable {
+                scheduleRetry(p)
+            }
+        }
+    }
+
+    /// Write `p` back into the pending queue at the slot matching its
+    /// `clientMessageID`. No-op if the message has already been removed
+    /// (e.g. a concurrent discard).
+    private func updatePending(_ p: PendingMessage) {
+        guard var list = self.pending[p.conversationID],
+              let idx = list.firstIndex(where: { $0.clientMessageID == p.clientMessageID }) else { return }
+        list[idx] = p
+        self.pending[p.conversationID] = list
+    }
+
+    /// Returns true for transient errors worth retrying automatically.
+    /// 4xx HTTP errors are NOT retriable (client-side mistake); 5xx and
+    /// network errors are retriable.
+    private func isRetriableError(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            return [
+                .timedOut, .networkConnectionLost,
+                .notConnectedToInternet, .cannotConnectToHost
+            ].contains(urlError.code)
+        }
+        if case .http(let code, _) = error as? APIError {
+            return code >= 500
+        }
+        return false
+    }
+
+    /// Exponential backoff: attempt n → 2^(n+1) seconds, capped at 32s.
+    /// n=1→2s, n=2→4s, n=3→8s, n=4→16s, n=5→32s
+    private func backoffSeconds(forAttempt n: Int) -> Double {
+        let exp = pow(2.0, Double(n + 1))
+        return min(exp, 32.0)
+    }
+
+    /// Schedules a retry for `pending` after the appropriate backoff delay.
+    /// If the message has been removed from the queue (cancelled/delivered
+    /// concurrently), the retry is silently dropped.
+    @MainActor
+    private func scheduleRetry(_ pending: PendingMessage) {
+        let delay = backoffSeconds(forAttempt: pending.attempts)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await self.retryClock.sleep(seconds: delay)
+            // Confirm the pending still exists — might have been cancelled
+            // or delivered while we were sleeping.
+            guard self.pending[pending.conversationID]?
+                    .contains(where: { $0.clientMessageID == pending.clientMessageID }) == true
+            else { return }
+            var p = pending
+            p.state = .enqueued
+            self.updatePending(p)
+            self.runSend(for: p)
         }
     }
 
@@ -229,19 +440,27 @@ final class OutboxStore: ObservableObject {
         pending[conversationID] ?? []
     }
 
-    func pending(conversationID: String, localID: String) -> PendingMessage? {
-        pending[conversationID]?.first(where: { $0.localID == localID })
+    /// Returns pending messages for a conversation. Synonym for `pendingFor`
+    /// with a named-parameter call-site style; added for test legibility.
+    func pending(conversationID: String) -> [PendingMessage] {
+        pending[conversationID] ?? []
+    }
+
+    func pending(conversationID: String, optimisticID: String) -> PendingMessage? {
+        pending[conversationID]?.first(where: { PendingMessage.optimisticID(for: $0.clientMessageID) == optimisticID })
     }
 
     /// Adapt a PendingMessage to the existing Message shape so the same
     /// rendering code can render both. id keeps the "local-" prefix so
     /// downstream rendering can still detect "this is a pending bubble".
+    /// Pending messages are always the current user's outbound sends, so
+    /// sender identity is read from AuthStore.
     func toMessage(_ p: PendingMessage) -> Message {
         Message(
-            id: p.localID,
+            id: PendingMessage.optimisticID(for: p.clientMessageID),
             conversation_id: p.conversationID,
-            sender: p.senderLogin,
-            sender_avatar: p.senderAvatar,
+            sender: AuthStore.shared.login ?? "me",
+            sender_avatar: nil,
             content: p.content,
             created_at: Self.iso8601.string(from: p.createdAt),
             edited_at: nil,
@@ -251,4 +470,35 @@ final class OutboxStore: ObservableObject {
             reply_to_id: p.replyToID
         )
     }
+
+    // MARK: - Test helpers
+
+#if DEBUG
+    /// Blocks until all pending messages in the store have reached a terminal
+    /// state (`.delivered` or `.failed(retriable: false)`), or throws if the
+    /// deadline is exceeded. Call from `@MainActor` test bodies.
+    @MainActor
+    func waitUntilIdle(timeout: TimeInterval) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let allTerminal = pending.values.allSatisfy {
+                $0.allSatisfy { isTerminalState($0.state) }
+            }
+            if allTerminal { return }
+            try await Task.sleep(nanoseconds: 50_000_000) // 50 ms poll
+        }
+        throw NSError(
+            domain: "OutboxStore", code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "waitUntilIdle timed out"]
+        )
+    }
+
+    private func isTerminalState(_ state: PendingMessage.State) -> Bool {
+        switch state {
+        case .delivered: return true
+        case .failed(_, retriable: false): return true
+        default: return false
+        }
+    }
+#endif
 }

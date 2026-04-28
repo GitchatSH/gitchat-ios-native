@@ -448,7 +448,7 @@ struct ChatView: View {
             // vertical rhythm entirely owned by .padding(.top) below.
             let isFailed: Bool = {
                 guard msg.id.hasPrefix("local-"),
-                      let p = OutboxStore.shared.pending(conversationID: vm.conversation.id, localID: msg.id),
+                      let p = OutboxStore.shared.pending(conversationID: vm.conversation.id, optimisticID: msg.id),
                       case .failed = p.state else { return false }
                 return true
             }()
@@ -757,16 +757,18 @@ extension ChatView {
         if msg.id.hasPrefix("local-") {
             if let pending = OutboxStore.shared.pending(
                 conversationID: vm.conversation.id,
-                localID: msg.id
+                optimisticID: msg.id
             ) {
                 switch pending.state {
-                case .sending:
+                case .enqueued, .uploading, .uploaded, .sending:
                     // Allow Discard while still sending so a Task that hangs
                     // (e.g., URLSession stuck on a stalled connection) isn't
                     // a permanent dead-end for the user.
                     return [.discard]
                 case .failed:
                     return [.retry, .discard]
+                case .delivered:
+                    return []
                 }
             }
             return []                        // unknown local- id (race) → no actions
