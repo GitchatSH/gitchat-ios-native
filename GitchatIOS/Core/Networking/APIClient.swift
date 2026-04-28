@@ -183,7 +183,9 @@ struct APIClient {
     func getConversationMessages(id: String, cursor: String? = nil, limit: Int = 30) async throws -> MessagesResponse {
         var q = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let cursor { q.append(URLQueryItem(name: "cursor", value: cursor)) }
-        return try await request("messages/conversations/\(id)", query: q)
+        let resp: MessagesResponse = try await request("messages/conversations/\(id)", query: q)
+        print("[API-MESSAGES] id=\(id) | otherReadAt=\(resp.otherReadAt ?? "nil") | readCursors=\(resp.readCursors?.map { "\($0.login):\($0.readAt)" } ?? ["nil"])")
+        return resp
     }
 
     func createConversation(recipient: String) async throws -> Conversation {
@@ -382,6 +384,20 @@ struct APIClient {
 
     func unmuteConversation(id: String) async throws {
         let _: EmptyResponse = try await request("messages/conversations/\(id)/mute", method: "DELETE")
+    }
+
+    func searchMessagesGlobal(q: String, limit: Int = 20) async throws -> [Message] {
+        struct Wrap: Decodable { let messages: [Message]?; let data: Inner? }
+        struct Inner: Decodable { let messages: [Message] }
+        let w: Wrap = try await request(
+            "messages/search",
+            query: [
+                URLQueryItem(name: "q", value: q),
+                URLQueryItem(name: "limit", value: String(limit)),
+                URLQueryItem(name: "cursor", value: ""),
+            ]
+        )
+        return w.messages ?? w.data?.messages ?? []
     }
 
     func searchMessagesInConversation(id: String, q: String) async throws -> [Message] {

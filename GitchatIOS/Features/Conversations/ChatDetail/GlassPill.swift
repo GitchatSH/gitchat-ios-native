@@ -1,5 +1,15 @@
 import SwiftUI
 
+struct GlassCircle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: .circle)
+        } else {
+            content.background(.ultraThinMaterial, in: Circle())
+        }
+    }
+}
+
 struct GlassPill: ViewModifier {
     // Using a rounded rectangle with a fixed max corner radius so the
     // capsule stays pretty when the text field grows to multiple lines.

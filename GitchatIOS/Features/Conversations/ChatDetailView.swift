@@ -28,6 +28,7 @@ struct ChatDetailView: View {
     // Sheet + alert presentation state.
     @State private var showSearch = false
     @State private var showPinned = false
+    @State private var showHeaderMenu = false
     @State private var showForward: Message?
     @State private var reactorsFor: Message?
     @State private var seenByFor: Message?
@@ -147,8 +148,12 @@ struct ChatDetailView: View {
             .task { await onAppearTask() }
             .onAppear {
                 if let mid = router.pendingMessageId {
-                    pendingJumpId = mid
                     router.pendingMessageId = nil
+                    // Set jump target immediately — the list retries
+                    // each update cycle until the row appears. The
+                    // actual page-loading happens in onAppearTask
+                    // AFTER vm.load() completes to avoid race conditions.
+                    pendingJumpId = mid
                 }
             }
             .onChange(of: scenePhase) { phase in
@@ -202,8 +207,8 @@ struct ChatDetailView: View {
             mentionSuggestions: mentionSuggestions,
             resolveAvatar: { resolveAvatar(for: $0) },
             seenByLogins: { vm.seenByLogins(for: $0) },
-            seenCursorLogins: { msg, idx in
-                vm.conversation.isGroup ? vm.seenCursorLogins(for: msg, at: idx) : []
+            seenCursorLogins: { msg, nextCreatedAt in
+                vm.conversation.isGroup ? vm.seenCursorLogins(for: msg, nextCreatedAt: nextCreatedAt) : []
             },
             participants: vm.conversation.participantsOrEmpty,
             blockedBannerLogin: otherBlockedLogin,
@@ -211,13 +216,14 @@ struct ChatDetailView: View {
                 blocks.unblock(login)
                 ToastCenter.shared.show(.success, "Unblocked", "@\(login)")
             },
+            totalUnreadCount: otherUnreadCount,
             actions: chatViewActions
         )
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
         .toolbar {
             chatToolbar
@@ -297,6 +303,15 @@ struct ChatDetailView: View {
         })
     }
 
+    // MARK: - Unread badge (other conversations)
+
+    private var otherUnreadCount: Int {
+        let convos = ConversationsCache.shared.get() ?? []
+        return convos
+            .filter { $0.id != vm.conversation.id }
+            .reduce(0) { $0 + $1.unreadCount }
+    }
+
     // MARK: - ChatView Actions wiring
 
     private var chatViewActions: ChatView.Actions {
@@ -309,9 +324,15 @@ struct ChatDetailView: View {
         }
         a.onReact = { msg, emoji in
             Haptics.impact(.light)
-            vm.applyOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
-            AnalyticsTracker.trackReaction(emoji: emoji)
-            Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: true) }
+            let alreadyReacted = (msg.reactionRows ?? []).contains { $0.emoji == emoji && $0.user_login == auth.login }
+            if alreadyReacted {
+                vm.removeOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
+                Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: false) }
+            } else {
+                vm.applyOptimisticReaction(messageId: msg.id, emoji: emoji, myLogin: auth.login)
+                AnalyticsTracker.trackReaction(emoji: emoji)
+                Task { try? await APIClient.shared.react(messageId: msg.id, emoji: emoji, add: true) }
+            }
         }
         a.onMoreReactions = { msg in reactingFor = msg }
         a.onReply = { msg in
@@ -327,6 +348,12 @@ struct ChatDetailView: View {
                   let first = urls.first,
                   let url = URL(string: first) else { return }
             Task { await Self.copyImageToPasteboard(url: url) }
+        }
+        a.onSaveToPhotos = { msg in
+            guard let urls = Self.imageAttachmentURLs(msg),
+                  let first = urls.first,
+                  let url = URL(string: first) else { return }
+            Task { await ImageDownloader.saveToPhotos(url: url) }
         }
         a.onTogglePin = { msg in Task { await vm.togglePin(msg) } }
         a.onForward = { msg in showForward = msg }
@@ -358,6 +385,7 @@ struct ChatDetailView: View {
             }
         }
         a.onPinBadgeTap = { _ in showPinned = true }
+        a.onShowPinnedList = { showPinned = true }
         a.onAvatarTap = { login in
             profileRoute = ProfileLoginRoute(login: login)
         }
@@ -390,10 +418,56 @@ struct ChatDetailView: View {
                 optimisticID: message.id
             )
         }
+        a.onBack = { dismiss() }
+        a.onHeaderTap = {
+            if vm.conversation.isGroup { showMembers = true }
+        }
+        a.headerMenuContent = AnyView(headerMenuItems)
         return a
     }
 
-    // MARK: - Toolbar
+    // MARK: - Header menu items (shared between custom header + Catalyst toolbar)
+
+    @ViewBuilder
+    private var headerMenuItems: some View {
+        if vm.conversation.isGroup {
+            Button { showMembers = true } label: {
+                Label("\(vm.conversation.participantsOrEmpty.count) Members", systemImage: "person.2")
+            }
+            Button { showAddMember = true } label: {
+                Label("Add member", systemImage: "person.crop.circle.badge.plus")
+            }
+            Button { showInviteLink = true } label: {
+                Label("Invite link", systemImage: "link")
+            }
+            Button { showGroupSettings = true } label: {
+                Label("Edit group", systemImage: "pencil")
+            }
+        } else if let other = vm.conversation.other_user {
+            NavigationLink(value: ProfileLoginRoute(login: other.login)) {
+                Label("View profile", systemImage: "person.crop.circle")
+            }
+            Button {
+                Task { await convertToGroupAndAddMember() }
+            } label: {
+                Label("Add to conversation", systemImage: "person.crop.circle.badge.plus")
+            }
+        }
+        Button { showSearch = true } label: { Label("Search", systemImage: "magnifyingglass") }
+        Button {
+            Task { await vm.toggleMute() }
+        } label: {
+            Label(vm.isMuted ? "Unmute" : "Mute", systemImage: vm.isMuted ? "bell" : "bell.slash")
+        }
+        if vm.conversation.isGroup {
+            Divider()
+            Button(role: .destructive) { showLeaveConfirm = true } label: {
+                Label("Leave group", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        }
+    }
+
+    // MARK: - Toolbar (Catalyst fallback)
 
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
@@ -431,7 +505,6 @@ struct ChatDetailView: View {
                     }
                 }
                 Button { showSearch = true } label: { Label("Search", systemImage: "magnifyingglass") }
-                Button { showPinned = true } label: { Label("Pinned messages", systemImage: "pin") }
                 Button {
                     Task { await vm.toggleMute() }
                 } label: {
@@ -464,12 +537,14 @@ struct ChatDetailView: View {
 
     private func jumpToReply(from msg: Message) {
         guard let targetId = msg.reply?.id else { return }
+        let createdAt = vm.messages.first(where: { $0.id == targetId })?.created_at
         pendingJumpId = targetId
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        Task {
+            _ = await vm.ensureMessageLoaded(id: targetId, createdAt: createdAt)
+            try? await Task.sleep(nanoseconds: 300_000_000)
             withAnimation(.easeInOut(duration: 0.25)) { pulsingId = targetId }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                withAnimation(.easeInOut(duration: 0.3)) { pulsingId = nil }
-            }
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            withAnimation(.easeInOut(duration: 0.3)) { pulsingId = nil }
         }
     }
 
@@ -593,9 +668,13 @@ struct ChatDetailView: View {
         let caption = dropCaption.trimmingCharacters(in: .whitespacesAndNewlines)
         pendingDropImages = []
         dropCaption = ""
-        if !caption.isEmpty {
-            vm.draft = caption
-            Task { await vm.send() }
+        guard !images.isEmpty else {
+            // No images — send caption as plain text if any
+            if !caption.isEmpty {
+                vm.draft = caption
+                Task { await vm.send() }
+            }
+            return
         }
         guard !images.isEmpty else { return }
         Task {
@@ -728,6 +807,21 @@ struct ChatDetailView: View {
         socket.currentConversationId = vm.conversation.id
         ActiveConversationTracker.shared.id = vm.conversation.id
         await vm.load()
+        // After load, the composer has definitely measured by now.
+        // Force scroll to bottom so the latest message isn't hidden
+        // behind the composer (initial scroll may have fired before
+        // composerOverlayHeight was known).
+        if pendingJumpId == nil {
+            scrollToBottomToken &+= 1
+        }
+        // After load completes, if there's a pending jump target
+        // (from search result / deep link), load the page containing
+        // it. This runs AFTER vm.load() so there's no race condition.
+        if let mid = pendingJumpId {
+            let createdAt = router.pendingMessageCreatedAt
+            router.pendingMessageCreatedAt = nil
+            _ = await vm.ensureMessageLoaded(id: mid, createdAt: createdAt)
+        }
         socket.subscribe(conversation: vm.conversation.id)
         // Receive server-confirmed self-sends directly from OutboxStore
         // (so a successful send is visible even if the socket event for
@@ -749,6 +843,10 @@ struct ChatDetailView: View {
             let ts = readAt ?? ISO8601DateFormatter().string(from: Date())
             vm.otherReadAt = ts
             vm.readCursors[login] = ts
+        }
+        socket.onReactionUpdated = { msgId in
+            guard vm.messages.contains(where: { $0.id == msgId }) else { return }
+            Task { await vm.load() }
         }
         socket.onMessagePinned = { convId, msgId in
             guard convId == vm.conversation.id else { return }
@@ -836,13 +934,28 @@ private struct ChatDetailSheets: ViewModifier {
                     .presentationDetents([.large])
             }
             .sheet(isPresented: $showPinned) {
-                NavigationStack {
-                    PinnedMessagesSheet(conversation: vm.conversation) { id in
+                PinnedMessagesSheet(
+                    conversation: vm.conversation,
+                    myLogin: auth.login,
+                    onJumpToMessage: { id in
                         pendingJumpId = id
+                        Task { _ = await vm.ensureMessageLoaded(id: id) }
+                    },
+                    onUnpinAll: {
+                        Task {
+                            for pin in vm.pinnedMessages {
+                                try? await APIClient.shared.unpinMessage(
+                                    conversationId: vm.conversation.id,
+                                    messageId: pin.id
+                                )
+                            }
+                            vm.pinnedIds.removeAll()
+                            vm.pinnedMessages.removeAll()
+                        }
                     }
-                }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
             }
             .sheet(item: $showForward) { msg in
                 NavigationStack { ForwardSheet(message: msg) }
@@ -898,7 +1011,7 @@ private struct ChatDetailSheets: ViewModifier {
                 NavigationStack {
                     SeenBySheet(
                         message: msg,
-                        readCursors: vm.readCursors,
+                        seenLogins: vm.seenByLogins(for: msg),
                         participants: vm.conversation.participantsOrEmpty,
                         myLogin: auth.login
                     )

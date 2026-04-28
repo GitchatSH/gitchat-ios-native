@@ -21,6 +21,7 @@ enum MessageMenuAction: Hashable {
     case unsend
     case delete
     case report
+    case saveToPhotos
     case retry
     case discard
 
@@ -29,6 +30,7 @@ enum MessageMenuAction: Hashable {
         case .reply: return "Reply"
         case .copyText: return "Copy"
         case .copyImage: return "Copy Image"
+        case .saveToPhotos: return "Save to Photos"
         case .pin: return "Pin"
         case .unpin: return "Unpin"
         case .forward: return "Forward"
@@ -47,6 +49,7 @@ enum MessageMenuAction: Hashable {
         case .reply: return "arrowshape.turn.up.left"
         case .copyText: return "doc.on.doc"
         case .copyImage: return "photo.on.rectangle"
+        case .saveToPhotos: return "square.and.arrow.down"
         case .pin: return "pin"
         case .unpin: return "pin.slash"
         case .forward: return "arrowshape.turn.up.right"
@@ -63,7 +66,8 @@ enum MessageMenuAction: Hashable {
     var isDestructive: Bool {
         switch self {
         case .delete, .report, .unsend, .discard: return true
-        default: return false
+        case .reply, .copyText, .copyImage, .saveToPhotos, .pin, .unpin,
+             .forward, .seenBy, .edit, .retry: return false
         }
     }
 
@@ -79,10 +83,13 @@ enum MessageMenuAction: Hashable {
     ) -> [MessageMenuAction] {
         var out: [MessageMenuAction] = [.reply]
         if hasText { out.append(.copyText) }
-        if hasImageAttachment { out.append(.copyImage) }
+        if hasImageAttachment {
+            out.append(.copyImage)
+            out.append(.saveToPhotos)
+        }
         out.append(isPinned ? .unpin : .pin)
         out.append(.forward)
-        if isGroup { out.append(.seenBy) }
+        if isGroup || isMe { out.append(.seenBy) }
         if isMe {
             out.append(contentsOf: [.edit, .unsend, .delete])
         } else {

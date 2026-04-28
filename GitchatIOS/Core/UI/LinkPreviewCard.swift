@@ -159,8 +159,8 @@ struct LinkPreviewCard: View {
                                 .font(.caption2)
                                 .foregroundStyle(isMe ? Color.white.opacity(0.6) : Color(.tertiaryLabel))
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 12)
                     }
                     #if targetEnvironment(macCatalyst)
                     .frame(width: 300)

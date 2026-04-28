@@ -2,25 +2,17 @@ import SwiftUI
 
 struct SeenBySheet: View {
     let message: Message
-    let readCursors: [String: String]
+    let seenLogins: [String]
     let participants: [ConversationParticipant]
     let myLogin: String?
     @State private var tab = 0
     @Environment(\.dismiss) private var dismiss
 
-    private var seenLogins: [String] {
-        let msgDate = message.created_at ?? ""
-        return readCursors.compactMap { login, readAt in
-            guard login != myLogin else { return nil }
-            return readAt >= msgDate ? login : nil
-        }.sorted()
-    }
-
     private var notSeenLogins: [String] {
         let seen = Set(seenLogins)
         return participants
             .map(\.login)
-            .filter { $0 != myLogin && !seen.contains($0) }
+            .filter { $0 != myLogin && $0 != message.sender && !seen.contains($0) }
             .sorted()
     }
 
@@ -80,7 +72,8 @@ struct SeenBySheet: View {
     private func userRow(login: String) -> some View {
         HStack(spacing: 12) {
             AvatarView(
-                url: participant(for: login)?.avatar_url,
+                url: participant(for: login)?.avatar_url
+                    ?? "https://github.com/\(login).png",
                 size: 36,
                 login: login
             )
@@ -92,11 +85,6 @@ struct SeenBySheet: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if tab == 0, let readAt = readCursors[login] {
-                Text(RelativeTime.format(readAt))
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
         }
     }
 }

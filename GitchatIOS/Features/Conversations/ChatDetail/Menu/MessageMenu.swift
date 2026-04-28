@@ -1,12 +1,9 @@
 import SwiftUI
 
 /// Full-screen overlay shown when the user long-presses a message.
-/// Ported verbatim from the `feat/chat-rework` branch's working
-/// version — the simpler spring-to-center layout without measure-
-/// then-position gymnastics. Three elements in a VStack (reaction
-/// bar, preview bubble, action list); the whole column springs into
-/// the vertical center of the screen; each element also scales in
-/// from the sender-side anchor.
+/// The bubble stays at its original screen position. Reactions bar
+/// appears above, action dropdown below. Only adjusts position if
+/// reactions would overlap the header or dropdown would be clipped.
 struct MessageMenu<Preview: View>: View {
     @Environment(\.chatTheme) private var theme
 
@@ -14,6 +11,9 @@ struct MessageMenu<Preview: View>: View {
     let actions: [MessageMenuAction]
     let currentReactions: Set<String>
     let seenCount: Int
+    let seenLogins: [String]
+    var isReadByOthers: Bool = false
+    let participants: [ConversationParticipant]
     let onReact: (String) -> Void
     let onMoreReactions: () -> Void
     let onAction: (MessageMenuAction) -> Void
@@ -22,33 +22,100 @@ struct MessageMenu<Preview: View>: View {
 
     @State private var appeared = false
     @State private var dragOffset: CGFloat = 0
+    @State private var reactionsSize: CGSize = .zero
+    @State private var dropdownSize: CGSize = .zero
 
     var body: some View {
         GeometryReader { geo in
+            let layout = computeLayout(in: geo)
+
             ZStack {
-                // Dimmed + blurred backdrop. Tap anywhere to dismiss.
-                Color.black.opacity(appeared ? 0.35 : 0)
+                // Dimmed + blurred backdrop
+                Color.black.opacity(appeared ? 0.20 : 0)
                     .background(.ultraThinMaterial.opacity(appeared ? 1 : 0))
                     .ignoresSafeArea()
                     .contentShape(Rectangle())
                     .onTapGesture { dismiss() }
 
-                content(in: geo)
-                    .offset(y: dragOffset)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { v in
-                                dragOffset = max(0, v.translation.height)
-                            }
-                            .onEnded { v in
-                                if v.translation.height > 80 { dismiss() }
-                                else {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                                        dragOffset = 0
-                                    }
+                Group {
+                    // Reactions bar
+                    reactionsBar
+                        .fixedSize()
+                        .background(GeometryReader { g in
+                            Color.clear.onAppear { reactionsSize = g.size }
+                        })
+                        .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
+                        .padding(.horizontal, 20)
+                        .scaleEffect(appeared ? 1 : 0.3, anchor: target.isMe ? .bottomTrailing : .bottomLeading)
+                        .opacity(appeared ? 1 : 0)
+                        .position(x: geo.size.width / 2, y: layout.reactionsY)
+
+                    // Bubble preview — stays at exact original position.
+                    HStack {
+                        if target.isMe { Spacer(minLength: 0) }
+                        preview()
+                        if !target.isMe { Spacer(minLength: 0) }
+                    }
+                    .padding(.horizontal, 8)
+                    .position(
+                        x: geo.size.width / 2,
+                        y: appeared ? layout.adjustedBubbleCenterY : layout.originalBubbleCenterY
+                    )
+                    .animation(.spring(response: 0.32, dampingFraction: 0.75), value: appeared)
+
+                    // Avatar — bottom-left of bubble, 8px gap
+                    if !target.isMe {
+                        AvatarView(
+                            url: target.message.sender_avatar
+                                ?? "https://github.com/\(target.message.sender).png",
+                            size: 32,
+                            login: target.message.sender
+                        )
+                        .frame(width: 32, height: 32)
+                        .position(
+                            x: layout.avatarX,
+                            y: layout.avatarY
+                        )
+                        .opacity(appeared ? 1 : 0)
+                    }
+
+                    // Action dropdown
+                    MessageMenuActionList(
+                        actions: actions,
+                        seenCount: seenCount,
+                        seenLogins: seenLogins,
+                        isReadByOthers: isReadByOthers,
+                        participants: participants,
+                        onAction: { action in
+                            onAction(action)
+                            dismiss()
+                        }
+                    )
+                    .frame(maxWidth: 220)
+                    .background(GeometryReader { g in
+                        Color.clear.onAppear { dropdownSize = g.size }
+                    })
+                    .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
+                    .padding(.horizontal, 20)
+                    .scaleEffect(appeared ? 1 : 0.4, anchor: target.isMe ? .topTrailing : .topLeading)
+                    .opacity(appeared ? 1 : 0)
+                    .position(x: geo.size.width / 2, y: layout.dropdownY)
+                }
+                .offset(y: dragOffset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { v in
+                            dragOffset = max(0, v.translation.height)
+                        }
+                        .onEnded { v in
+                            if v.translation.height > 80 { dismiss() }
+                            else {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                    dragOffset = 0
                                 }
                             }
-                    )
+                        }
+                )
             }
         }
         .onAppear {
@@ -58,59 +125,89 @@ struct MessageMenu<Preview: View>: View {
         }
     }
 
-    @ViewBuilder
-    private func content(in geo: GeometryProxy) -> some View {
-        let screenW = geo.size.width
+    // MARK: - Layout computation
+
+    private struct Layout {
+        let originalBubbleCenterY: CGFloat
+        let adjustedBubbleCenterY: CGFloat
+        let reactionsY: CGFloat
+        let dropdownY: CGFloat
+        let avatarX: CGFloat
+        let avatarY: CGFloat
+    }
+
+    private func computeLayout(in geo: GeometryProxy) -> Layout {
         let source = target.sourceFrame
-        let bubbleMaxWidth = min(screenW - 40, max(source.width, 260))
+        let geoOrigin = geo.frame(in: .global)
+        let safeTop = geo.safeAreaInsets.top
+        let screenH = geo.size.height
 
-        VStack(spacing: 12) {
-            ReactionSelectionView(
-                currentReactions: currentReactions,
-                onPick: { emoji in
-                    onReact(emoji)
-                    dismiss()
-                },
-                onMore: {
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-                        onMoreReactions()
-                    }
-                }
-            )
-            .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
-            .padding(.horizontal, 20)
-            .scaleEffect(appeared ? 1 : 0.3, anchor: target.isMe ? .topTrailing : .topLeading)
-            .opacity(appeared ? 1 : 0)
+        // Convert source frame from window coords to geo-local coords
+        let bubbleTop = source.minY - geoOrigin.minY
+        let bubbleH = source.height
 
-            HStack {
-                if target.isMe { Spacer(minLength: 0) }
-                preview()
-                    .frame(maxWidth: bubbleMaxWidth)
-                if !target.isMe { Spacer(minLength: 0) }
-            }
-            .padding(.horizontal, 20)
+        let reactionsH = reactionsSize.height > 0 ? reactionsSize.height : 44
+        let dropdownH = dropdownSize.height > 0 ? dropdownSize.height : 200
+        let gap: CGFloat = 8
 
-            MessageMenuActionList(
-                actions: actions,
-                seenCount: seenCount,
-                onAction: { action in
-                    onAction(action)
-                    dismiss()
-                }
-            )
-            .frame(maxWidth: 260)
-            .frame(maxWidth: .infinity, alignment: target.isMe ? .trailing : .leading)
-            .padding(.horizontal, 20)
-            .scaleEffect(appeared ? 1 : 0.4, anchor: target.isMe ? .topTrailing : .topLeading)
-            .opacity(appeared ? 1 : 0)
+        // Default: bubble at original position
+        var adjustedBubbleTop = bubbleTop
+
+        // Case 1: reactions would overlap header (safe area top)
+        let reactionsTop = adjustedBubbleTop - gap - reactionsH
+        if reactionsTop < safeTop {
+            adjustedBubbleTop = safeTop + reactionsH + gap
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .position(
-            x: geo.size.width / 2,
-            y: appeared
-                ? max(geo.size.height * 0.5, min(source.midY, geo.size.height * 0.55))
-                : source.midY
+
+        // Case 2: dropdown would be clipped at bottom
+        let dropdownBottom = adjustedBubbleTop + bubbleH + gap + dropdownH
+        if dropdownBottom > screenH {
+            let overflow = dropdownBottom - screenH
+            adjustedBubbleTop -= overflow
+        }
+
+        // Re-check reactions after adjustment
+        let finalReactionsTop = adjustedBubbleTop - gap - reactionsH
+        if finalReactionsTop < safeTop {
+            adjustedBubbleTop = safeTop + reactionsH + gap
+        }
+
+        // .position() uses center point
+        let originalCenterY = bubbleTop + bubbleH / 2
+        let adjustedCenterY = adjustedBubbleTop + bubbleH / 2
+        let reactionsY = adjustedBubbleTop - gap - reactionsH / 2
+        let dropdownY = adjustedBubbleTop + bubbleH + gap + dropdownH / 2
+
+        // Avatar: bottom-left of bubble, 8px gap left
+        let bubbleLeft = source.minX - geoOrigin.minX
+        let avatarX = bubbleLeft - 8 - 16 // 8px gap + 16 (half avatar)
+        let avatarY = adjustedBubbleTop + bubbleH - 16 // bottom-aligned, center of 32pt avatar
+
+        return Layout(
+            originalBubbleCenterY: originalCenterY,
+            adjustedBubbleCenterY: adjustedCenterY,
+            reactionsY: reactionsY,
+            dropdownY: dropdownY,
+            avatarX: avatarX,
+            avatarY: avatarY
+        )
+    }
+
+    // MARK: - Subviews
+
+    private var reactionsBar: some View {
+        ReactionSelectionView(
+            currentReactions: currentReactions,
+            onPick: { emoji in
+                onReact(emoji)
+                dismiss()
+            },
+            onMore: {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                    onMoreReactions()
+                }
+            }
         )
     }
 

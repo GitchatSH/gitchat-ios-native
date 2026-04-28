@@ -69,7 +69,7 @@ struct ChatInputView: View {
             textField
             sendButton
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 16)
         .padding(.vertical, 8)
         #endif
     }
@@ -80,12 +80,10 @@ struct ChatInputView: View {
     private var attachButton: some View {
         PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
             Image(systemName: "paperclip")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
-                #if !targetEnvironment(macCatalyst)
-                .modifier(GlassPill())
-                #endif
+                .modifier(GlassCircle())
         }
         .disabled(isUploading)
         .accessibilityLabel("Attach")
@@ -133,21 +131,16 @@ struct ChatInputView: View {
         Button(action: onSend) {
             Group {
                 if isUploading {
-                    ProgressView().tint(theme.sendGlyph)
+                    ProgressView().tint(.primary)
                 } else {
                     Image(systemName: sendGlyph)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(theme.sendGlyph)
+                        .foregroundStyle(.primary)
                 }
             }
             .frame(width: 44, height: 44)
-            .background(
-                Circle().fill(
-                    draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        ? theme.sendDisabledBg
-                        : theme.sendBg
-                )
-            )
+            .modifier(GlassCircle())
+            .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
         }
         .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isUploading)
     }

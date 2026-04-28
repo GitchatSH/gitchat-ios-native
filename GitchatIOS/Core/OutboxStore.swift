@@ -97,6 +97,37 @@ final class OutboxStore: ObservableObject {
     init(api: APIClientProtocol, retryClock: RetryClock = RealRetryClock()) {
         self.api = api
         self.retryClock = retryClock
+        loadFromDisk()
+    }
+
+    // MARK: - Disk persistence
+
+    private static let fileURL: URL = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("outbox-pending.json")
+    }()
+
+    private func saveToDisk() {
+        // Only persist failed messages — sending ones will be
+        // re-attempted on next launch anyway.
+        var failed: [String: [PendingMessage]] = [:]
+        for (convId, list) in pending {
+            let failedOnly = list.filter { if case .failed = $0.state { return true }; return false }
+            if !failedOnly.isEmpty { failed[convId] = failedOnly }
+        }
+        do {
+            let data = try JSONEncoder().encode(failed)
+            try data.write(to: Self.fileURL, options: .atomic)
+        } catch {
+            // Best-effort persist — log but don't crash.
+        }
+    }
+
+    private func loadFromDisk() {
+        guard let data = try? Data(contentsOf: Self.fileURL),
+              let stored = try? JSONDecoder().decode([String: [PendingMessage]].self, from: data) else { return }
+        pending = stored
     }
 
     /// Hoisted to avoid per-call allocation — `toMessage` is invoked
@@ -136,6 +167,7 @@ final class OutboxStore: ObservableObject {
     func enqueue(_ msg: PendingMessage) {
         pending[msg.conversationID, default: []].append(msg)
         runSend(for: msg)
+        saveToDisk()
     }
 
     func markDelivered(conversationID: String, clientMessageID: String) {
@@ -146,6 +178,7 @@ final class OutboxStore: ObservableObject {
         } else {
             pending[conversationID] = list
         }
+        saveToDisk()
     }
 
     func markFailed(conversationID: String, clientMessageID: String, error: String) {
@@ -153,6 +186,7 @@ final class OutboxStore: ObservableObject {
               let idx = list.firstIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
         list[idx].state = .failed(reason: error, retriable: true)
         pending[conversationID] = list
+        saveToDisk()
     }
 
     /// User-initiated discard of a `.failed` pending (keyed by optimistic ID,
