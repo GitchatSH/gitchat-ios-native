@@ -97,6 +97,7 @@
 		92E71F6AACBC3BC9107B14F0 /* ChatTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D9FF2224123D14E9F3B352 /* ChatTheme.swift */; };
 		92F2FE2AABCC2EC3078AF8C7 /* MacShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF5B3E9D4CC0144CEB0247E8 /* MacShellView.swift */; };
 		97BEFA46F74B25582C9B5E6A /* ExploreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1171C3E5B7CAEFCD3F9C388C /* ExploreSheet.swift */; };
+		98BE48E15464DA64FAA0F96B /* SocketHandlerMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510F87602FF09899A6C3C285 /* SocketHandlerMatchingTests.swift */; };
 		9911E286944B2E5A0B5817D6 /* ChatBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC444597FF8A45EB8294EC /* ChatBackground.swift */; };
 		999E1B7961171663AD703952 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */; };
 		9B132E5A31654D56BB07CBCD /* MessageMenuAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA0DB03557EDE0854293B66 /* MessageMenuAction.swift */; };
@@ -140,6 +141,7 @@
 		D07D9355CDBC4951A47E0E49 /* Toasts in Frameworks */ = {isa = PBXBuildFile; productRef = F20AD11CCF1A774D37693A00 /* Toasts */; };
 		D217FFA3516672466F57300D /* SyncingDotsLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17539A82EA8BDD61C6458F4F /* SyncingDotsLabel.swift */; };
 		D2745DCC01B9FB447C2F6ABA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6C6D62D2207B8EF522F851 /* SettingsView.swift */; };
+		D279CA272EEC0D5FBC86177F /* ChatDetailViewBindings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F34C94DA0D06E14B5CFA935 /* ChatDetailViewBindings.swift */; };
 		D27DD02D4AA56A1A5EC1F58D /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2D9E43399F860C5B165A48 /* ChatInputView.swift */; };
 		D3A3045A0F089C628A6E343D /* GitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE08A0DE3086C45434C3F914 /* GitchatApp.swift */; };
 		D5BD7E0FF0B7340865144938 /* ConversationPeekOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5AF13F85361463758747546 /* ConversationPeekOverlay.swift */; };
@@ -225,6 +227,7 @@
 		0DC596A700FC14EB6D8CF986 /* OutboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxStore.swift; sourceTree = "<group>"; };
 		0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
 		0EF0AE1C58D76C8FBB0F123A /* DiscoverSubTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverSubTab.swift; sourceTree = "<group>"; };
+		0F34C94DA0D06E14B5CFA935 /* ChatDetailViewBindings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailViewBindings.swift; sourceTree = "<group>"; };
 		0FAC444597FF8A45EB8294EC /* ChatBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatBackground.swift; sourceTree = "<group>"; };
 		0FE326E86F4D895FBAFCE1BF /* AsyncBlocker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncBlocker.swift; sourceTree = "<group>"; };
 		1171C3E5B7CAEFCD3F9C388C /* ExploreSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreSheet.swift; sourceTree = "<group>"; };
@@ -270,6 +273,7 @@
 		4DBC8FEE623A8B5FB4BDFFBC /* MacReadableWidth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacReadableWidth.swift; sourceTree = "<group>"; };
 		4ED56669CED0DEE797EABF78 /* EmojiPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerSheet.swift; sourceTree = "<group>"; };
 		500978A5175704DEC944236B /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		510F87602FF09899A6C3C285 /* SocketHandlerMatchingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketHandlerMatchingTests.swift; sourceTree = "<group>"; };
 		52C4210527E4A63652D48DEC /* PushSubscriptionSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushSubscriptionSync.swift; sourceTree = "<group>"; };
 		59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCache.swift; sourceTree = "<group>"; };
 		5B23801FC790B492B964A84F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -595,6 +599,7 @@
 				CAA29FA3097FC72218AA0DE2 /* ChatViewModelSendTests.swift */,
 				D7561D267DF7EC693EA28CDE /* MergeFromServerTests.swift */,
 				4DB43B0E432F8F3D6E79EC11 /* MessageCacheFilterTests.swift */,
+				510F87602FF09899A6C3C285 /* SocketHandlerMatchingTests.swift */,
 			);
 			path = Conversations;
 			sourceTree = "<group>";
@@ -819,6 +824,7 @@
 				BA06F06179CF48CD72660313 /* CatalystDropModifier.swift */,
 				0FAC444597FF8A45EB8294EC /* ChatBackground.swift */,
 				2F3F9D645B6410E4BD1139FC /* ChatDetailTitleBar.swift */,
+				0F34C94DA0D06E14B5CFA935 /* ChatDetailViewBindings.swift */,
 				5DA6355A70C27DBE9EA3F912 /* ChatSkeleton.swift */,
 				712E8E47398E82D0EA952BE8 /* ChatView.swift */,
 				2679A8A97AA258DB81818FF2 /* ChatViewModel.swift */,
@@ -1138,6 +1144,7 @@
 				9911E286944B2E5A0B5817D6 /* ChatBackground.swift in Sources */,
 				03DA54DAB6CB0C9146CF00DB /* ChatDetailTitleBar.swift in Sources */,
 				CD8AD7132CAC90482CAD8C90 /* ChatDetailView.swift in Sources */,
+				D279CA272EEC0D5FBC86177F /* ChatDetailViewBindings.swift in Sources */,
 				D27DD02D4AA56A1A5EC1F58D /* ChatInputView.swift in Sources */,
 				E1FA075EBA0CDCB6D9C178C9 /* ChatMentionSuggestionRow.swift in Sources */,
 				B8FDA609D8161EA4A77671E1 /* ChatMessageText.swift in Sources */,
@@ -1251,6 +1258,7 @@
 				60C71A9623516E3FD5682B07 /* PendingAttachmentTests.swift in Sources */,
 				C63A274EB9BD4527B0FA59E6 /* PendingMessageTests.swift in Sources */,
 				146BD1CED03878B0132D7B34 /* SmokeUnitTest.swift in Sources */,
+				98BE48E15464DA64FAA0F96B /* SocketHandlerMatchingTests.swift in Sources */,
 				D89FF53B49AC2EE3B3E54170 /* StubURLProtocol.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -714,23 +714,13 @@ struct ChatDetailView: View {
         // Receive server-confirmed self-sends directly from OutboxStore
         // (so a successful send is visible even if the socket event for
         // it never arrives — e.g. WS disconnect, local API without WS).
-        // Same dedup contract as the socket handler below.
-        OutboxStore.shared.registerDeliveryHandler(conversationID: vm.conversation.id) { msg in
-            guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
-            vm.messages.append(msg)
-        }
-        socket.onMessageSent = { msg in
-            guard msg.conversation_id == vm.conversation.id else { return }
-            // Dedup using the atomic Set insert: the only way a second
-            // callback for the same id can race past the .contains guard
-            // is if both fire close together off the socket queue. Set
-            // insert returns false on the second call, dropping it cleanly.
-            guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
-            vm.messages.append(msg)
-            if msg.sender != auth.login {
-                Task { try? await APIClient.shared.markRead(conversationId: vm.conversation.id) }
-            }
-        }
+        // Both handlers match by client_message_id first (replaces the
+        // optimistic placeholder), then fall back to seenIds dedup.
+        OutboxStore.shared.registerDeliveryHandler(
+            conversationID: vm.conversation.id,
+            ChatDetailViewBindings.makeOutboxDeliveryHandler(vm: vm)
+        )
+        socket.onMessageSent = ChatDetailViewBindings.makeSocketMessageSentHandler(vm: vm)
         socket.onTyping = { convId, login, typing in
             guard convId == vm.conversation.id, login != auth.login else { return }
             if typing { vm.typingUsers.insert(login) }
