@@ -207,7 +207,7 @@ final class ChatViewModel: ObservableObject {
         self.messages = existing
     }
 
-    private func persistCache() {
+    func persistCache() {
         MessageCache.shared.store(conversation.id, entry: MessageCache.Entry(
             messages: self.messages.filter { !$0.id.hasPrefix("local-") },
             nextCursor: self.nextCursor,
