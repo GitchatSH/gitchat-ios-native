@@ -24,12 +24,12 @@ enum ChatDetailViewBindings {
     static func makeSocketMessageSentHandler(vm: ChatViewModel) -> (Message) -> Void {
         return { msg in
             guard msg.conversation_id == vm.conversation.id else { return }
-            print("[CMID-DEBUG] ws-onMessageSent: id=\(msg.id) cmid=\(msg.client_message_id ?? "nil") | vm.messages.cmids=\(vm.messages.compactMap(\.client_message_id))")
 
             // 1. Outbound match by cmid — replace optimistic placeholder in-place.
+            //    Case-insensitive compare: Swift's UUID().uuidString is UPPERCASE
+            //    but BE Postgres uuid serializes lowercase.
             if let cmid = msg.client_message_id,
-               let idx = vm.messages.firstIndex(where: { $0.client_message_id == cmid }) {
-                print("[CMID-DEBUG] ws-onMessageSent: REPLACE idx=\(idx)")
+               let idx = vm.messages.firstIndex(where: { $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame }) {
                 vm.messages[idx] = msg
                 ChatMessageView.seenIds.insert(msg.id)
                 vm.persistCache()
@@ -38,7 +38,6 @@ enum ChatDetailViewBindings {
 
             // 2. Inbound dedup by server id.
             guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
-            print("[CMID-DEBUG] ws-onMessageSent: APPEND (no cmid match)")
             vm.messages.append(msg)
             vm.persistCache()
 
@@ -56,11 +55,10 @@ enum ChatDetailViewBindings {
     /// messages, so `markRead` is never needed here.
     static func makeOutboxDeliveryHandler(vm: ChatViewModel) -> (Message) -> Void {
         return { msg in
-            print("[CMID-DEBUG] outbox-delivery: id=\(msg.id) cmid=\(msg.client_message_id ?? "nil") | vm.messages.cmids=\(vm.messages.compactMap(\.client_message_id))")
             // 1. Outbound match by cmid — replace optimistic placeholder in-place.
+            //    Case-insensitive compare: see note in makeSocketMessageSentHandler.
             if let cmid = msg.client_message_id,
-               let idx = vm.messages.firstIndex(where: { $0.client_message_id == cmid }) {
-                print("[CMID-DEBUG] outbox-delivery: REPLACE idx=\(idx)")
+               let idx = vm.messages.firstIndex(where: { $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame }) {
                 vm.messages[idx] = msg
                 ChatMessageView.seenIds.insert(msg.id)
                 vm.persistCache()
@@ -69,7 +67,6 @@ enum ChatDetailViewBindings {
 
             // 2. Inbound dedup by server id.
             guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
-            print("[CMID-DEBUG] outbox-delivery: APPEND (no cmid match)")
             vm.messages.append(msg)
             vm.persistCache()
         }

@@ -123,7 +123,7 @@ final class MessageCache {
         if let idx = msgs.firstIndex(where: { $0.id == message.id }) {
             msgs[idx] = message
         } else if let cmid = message.client_message_id,
-                  let idx = msgs.firstIndex(where: { $0.client_message_id == cmid }) {
+                  let idx = msgs.firstIndex(where: { $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame }) {
             msgs[idx] = message
         } else {
             msgs.append(message)

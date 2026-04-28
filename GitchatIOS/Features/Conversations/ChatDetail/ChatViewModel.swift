@@ -172,9 +172,11 @@ final class ChatViewModel: ObservableObject {
     func mergeFromServer(_ fetched: [Message]) {
         var existing = self.messages
         for srv in fetched {
-            // Match by client_message_id first (replaces optimistic with stable id)
+            // Match by client_message_id first (replaces optimistic with stable id).
+            // Case-insensitive: Swift's UUID().uuidString is UPPERCASE, BE's
+            // postgres uuid serialization is lowercase.
             if let cmid = srv.client_message_id,
-               let idx = existing.firstIndex(where: { $0.client_message_id == cmid }) {
+               let idx = existing.firstIndex(where: { $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame }) {
                 existing[idx] = srv
                 continue
             }
@@ -187,8 +189,8 @@ final class ChatViewModel: ObservableObject {
             existing.append(srv)
         }
 
-        // Collect fetched cmids for the defensive sweep below.
-        let fetchedCmids = Set(fetched.compactMap(\.client_message_id))
+        // Collect fetched cmids (lowercased) for the defensive sweep below.
+        let fetchedCmidsLower = Set(fetched.compactMap { $0.client_message_id?.lowercased() })
 
         // Defensive sweep: remove any remaining local-* placeholder
         //  - whose cmid matches a fetched server message (defensive against the
@@ -198,7 +200,7 @@ final class ChatViewModel: ObservableObject {
         existing.removeAll { msg in
             guard msg.id.hasPrefix("local-") else { return false }
             guard let cmid = msg.client_message_id else { return true }  // legacy junk
-            return fetchedCmids.contains(cmid)
+            return fetchedCmidsLower.contains(cmid.lowercased())
         }
 
         // Sort by created_at ascending (ISO8601 strings are lexicographically
@@ -403,7 +405,11 @@ final class ChatViewModel: ObservableObject {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty else { return }
 
-        let cmid = UUID().uuidString
+        // Lowercase to match BE Postgres uuid serialization. Swift's
+        // UUID().uuidString is UPPERCASE; BE returns lowercase. Case-sensitive
+        // string compare in the delivery handler would otherwise fail to
+        // match the optimistic placeholder against the server's echoed cmid.
+        let cmid = UUID().uuidString.lowercased()
         let optimistic = Message.optimistic(
             clientMessageID: cmid,
             conversationID: conversation.id,
@@ -462,7 +468,8 @@ final class ChatViewModel: ObservableObject {
                 }
                 editingMessage = nil
             } else {
-                let cmid = UUID().uuidString
+                // Lowercase: see note in send(content:attachments:replyTo:).
+                let cmid = UUID().uuidString.lowercased()
                 let pending = PendingMessage(
                     clientMessageID: cmid,
                     conversationID: conversation.id,
