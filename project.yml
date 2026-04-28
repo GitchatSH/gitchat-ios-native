@@ -15,7 +15,8 @@ schemes:
     test:
       config: Debug
       targets:
-        - GitchatIOSTests
+        - name: GitchatIOSTests
+          parallelizable: true
         - GitchatIOSUITests
     profile:
       config: Release
@@ -255,6 +256,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: chat.git.unittests
         BUNDLE_LOADER: $(TEST_HOST)
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Gitchat.app/Gitchat
+        SWIFT_VERSION: "5.9"
         SUPPORTS_MACCATALYST: YES
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     info:
