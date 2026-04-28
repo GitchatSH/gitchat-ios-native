@@ -10,11 +10,14 @@ schemes:
     build:
       targets:
         GitchatIOS: all
+        GitchatIOSTests: [test]
+        GitchatIOSUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
+        - GitchatIOSTests
         - GitchatIOSUITests
     profile:
       config: Release
@@ -257,6 +260,27 @@ targets:
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     info:
       path: GitchatIOSUITests/Info.plist
+      properties:
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: BNDL
+  GitchatIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: GitchatIOSTests
+    dependencies:
+      - target: GitchatIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: chat.git.tests
+        TEST_TARGET_NAME: GitchatIOS
+        SUPPORTS_MACCATALYST: YES
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Gitchat.app/Gitchat
+        BUNDLE_LOADER: $(TEST_HOST)
+    info:
+      path: GitchatIOSTests/Info.plist
       properties:
         CFBundleName: $(PRODUCT_NAME)
         CFBundlePackageType: BNDL

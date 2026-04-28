@@ -48,6 +48,20 @@ struct Conversation: Codable, Identifiable, Hashable {
     let is_muted: Bool?
     let has_mention: Bool?
     let has_reaction: Bool?
+    let topics_enabled: Bool?
+    /// BE list endpoint embeds `has_topics: true` on conversations whose
+    /// `topicsEnabled` flag is true and that have at least one topic row.
+    /// See messages.service.ts:564–631 (topic chips enrichment).
+    let has_topics: Bool?
+    /// BE-sorted topic chips (most recent activity first). Embedded by
+    /// `messages.service.ts:564–631` for topics-enabled conversations.
+    /// `topic_chips[0]` is the topic with the latest `last_message_at`.
+    let topic_chips: [ConversationTopicChip]?
+
+    var hasTopicsEnabled: Bool { topics_enabled == true || has_topics == true }
+    /// Newest active topic — used by ConversationsListView row to label
+    /// which topic the latest message came from. Nil for non-topic groups.
+    var latestTopicChip: ConversationTopicChip? { topic_chips?.first }
 
     var isGroup: Bool { is_group == true || type == "group" || type == "community" || type == "team" }
     var hasMentionFromBE: Bool { has_mention == true }
@@ -101,8 +115,153 @@ struct Conversation: Codable, Identifiable, Hashable {
             updated_at: updated_at,
             is_muted: is_muted,
             has_mention: has_mention,
-            has_reaction: has_reaction
+            has_reaction: has_reaction,
+            topics_enabled: topics_enabled,
+            has_topics: has_topics,
+            topic_chips: topic_chips
         )
+    }
+}
+
+/// Compact summary of a topic embedded in conversation list responses.
+/// Used by `ConversationsListView` row to show "<emoji> <name>" prefix
+/// before the preview text. Mirrors BE `topic_chips[]` shape (camelCase).
+struct ConversationTopicChip: Codable, Hashable, Identifiable {
+    let id: String
+    let name: String
+    let iconEmoji: String?
+    let colorToken: String?
+    let lastMessageAt: String?
+    let lastMessageText: String?
+    let lastSenderLogin: String?
+    let unreadCount: Int?
+
+    var displayEmoji: String { iconEmoji ?? "💬" }
+}
+
+// MARK: - Topic
+
+struct Topic: Codable, Identifiable, Hashable {
+    let id: String
+    let parent_conversation_id: String
+    let name: String
+    let icon_emoji: String?
+    let color_token: String?
+    let is_general: Bool
+    let pin_order: Int?
+    let archived_at: String?
+    let last_message_at: String?
+    let last_message_preview: String?
+    let last_sender_login: String?
+    let unread_count: Int
+    let unread_mentions_count: Int
+    let unread_reactions_count: Int
+    let created_by: String
+    let created_at: String
+
+    var isArchived: Bool { archived_at != nil }
+    var isPinned: Bool { pin_order != nil }
+    var displayEmoji: String { icon_emoji ?? "💬" }
+    var hasMention: Bool { unread_mentions_count > 0 }
+    var hasReaction: Bool { unread_reactions_count > 0 }
+
+    // BE TopicResponseDto uses camelCase keys (verified against
+    // backend src/modules/messages/dto/topic-response.dto.ts).
+    // The conversation list embed (`topic_chips`) is also camelCase.
+    // We keep snake_case property names in Swift for consistency
+    // with Conversation/Message and map via explicit CodingKeys.
+    enum CodingKeys: String, CodingKey {
+        case id
+        case parent_conversation_id = "parentConversationId"
+        case name
+        case icon_emoji = "iconEmoji"
+        case color_token = "colorToken"
+        case is_general = "isGeneral"
+        case pin_order = "pinOrder"
+        case archived_at = "archivedAt"
+        case last_message_at = "lastMessageAt"
+        case last_message_preview = "lastMessageText"
+        case last_sender_login = "lastSenderLogin"
+        case unread_count = "unreadCount"
+        case unread_mentions_count = "unreadMentionsCount"
+        case unread_reactions_count = "unreadReactionsCount"
+        case created_by = "createdBy"
+        case created_at = "createdAt"
+    }
+
+    // Explicit memberwise init — once we add `init(from:)` below, the
+    // synthesized memberwise init disappears and call sites
+    // (`Topic.fixturePreview`, tests) break. Restore it here.
+    init(
+        id: String, parent_conversation_id: String, name: String,
+        icon_emoji: String?, color_token: String?, is_general: Bool,
+        pin_order: Int?, archived_at: String?,
+        last_message_at: String?, last_message_preview: String?, last_sender_login: String?,
+        unread_count: Int, unread_mentions_count: Int, unread_reactions_count: Int,
+        created_by: String, created_at: String
+    ) {
+        self.id = id
+        self.parent_conversation_id = parent_conversation_id
+        self.name = name
+        self.icon_emoji = icon_emoji
+        self.color_token = color_token
+        self.is_general = is_general
+        self.pin_order = pin_order
+        self.archived_at = archived_at
+        self.last_message_at = last_message_at
+        self.last_message_preview = last_message_preview
+        self.last_sender_login = last_sender_login
+        self.unread_count = unread_count
+        self.unread_mentions_count = unread_mentions_count
+        self.unread_reactions_count = unread_reactions_count
+        self.created_by = created_by
+        self.created_at = created_at
+    }
+
+    // Custom decode so non-optional fields (is_general, unread counts,
+    // created_by, created_at, parent_conversation_id) don't fail when
+    // decoding `topic_chips` embeds (which omit them) — only fail for
+    // the dedicated `/topics` endpoint where they are guaranteed
+    // present.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.parent_conversation_id = (try? c.decode(String.self, forKey: .parent_conversation_id)) ?? ""
+        self.name = try c.decode(String.self, forKey: .name)
+        self.icon_emoji = try c.decodeIfPresent(String.self, forKey: .icon_emoji)
+        self.color_token = try c.decodeIfPresent(String.self, forKey: .color_token)
+        self.is_general = (try? c.decode(Bool.self, forKey: .is_general)) ?? false
+        self.pin_order = try c.decodeIfPresent(Int.self, forKey: .pin_order)
+        self.archived_at = try c.decodeIfPresent(String.self, forKey: .archived_at)
+        self.last_message_at = try c.decodeIfPresent(String.self, forKey: .last_message_at)
+        self.last_message_preview = try c.decodeIfPresent(String.self, forKey: .last_message_preview)
+        self.last_sender_login = try c.decodeIfPresent(String.self, forKey: .last_sender_login)
+        self.unread_count = (try? c.decode(Int.self, forKey: .unread_count)) ?? 0
+        self.unread_mentions_count = (try? c.decode(Int.self, forKey: .unread_mentions_count)) ?? 0
+        self.unread_reactions_count = (try? c.decode(Int.self, forKey: .unread_reactions_count)) ?? 0
+        self.created_by = (try? c.decode(String.self, forKey: .created_by)) ?? ""
+        self.created_at = (try? c.decode(String.self, forKey: .created_at)) ?? ""
+    }
+}
+
+// MARK: - ChatTarget
+
+enum ChatTarget: Hashable {
+    case conversation(Conversation)
+    case topic(Topic, parent: Conversation)
+
+    var conversationId: String {
+        switch self {
+        case .conversation(let c): return c.id
+        case .topic(let t, _): return t.id
+        }
+    }
+
+    var parentConversationId: String? {
+        switch self {
+        case .conversation: return nil
+        case .topic(_, let p): return p.id
+        }
     }
 }
 
@@ -179,6 +338,7 @@ struct Message: Codable, Identifiable, Hashable {
     let type: String?
     let reply_to_id: String?
     let reply: ReplyPreview?
+    let topicId: String?
 
     // Decode defensively: backend may send `sender` as a string OR as an
     // object `{ login, avatar_url }`, and may use slightly different keys.
@@ -194,6 +354,7 @@ struct Message: Codable, Identifiable, Hashable {
         case attachment_url, attachmentUrl
         case reply_to_id, replyToId
         case body
+        case topicId
     }
 
     private struct SenderObject: Decodable {
@@ -216,7 +377,8 @@ struct Message: Codable, Identifiable, Hashable {
         reply: ReplyPreview? = nil,
         attachments: [MessageAttachment]? = nil,
         unsent_at: String? = nil,
-        reactionRows: [RawReactionRow]? = nil
+        reactionRows: [RawReactionRow]? = nil,
+        topicId: String? = nil
     ) {
         self.id = id
         self.conversation_id = conversation_id
@@ -233,6 +395,7 @@ struct Message: Codable, Identifiable, Hashable {
         self.type = type
         self.reply_to_id = reply_to_id
         self.reply = reply
+        self.topicId = topicId
     }
 
     init(from decoder: Decoder) throws {
@@ -297,6 +460,7 @@ struct Message: Codable, Identifiable, Hashable {
         self.reply_to_id = try c.decodeIfPresent(String.self, forKey: .reply_to_id)
             ?? c.decodeIfPresent(String.self, forKey: .replyToId)
         self.reply = try? c.decodeIfPresent(ReplyPreview.self, forKey: .reply)
+        self.topicId = try? c.decodeIfPresent(String.self, forKey: .topicId)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -315,6 +479,7 @@ struct Message: Codable, Identifiable, Hashable {
         try c.encodeIfPresent(type, forKey: .type)
         try c.encodeIfPresent(reply_to_id, forKey: .reply_to_id)
         try c.encodeIfPresent(reply, forKey: .reply)
+        try c.encodeIfPresent(topicId, forKey: .topicId)
     }
 }
 

@@ -68,6 +68,12 @@ final class OutboxStore: ObservableObject {
         let replyToID: String?
         let createdAt: Date
         var state: State
+        /// Non-nil when this message targets a topic rather than a plain
+        /// conversation. Both fields are Optional so old persisted outbox
+        /// items (which lack these keys) decode cleanly via Codable — the
+        /// decoder sets them to nil automatically.
+        let topicID: String?
+        let parentConversationID: String?       // present iff topicID is non-nil
 
         enum State: Equatable, Codable {
             case sending
@@ -152,15 +158,33 @@ final class OutboxStore: ObservableObject {
         }
     }
 
+    /// Compute the send endpoint for a pending message. Topic sends use the
+    /// parent-prefixed path; plain-conversation sends use the legacy id-based path.
+    private func sendEndpoint(for msg: PendingMessage) -> String? {
+        if let topicID = msg.topicID, let parentID = msg.parentConversationID {
+            return TopicEndpoints.sendMessage(parentId: parentID, topicId: topicID)
+        }
+        return nil          // caller falls back to conversationId-based API
+    }
+
     private func executeSend(for pending: PendingMessage) async {
         let convId = pending.conversationID
         let localID = pending.localID
         do {
-            let msg = try await APIClient.shared.sendMessage(
-                conversationId: convId,
-                body: pending.content,
-                replyTo: pending.replyToID
-            )
+            let msg: Message
+            if let path = sendEndpoint(for: pending) {
+                msg = try await APIClient.shared.sendMessage(
+                    at: path,
+                    body: pending.content,
+                    replyTo: pending.replyToID
+                )
+            } else {
+                msg = try await APIClient.shared.sendMessage(
+                    conversationId: convId,
+                    body: pending.content,
+                    replyTo: pending.replyToID
+                )
+            }
             // Keep the bubble in its typed-order position across the
             // pending→server transition: re-stamp `created_at` with the
             // pending's client tap time (matching ms-precision format).
@@ -195,6 +219,15 @@ final class OutboxStore: ObservableObject {
             // handler's dedup and the bubble would never render.
             deliveryHandlers[convId]?(stamped)
         } catch {
+            // 410 Gone + TOPIC_ARCHIVED: topic was archived before the send
+            // could flush. Drop the item silently (retrying forever would be
+            // pointless) and surface a descriptive toast.
+            if case APIError.http(410, let body) = error,
+               body?.contains("TOPIC_ARCHIVED") == true {
+                ToastCenter.shared.show(.error, "Topic was archived", "Message not sent")
+                markDelivered(conversationID: convId, localID: localID)
+                return
+            }
             Haptics.error()
             ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
             markFailed(
