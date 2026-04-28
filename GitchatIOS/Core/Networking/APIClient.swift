@@ -26,6 +26,7 @@ struct APIClient {
     let decoder: JSONDecoder
     let encoder: JSONEncoder
 
+    /// Production init — builds sessions with the standard configuration.
     init() {
         let headers: [AnyHashable: Any] = [
             "User-Agent": Config.userAgent,
@@ -49,6 +50,15 @@ struct APIClient {
         upCfg.httpAdditionalHeaders = headers
         self.uploadSession = URLSession(configuration: upCfg)
 
+        self.decoder = JSONDecoder()
+        self.encoder = JSONEncoder()
+    }
+
+    /// Test init — accepts an injected URLSession so tests can supply one
+    /// configured with StubURLProtocol.
+    init(session: URLSession, uploadSession: URLSession? = nil) {
+        self.session = session
+        self.uploadSession = uploadSession ?? session
         self.decoder = JSONDecoder()
         self.encoder = JSONEncoder()
     }
@@ -173,7 +183,9 @@ struct APIClient {
     func getConversationMessages(id: String, cursor: String? = nil, limit: Int = 30) async throws -> MessagesResponse {
         var q = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let cursor { q.append(URLQueryItem(name: "cursor", value: cursor)) }
-        return try await request("messages/conversations/\(id)", query: q)
+        let resp: MessagesResponse = try await request("messages/conversations/\(id)", query: q)
+        print("[API-MESSAGES] id=\(id) | otherReadAt=\(resp.otherReadAt ?? "nil") | readCursors=\(resp.readCursors?.map { "\($0.login):\($0.readAt)" } ?? ["nil"])")
+        return resp
     }
 
     func createConversation(recipient: String) async throws -> Conversation {
@@ -240,14 +252,14 @@ struct APIClient {
         )
     }
 
-    /// Upload a file to a conversation. Returns the attachment URL the
-    /// backend will recognize when passed in `sendMessage(..., attachmentURL:)`.
+    /// Upload a file to a conversation. Returns a full `UploadedRef` with
+    /// the url, storage_path, and size_bytes from the upload response.
     func uploadAttachment(
         data: Data,
         filename: String,
         mimeType: String,
         conversationId: String
-    ) async throws -> String {
+    ) async throws -> UploadedRef {
         let boundary = "gitchat-\(UUID().uuidString)"
         var req = URLRequest(url: Config.apiBaseURL.appendingPathComponent("messages/upload"))
         req.httpMethod = "POST"
@@ -270,11 +282,23 @@ struct APIClient {
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError.http((resp as? HTTPURLResponse)?.statusCode ?? -1, String(data: respData, encoding: .utf8))
         }
-        struct Wrap: Decodable { let data: Inner?; let url: String? }
-        struct Inner: Decodable { let url: String }
+        struct UploadResponse: Decodable {
+            let url: String
+            let storage_path: String?
+            let filename: String?
+            let mime_type: String?
+            let size_bytes: Int?
+        }
+        struct Wrap: Decodable { let data: UploadResponse? }
         let w = try decoder.decode(Wrap.self, from: respData)
-        if let url = w.data?.url ?? w.url { return url }
-        throw APIError.decoding(NSError(domain: "upload", code: 0, userInfo: [NSLocalizedDescriptionKey: "no url in response"]))
+        guard let inner = w.data, !inner.url.isEmpty else {
+            throw APIError.decoding(NSError(domain: "upload", code: 0, userInfo: [NSLocalizedDescriptionKey: "no url in response"]))
+        }
+        return UploadedRef(
+            url: inner.url,
+            storagePath: inner.storage_path ?? "",
+            sizeBytes: inner.size_bytes ?? data.count
+        )
     }
 
     /// Send an upload request with one automatic retry after 2 s for
@@ -305,12 +329,14 @@ struct APIClient {
         body: String,
         replyTo: String? = nil,
         attachmentURL: String? = nil,
-        attachmentURLs: [String]? = nil
+        attachmentURLs: [String]? = nil,
+        clientMessageID: String? = nil
     ) async throws -> Message {
         struct Body: Encodable {
             let body: String
             let reply_to_id: String?
             let attachments: [[String: String]]?
+            let client_message_id: String?
         }
         var attachments: [[String: String]]? = nil
         if let many = attachmentURLs, !many.isEmpty {
@@ -318,7 +344,7 @@ struct APIClient {
         } else if let single = attachmentURL {
             attachments = [["url": single]]
         }
-        let req = Body(body: body, reply_to_id: replyTo, attachments: attachments)
+        let req = Body(body: body, reply_to_id: replyTo, attachments: attachments, client_message_id: clientMessageID)
         return try await request("messages/conversations/\(conversationId)", method: "POST", body: req)
     }
 

@@ -276,6 +276,7 @@ struct ChatDetailView: View {
                 blocks.unblock(login)
                 ToastCenter.shared.show(.success, "Unblocked", "@\(login)")
             },
+            totalUnreadCount: otherUnreadCount,
             actions: chatViewActions
         )
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
@@ -364,6 +365,15 @@ struct ChatDetailView: View {
             #endif
             return .handled
         })
+    }
+
+    // MARK: - Unread badge (other conversations)
+
+    private var otherUnreadCount: Int {
+        let convos = ConversationsCache.shared.get() ?? []
+        return convos
+            .filter { $0.id != vm.conversation.id }
+            .reduce(0) { $0 + $1.unreadCount }
     }
 
     // MARK: - ChatView Actions wiring
@@ -457,7 +467,7 @@ struct ChatDetailView: View {
         a.onRetryPending = { message in
             guard let pending = OutboxStore.shared.pending(
                 conversationID: vm.conversation.id,
-                localID: message.id
+                optimisticID: message.id
             ) else {
                 // Race: pending was discarded between menu render and tap.
                 // Surface a hint so the user isn't left wondering.
@@ -469,7 +479,7 @@ struct ChatDetailView: View {
         a.onDiscardPending = { message in
             OutboxStore.shared.discard(
                 conversationID: vm.conversation.id,
-                localID: message.id
+                optimisticID: message.id
             )
         }
         a.onBack = { dismiss() }
@@ -726,15 +736,38 @@ struct ChatDetailView: View {
         let caption = dropCaption.trimmingCharacters(in: .whitespacesAndNewlines)
         pendingDropImages = []
         dropCaption = ""
+
+        // No images — send caption as plain text via the legacy outbox.
         guard !images.isEmpty else {
-            // No images — send caption as plain text if any
             if !caption.isEmpty {
                 vm.draft = caption
                 Task { await vm.send() }
             }
             return
         }
-        Task { await vm.uploadImagesAndSend(images: images, senderLogin: auth.login, caption: caption) }
+
+        // Images (with or without caption) — bundle into ONE message so
+        // sender + receiver see a single bubble in identical order.
+        // Spec §Ordering decision (A): "Bundle text + image into ONE message".
+        Task {
+            var attachments: [PendingAttachment] = []
+            for (i, img) in images.enumerated() {
+                if let (data, _, mime) = await ChatViewModel.encodeForUploadOffMain(
+                    image: img, filename: "image-\(i).jpg"
+                ) {
+                    attachments.append(PendingAttachment(
+                        clientAttachmentID: UUID().uuidString,
+                        sourceData: data,
+                        mimeType: mime,
+                        width: nil,
+                        height: nil,
+                        blurhash: nil
+                    ))
+                }
+            }
+            guard !attachments.isEmpty else { return }
+            vm.send(content: caption, attachments: attachments)
+        }
     }
 
     /// Copy an image message to the system pasteboard using the raw
@@ -865,26 +898,19 @@ struct ChatDetailView: View {
         // Receive server-confirmed self-sends directly from OutboxStore
         // (so a successful send is visible even if the socket event for
         // it never arrives — e.g. WS disconnect, local API without WS).
-        // Same dedup contract as the socket handler below.
-        OutboxStore.shared.registerDeliveryHandler(conversationID: vm.target.conversationId) { msg in
-            guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
-            vm.messages.append(msg)
-        }
-        socket.onMessageSent = { msg in
-            // Topic messages also fire as message:sent; the topic:message handler
-            // already routed them via NotificationCenter.gitchatTopicEvent.
-            if msg.topicId != nil { return }
-            guard msg.conversation_id == vm.conversation.id else { return }
-            // Dedup using the atomic Set insert: the only way a second
-            // callback for the same id can race past the .contains guard
-            // is if both fire close together off the socket queue. Set
-            // insert returns false on the second call, dropping it cleanly.
-            guard ChatMessageView.seenIds.insert(msg.id).inserted else { return }
-            vm.messages.append(msg)
-            if msg.sender != auth.login {
-                Task { try? await APIClient.shared.markRead(conversationId: vm.conversation.id) }
-            }
-        }
+        // Both handlers match by client_message_id first (replaces the
+        // optimistic placeholder), then fall back to seenIds dedup.
+        // Keyed by `vm.target.conversationId` (topic id for topic targets,
+        // parent id for plain conversation) to match `PendingMessage.conversationID`.
+        // The socket handler's `conversation_id == vm.conversation.id` guard
+        // (vm.conversation = parent for topic) naturally filters out topic
+        // messages, which are routed via `Notification.gitchatTopicEvent`
+        // to ChatViewModel.handle(topicEvent:.message) instead.
+        OutboxStore.shared.registerDeliveryHandler(
+            conversationID: vm.target.conversationId,
+            ChatDetailViewBindings.makeOutboxDeliveryHandler(vm: vm)
+        )
+        socket.onMessageSent = ChatDetailViewBindings.makeSocketMessageSentHandler(vm: vm)
         socket.onTyping = { convId, login, typing in
             guard convId == vm.conversation.id, login != auth.login else { return }
             if typing { vm.typingUsers.insert(login) }
@@ -1064,7 +1090,7 @@ private struct ChatDetailSheets: ViewModifier {
                 NavigationStack {
                     SeenBySheet(
                         message: msg,
-                        readCursors: vm.readCursors,
+                        seenLogins: vm.seenByLogins(for: msg),
                         participants: vm.conversation.participantsOrEmpty,
                         myLogin: auth.login
                     )

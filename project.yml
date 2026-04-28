@@ -17,7 +17,8 @@ schemes:
     test:
       config: Debug
       targets:
-        - GitchatIOSTests
+        - name: GitchatIOSTests
+          parallelizable: true
         - GitchatIOSUITests
     profile:
       config: Release
@@ -110,7 +111,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.5"
-        CFBundleVersion: "76"
+        CFBundleVersion: "79"
         UILaunchScreen:
           UIColorName: AccentColor
           UIImageName: LaunchIcon
@@ -185,7 +186,7 @@ targets:
       properties:
         CFBundleDisplayName: OneSignalNotificationServiceExtension
         CFBundleShortVersionString: "1.0.5"
-        CFBundleVersion: "76"
+        CFBundleVersion: "79"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
@@ -222,7 +223,7 @@ targets:
         CFBundleDisplayName: Gitchat
         CFBundleName: Gitchat
         CFBundleShortVersionString: "1.0.5"
-        CFBundleVersion: "76"
+        CFBundleVersion: "79"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
@@ -244,6 +245,27 @@ targets:
         INFOPLIST_FILE: GitchatShareExtension/Info.plist
         SKIP_INSTALL: NO
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  GitchatIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: GitchatIOSTests
+    dependencies:
+      - target: GitchatIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: chat.git.unittests
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Gitchat.app/Gitchat
+        SWIFT_VERSION: "5.9"
+        SUPPORTS_MACCATALYST: YES
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    info:
+      path: GitchatIOSTests/Info.plist
+      properties:
+        CFBundleName: $(PRODUCT_NAME)
+        CFBundlePackageType: BNDL
   GitchatIOSUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -260,27 +282,6 @@ targets:
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     info:
       path: GitchatIOSUITests/Info.plist
-      properties:
-        CFBundleName: $(PRODUCT_NAME)
-        CFBundlePackageType: BNDL
-  GitchatIOSTests:
-    type: bundle.unit-test
-    platform: iOS
-    deploymentTarget: "16.0"
-    sources:
-      - path: GitchatIOSTests
-    dependencies:
-      - target: GitchatIOS
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: chat.git.tests
-        TEST_TARGET_NAME: GitchatIOS
-        SUPPORTS_MACCATALYST: YES
-        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
-        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Gitchat.app/Gitchat
-        BUNDLE_LOADER: $(TEST_HOST)
-    info:
-      path: GitchatIOSTests/Info.plist
       properties:
         CFBundleName: $(PRODUCT_NAME)
         CFBundlePackageType: BNDL

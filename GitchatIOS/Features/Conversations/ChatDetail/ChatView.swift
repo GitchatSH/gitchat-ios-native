@@ -46,6 +46,7 @@ struct ChatView: View {
     let participants: [ConversationParticipant]
     let blockedBannerLogin: String?
     let onUnblock: (String) -> Void
+    var totalUnreadCount: Int = 0
 
     /// Imperative actions wired from the caller.
     struct Actions {
@@ -276,6 +277,17 @@ struct ChatView: View {
                     .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .modifier(GlassCircle())
+                    .overlay(alignment: .topTrailing) {
+                        if totalUnreadCount > 0 {
+                            Text(totalUnreadCount > 99 ? "99+" : "\(totalUnreadCount)")
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .frame(minWidth: 22, minHeight: 22)
+                                .background(Color("AccentColor"), in: Capsule())
+                                .offset(x: 6, y: -6)
+                        }
+                    }
             }
             .buttonStyle(.plain)
 
@@ -340,8 +352,8 @@ struct ChatView: View {
                 items: visibleMessages,
                 typingUsers: Array(vm.typingUsers),
                 isGroup: vm.conversation.isGroup,
-                showSeen: showSeen,
-                seenAvatarURL: seenAvatarURL,
+                showSeen: false,
+                seenAvatarURL: nil,
                 pinnedIds: vm.pinnedIds,
                 readCursors: vm.readCursors,
                 pulsingId: pulsingId,
@@ -436,7 +448,7 @@ struct ChatView: View {
             // vertical rhythm entirely owned by .padding(.top) below.
             let isFailed: Bool = {
                 guard msg.id.hasPrefix("local-"),
-                      let p = OutboxStore.shared.pending(conversationID: vm.conversation.id, localID: msg.id),
+                      let p = OutboxStore.shared.pending(conversationID: vm.conversation.id, optimisticID: msg.id),
                       case .failed = p.state else { return false }
                 return true
             }()
@@ -476,9 +488,6 @@ struct ChatView: View {
                 .padding(.top, showHeader ? 8 : 4)
                 .chatSwipeToReply(isMe: isMe, messageId: msg.id)
                 .onTapGesture(count: 2) { actions.onDoubleTapHeart(msg) }
-                if !cursors.isEmpty {
-                    seenByAvatarsRow(cursors: cursors, isMe: isMe, for: msg)
-                }
             }
         }
     }
@@ -691,6 +700,7 @@ extension ChatView {
                 currentReactions: currentUserReactions(for: t.message),
                 seenCount: seenByLogins(t.message).count,
                 seenLogins: seenByLogins(t.message),
+                isReadByOthers: vm.isReadByOthers(for: t.message),
                 participants: participants,
                 onReact: { emoji in actions.onReact(t.message, emoji) },
                 onMoreReactions: { actions.onMoreReactions(t.message) },
@@ -747,16 +757,18 @@ extension ChatView {
         if msg.id.hasPrefix("local-") {
             if let pending = OutboxStore.shared.pending(
                 conversationID: vm.conversation.id,
-                localID: msg.id
+                optimisticID: msg.id
             ) {
                 switch pending.state {
-                case .sending:
+                case .enqueued, .uploading, .uploaded, .sending:
                     // Allow Discard while still sending so a Task that hangs
                     // (e.g., URLSession stuck on a stalled connection) isn't
                     // a permanent dead-end for the user.
                     return [.discard]
                 case .failed:
                     return [.retry, .discard]
+                case .delivered:
+                    return []
                 }
             }
             return []                        // unknown local- id (race) → no actions

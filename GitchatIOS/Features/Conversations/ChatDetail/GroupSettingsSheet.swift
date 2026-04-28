@@ -126,13 +126,13 @@ struct GroupSettingsSheet: View {
             return
         }
         do {
-            let url = try await APIClient.shared.uploadAttachment(
+            let uploaded = try await APIClient.shared.uploadAttachment(
                 data: data,
                 filename: "group-avatar.jpg",
                 mimeType: "image/jpeg",
                 conversationId: conversation.id
             )
-            uploadedAvatarUrl = url
+            uploadedAvatarUrl = uploaded.url
             previewAvatarImage = image
         } catch {
             ToastCenter.shared.show(.error, "Upload failed", error.localizedDescription)

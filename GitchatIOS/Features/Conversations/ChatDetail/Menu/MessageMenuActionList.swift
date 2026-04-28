@@ -10,6 +10,7 @@ struct MessageMenuActionList: View {
     let actions: [MessageMenuAction]
     let seenCount: Int
     let seenLogins: [String]
+    var isReadByOthers: Bool = false
     let participants: [ConversationParticipant]
     let onAction: (MessageMenuAction) -> Void
 
@@ -29,7 +30,13 @@ struct MessageMenuActionList: View {
         sectionContainer {
             // Section 1: Seen by
             if showSeenBy {
-                seenByRow
+                if seenCount > 0 {
+                    seenByRow
+                        .contentShape(Rectangle())
+                        .onTapGesture { onAction(.seenBy) }
+                } else {
+                    seenByRow
+                }
                 sectionDivider
             }
 
@@ -69,32 +76,30 @@ struct MessageMenuActionList: View {
 
     @ViewBuilder
     private var seenByRow: some View {
-        if seenCount > 0 {
-            HStack(spacing: 8) {
-                seenAvatarStack
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Seen by")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
-                    Text(seenNamesList)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-        } else {
-            HStack {
+        HStack {
+            if seenCount > 0 {
+                Text("Seen by \(seenCount)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            } else if isReadByOthers {
+                Text("Seen")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            } else {
                 Text("No one has seen this yet")
                     .font(.system(size: 13))
                     .foregroundStyle(.tertiary)
-                Spacer()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            Spacer()
+            if seenCount > 0 {
+                seenAvatarStack
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 
     private var seenNamesList: String {
@@ -117,18 +122,19 @@ struct MessageMenuActionList: View {
                 let login = i < seenLogins.count ? seenLogins[i] : nil
                 let avatarURL = login.flatMap { l in
                     participants.first(where: { $0.login == l })?.avatar_url
+                        ?? "https://github.com/\(l).png"
                 }
                 AvatarView(url: avatarURL, size: 22, login: login ?? "")
                     .frame(width: 22, height: 22)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                    .overlay(Circle().stroke(Color(.separator).opacity(0.3), lineWidth: 1))
             }
             if extra > 0 {
                 Text("+\(extra)")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.secondary)
                     .frame(width: 22, height: 22)
-                    .background(Color(.tertiarySystemFill), in: Circle())
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
+                    .background(Color(.systemGray5), in: Circle())
+                    .overlay(Circle().stroke(Color(.separator).opacity(0.3), lineWidth: 1))
             }
         }
     }

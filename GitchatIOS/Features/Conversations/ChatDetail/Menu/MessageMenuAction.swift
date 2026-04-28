@@ -89,7 +89,7 @@ enum MessageMenuAction: Hashable {
         }
         out.append(isPinned ? .unpin : .pin)
         out.append(.forward)
-        if isGroup { out.append(.seenBy) }
+        if isGroup || isMe { out.append(.seenBy) }
         if isMe {
             out.append(contentsOf: [.edit, .unsend, .delete])
         } else {

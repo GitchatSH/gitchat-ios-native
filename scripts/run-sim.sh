@@ -7,6 +7,7 @@
 #   ./scripts/run-sim.sh --list       # just list available devices
 #   ./scripts/run-sim.sh --build      # force a fresh build first
 #   ./scripts/run-sim.sh --catalyst   # build & run the Mac Catalyst app
+#   ./scripts/run-sim.sh --local      # use GitchatIOS local scheme (API_BASE_URL=http://localhost:3000/api/v1)
 
 set -euo pipefail
 
@@ -26,6 +27,7 @@ die()   { echo -e "${RED}xx${NC}  $*" >&2; exit 1; }
 # --- Parse args ---
 FORCE_BUILD=0
 CATALYST=0
+LOCAL=0
 TARGET_DEVICE=""
 for arg in "$@"; do
     case "$arg" in
@@ -39,8 +41,11 @@ for arg in "$@"; do
         --catalyst)
             CATALYST=1
             ;;
+        --local)
+            LOCAL=1
+            ;;
         -h|--help)
-            sed -n '2,11p' "$0"
+            sed -n '2,12p' "$0"
             exit 0
             ;;
         *)
@@ -48,6 +53,11 @@ for arg in "$@"; do
             ;;
     esac
 done
+
+if [[ "$LOCAL" == 1 ]]; then
+    SCHEME="GitchatIOS local"
+    info "Using local backend scheme: $SCHEME"
+fi
 
 CATALYST_LABEL="Mac Catalyst (macOS)"
 

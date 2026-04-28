@@ -110,4 +110,39 @@ final class MessageCache {
             }
         }
     }
+
+    /// Append (or replace by id) a single delivered message into the cached entry
+    /// for `conversationID`. If no entry exists yet, no-op (caller relies on first
+    /// vm.load() to populate). Idempotent; safe to call when entry was just
+    /// updated by the vm.
+    func upsertDelivered(conversationID: String, message: Message) {
+        guard var entry = get(conversationID) else { return }
+        var msgs = entry.messages
+        // Strip optimistic local-* placeholders (defense-in-depth, matches existing filter).
+        msgs.removeAll { $0.id.hasPrefix("local-") }
+        if let idx = msgs.firstIndex(where: { $0.id == message.id }) {
+            msgs[idx] = message
+        } else if let cmid = message.client_message_id,
+                  let idx = msgs.firstIndex(where: { $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame }) {
+            msgs[idx] = message
+        } else {
+            msgs.append(message)
+        }
+        entry = Entry(
+            messages: msgs,
+            nextCursor: entry.nextCursor,
+            otherReadAt: entry.otherReadAt,
+            readCursors: entry.readCursors,
+            fetchedAt: Date()
+        )
+        store(conversationID, entry: entry)
+    }
+
+    #if DEBUG
+    /// Test-only helper to clear in-memory cache entries. Disk files are
+    /// left intact to avoid side effects on other tests.
+    func clearForTesting() {
+        entries.removeAll()
+    }
+    #endif
 }
