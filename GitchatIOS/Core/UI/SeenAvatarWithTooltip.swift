@@ -6,7 +6,7 @@ struct SeenAvatarWithTooltip: View {
     @State private var hovering = false
 
     var body: some View {
-        AvatarView(url: avatarURL, size: 16)
+        AvatarView(url: avatarURL, size: 20)
             .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1))
             #if targetEnvironment(macCatalyst)
             .overlay(alignment: .top) {

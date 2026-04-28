@@ -12,9 +12,20 @@ final class ConversationsViewModel: ObservableObject {
     @Published var locallyRead: Set<String> = []
     @Published var locallyMuted: Set<String> = []
     @Published var locallyUnmuted: Set<String> = []
+    @Published var isLoadingMore = false
+    private var nextCursor: String?
+    private var loadTask: Task<Void, Never>?
 
     func markLocallyRead(_ id: String) {
         locallyRead.insert(id)
+    }
+
+    func toggleRead(_ convo: Conversation) {
+        if locallyRead.contains(convo.id) {
+            locallyRead.remove(convo.id)
+        } else {
+            locallyRead.insert(convo.id)
+        }
     }
 
     /// Sum of unread counts across all conversations, treating ones the
@@ -35,26 +46,7 @@ final class ConversationsViewModel: ObservableObject {
               let idx = conversations.firstIndex(where: { $0.id == cid }) else { return }
         let c = conversations[idx]
         let preview = msg.content.isEmpty ? c.last_message_preview : msg.content
-        conversations[idx] = Conversation(
-            id: c.id,
-            type: c.type,
-            is_group: c.is_group,
-            group_name: c.group_name,
-            group_avatar_url: c.group_avatar_url,
-            repo_full_name: c.repo_full_name,
-            participants: c.participants,
-            other_user: c.other_user,
-            last_message: msg,
-            last_message_preview: preview,
-            last_message_text: msg.content.isEmpty ? c.last_message_text : msg.content,
-            last_message_at: msg.created_at ?? c.last_message_at,
-            unread_count: c.unread_count,
-            pinned: c.pinned,
-            pinned_at: c.pinned_at,
-            is_request: c.is_request,
-            updated_at: c.updated_at,
-            is_muted: c.is_muted
-        )
+        conversations[idx] = c.withLastMessage(msg, preview: preview)
         ConversationsCache.shared.store(conversations)
     }
 
@@ -84,7 +76,9 @@ final class ConversationsViewModel: ObservableObject {
             pinned_at: c.pinned_at,
             is_request: c.is_request,
             updated_at: c.updated_at,
-            is_muted: c.is_muted
+            is_muted: c.is_muted,
+            has_mention: c.has_mention,
+            has_reaction: c.has_reaction
         )
         ConversationsCache.shared.store(conversations)
     }
@@ -179,35 +173,66 @@ final class ConversationsViewModel: ObservableObject {
         return ordered
     }
 
-    func load() async {
-        if conversations.isEmpty { isLoading = true }
-        isSyncing = true
-        let started = Date()
-        defer { isLoading = false }
-        do {
-            let resp = try await APIClient.shared.listConversations()
-            // Dedupe group/channel conversations whose repo_full_name
-            // collides case-insensitively. Backend stores both
-            // `open-acp/openacp` and `Open-ACP/OpenACP` as separate
-            // rows; on the client we keep the one with the most
-            // recent activity so the user sees a single chat.
-            let deduped = Self.dedupeChannels(resp.conversations)
-            self.conversations = deduped
-            ConversationsCache.shared.store(deduped)
-            syncMutedStore()
-            for convo in deduped {
-                MessageCache.shared.prefetch(conversationId: convo.id)
+    func load(reset: Bool = true) async {
+        loadTask?.cancel()
+        let task = Task { @MainActor in
+            if reset {
+                if conversations.isEmpty { isLoading = true }
+                isSyncing = true
             }
-        } catch {
-            self.error = error.localizedDescription
+            let started = Date()
+            defer {
+                if reset { isLoading = false }
+            }
+            do {
+                let cursor = reset ? nil : nextCursor
+                let resp = try await APIClient.shared.listConversations(cursor: cursor)
+                guard !Task.isCancelled else { return }
+
+                if reset {
+                    let deduped = Self.dedupeChannels(resp.conversations)
+                    self.conversations = deduped
+                    self.locallyRead.removeAll()
+                    // Keep locallyMuted/locallyUnmuted — syncMutedStore() reconciles them
+                } else {
+                    let existingIds = Set(conversations.map(\.id))
+                    let newConvos = resp.conversations.filter { !existingIds.contains($0.id) }
+                    let merged = conversations + newConvos
+                    self.conversations = Self.dedupeChannels(merged)
+                }
+
+                self.nextCursor = resp.nextCursor
+                ConversationsCache.shared.store(conversations)
+                syncMutedStore()
+                for convo in resp.conversations {
+                    MessageCache.shared.prefetch(conversationId: convo.id)
+                }
+            } catch {
+                if !Task.isCancelled {
+                    self.error = error.localizedDescription
+                }
+            }
+            if reset {
+                let elapsed = Date().timeIntervalSince(started)
+                if elapsed < 2 {
+                    try? await Task.sleep(nanoseconds: UInt64((2 - elapsed) * 1_000_000_000))
+                }
+                isSyncing = false
+            }
+            isLoadingMore = false
         }
-        // Keep the syncing indicator on screen for at least 2s so the
-        // user has time to notice the sync happened.
-        let elapsed = Date().timeIntervalSince(started)
-        if elapsed < 2 {
-            try? await Task.sleep(nanoseconds: UInt64((2 - elapsed) * 1_000_000_000))
+        loadTask = task
+        await task.value
+    }
+
+    func loadMoreIfNeeded(current: Conversation) {
+        guard !isLoadingMore, nextCursor != nil else { return }
+        let thresholdIndex = conversations.index(conversations.endIndex, offsetBy: -5, limitedBy: conversations.startIndex) ?? conversations.startIndex
+        if let currentIndex = conversations.firstIndex(where: { $0.id == current.id }),
+           currentIndex >= thresholdIndex {
+            isLoadingMore = true
+            Task { await load(reset: false) }
         }
-        isSyncing = false
     }
 
     func togglePin(_ convo: Conversation) async {
@@ -245,6 +270,7 @@ final class ConversationsViewModel: ObservableObject {
             ToastCenter.shared.show(.error, "Couldn't delete", error.localizedDescription)
         }
     }
+
 }
 
 struct ConversationsListView: View {
@@ -254,6 +280,11 @@ struct ConversationsListView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var showNewChat = false
     @State private var filter = ""
+    @State private var profileResults: [FriendUser] = []
+    @State private var isSearchingProfiles = false
+    @State private var messageResults: [Message] = []
+    @State private var isSearchingMessages = false
+    @State private var searchTask: Task<Void, Never>?
     @State private var path = NavigationPath()
     @State private var confirmDelete: Conversation?
     @State private var tappedConvoId: String?
@@ -274,9 +305,9 @@ struct ConversationsListView: View {
     }
 
     private func openConversation(_ convo: Conversation) {
-        withAnimation(.none) { tappedConvoId = convo.id }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            tappedConvoId = nil
+        tappedConvoId = convo.id
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.easeOut(duration: 0.2)) { tappedConvoId = nil }
         }
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
@@ -286,7 +317,11 @@ struct ConversationsListView: View {
         #endif
     }
 
-    private var filtered: [Conversation] {
+    private var isSearching: Bool {
+        !filter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var filteredChats: [Conversation] {
         let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let base: [Conversation]
         if q.isEmpty {
@@ -294,13 +329,36 @@ struct ConversationsListView: View {
         } else {
             base = vm.conversations.filter { c in
                 c.displayTitle.lowercased().contains(q)
-                    || (c.previewText ?? "").lowercased().contains(q)
                     || c.participantsOrEmpty.contains(where: { $0.login.lowercased().contains(q) })
             }
         }
         return base.sorted { a, b in
             if a.isPinned != b.isPinned { return a.isPinned }
             return (a.last_message_at ?? "") > (b.last_message_at ?? "")
+        }
+    }
+
+    private func runSearch(_ query: String) {
+        searchTask?.cancel()
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard q.count >= 2 else {
+            profileResults = []
+            messageResults = []
+            isSearchingProfiles = false
+            isSearchingMessages = false
+            return
+        }
+        searchTask = Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+            isSearchingProfiles = true
+            isSearchingMessages = true
+            async let profiles = APIClient.shared.searchUsersForDM(query: q)
+            async let messages = APIClient.shared.searchMessagesGlobal(q: q)
+            if let p = try? await profiles, !Task.isCancelled { profileResults = p }
+            isSearchingProfiles = false
+            if let m = try? await messages, !Task.isCancelled { messageResults = m }
+            isSearchingMessages = false
         }
     }
 
@@ -381,7 +439,7 @@ struct ConversationsListView: View {
     private func rowBackground(for convo: Conversation) -> some View {
         let fill: Color? = {
             if isActiveRow(convo) { return Color("AccentColor") }
-            if convo.isPinned { return Color("AccentColor").opacity(0.08) }
+            // Pinned rows use no special background — pin icon in right column is sufficient
             return nil
         }()
 
@@ -408,12 +466,10 @@ struct ConversationsListView: View {
             isActive: isActiveRow(convo)
         )
         .contentShape(Rectangle())
-        // Telegram-style press: 0.12s delay, then 0.20s squeeze
-        // ramp, then activate at 0.32s. `onPressingChanged` fires
-        // immediately on touch / release; we use a token to guard
-        // the deferred squeeze against early lifts.
+        .background(tappedConvoId == convo.id ? Color(.tertiarySystemBackground) : Color.clear)
         .scaleEffect(squeezedConvoId == convo.id ? rowSqueezeFactor(for: convo) : 1)
         .animation(.easeOut(duration: 0.20), value: squeezedConvoId == convo.id)
+        .animation(.easeOut(duration: 0.08), value: tappedConvoId == convo.id)
         .onTapGesture { openConversation(convo) }
         .onLongPressGesture(minimumDuration: 0.32) {
             squeezedConvoId = nil
@@ -435,69 +491,245 @@ struct ConversationsListView: View {
             }
         }
         .macHover()
-        .listRowSeparator(.hidden)
+        .listRowSeparator(.hidden, edges: .top)
+        .listRowSeparator(.visible, edges: .bottom)
+        .listRowSeparatorTint(Color(.separator))
+        .alignmentGuide(.listRowSeparatorLeading) { _ in 76 }
+        .alignmentGuide(.listRowSeparatorTrailing) { d in d.width }
         #if targetEnvironment(macCatalyst)
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         #else
-        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
         #endif
-        .scaleEffect(tappedConvoId == convo.id ? 0.97 : 1)
-        .opacity(tappedConvoId == convo.id ? 0.7 : 1)
         .listRowBackground(rowBackground(for: convo))
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
-                Task { await vm.togglePin(convo) }
+                vm.markLocallyRead(convo.id)
+                Task { try? await APIClient.shared.markRead(conversationId: convo.id) }
             } label: {
-                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash.fill" : "pin.fill")
+                Label("Read", systemImage: "envelope.open")
             }
-            .tint(.orange)
+            .tint(Color(.systemGreen))
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                confirmDelete = convo
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
             Button {
                 Task { await vm.toggleMute(convo) }
             } label: {
                 let muted = vm.isLocallyMuted(convo)
                 Label(muted ? "Unmute" : "Mute", systemImage: muted ? "bell.fill" : "bell.slash.fill")
             }
-            .tint(.gray)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                Task { await vm.delete(convo) }
+            .tint(.orange)
+            Button {
+                Task { await vm.togglePin(convo) }
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label(convo.isPinned ? "Unpin" : "Pin", systemImage: convo.isPinned ? "pin.slash.fill" : "pin.fill")
             }
-            .tint(.red)
+            .tint(Color(.systemBlue))
         }
+        .onAppear {
+            vm.loadMoreIfNeeded(current: convo)
+        }
+    }
+
+    @ViewBuilder
+    private var searchResultsList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if !profileResults.isEmpty || isSearchingProfiles {
+                    sectionHeader("Profiles")
+                    if isSearchingProfiles && profileResults.isEmpty {
+                        HStack { Spacer(); ProgressView(); Spacer() }
+                            .padding(.vertical, 16)
+                    } else {
+                        ForEach(profileResults) { user in
+                            profileRow(user)
+                            searchDivider
+                        }
+                    }
+                }
+
+                if !messageResults.isEmpty || isSearchingMessages {
+                    sectionHeader("Messages")
+                    if isSearchingMessages && messageResults.isEmpty {
+                        HStack { Spacer(); ProgressView(); Spacer() }
+                            .padding(.vertical, 16)
+                    } else {
+                        ForEach(messageResults) { msg in
+                            messageSearchRow(msg)
+                            searchDivider
+                        }
+                    }
+                }
+            }
+        }
+        .scrollIndicators(.hidden, axes: .vertical)
+        .overlay {
+            let q = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+            if q.count >= 2
+                && profileResults.isEmpty && !isSearchingProfiles
+                && messageResults.isEmpty && !isSearchingMessages {
+                ContentUnavailableCompat(
+                    title: "",
+                    systemImage: "magnifyingglass",
+                    description: "No results. Try a different search."
+                )
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
+    }
+
+    private var searchDivider: some View {
+        Color(.separator).opacity(0.5)
+            .frame(height: 1 / UIScreen.main.scale)
+            .padding(.leading, 16 + 44 + 12) // padding + avatar + gap
+    }
+
+    @ViewBuilder
+    private func profileRow(_ user: FriendUser) -> some View {
+        HStack(spacing: 12) {
+            AvatarView(
+                url: user.avatar_url,
+                size: 44,
+                login: user.login
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(user.login)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                if let name = user.name, !name.isEmpty {
+                    Text(name)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            filter = ""
+            if let convo = vm.conversations.first(where: { $0.other_user?.login == user.login }) {
+                openConversation(convo)
+            } else {
+                Task {
+                    if let convo = try? await APIClient.shared.createConversation(recipient: user.login) {
+                        openConversation(convo)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func messageSearchRow(_ msg: Message) -> some View {
+        HStack(spacing: 12) {
+            AvatarView(
+                url: msg.sender_avatar,
+                size: 44,
+                login: msg.sender
+            )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(msg.sender)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                highlightedText(msg.content, query: filter)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 4)
+            if let date = msg.created_at {
+                Text(RelativeTime.chatListStamp(date))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard let convoId = msg.conversation_id,
+                  let convo = vm.conversations.first(where: { $0.id == convoId }) else { return }
+            AppRouter.shared.pendingMessageId = msg.id
+            AppRouter.shared.pendingMessageCreatedAt = msg.created_at
+            openConversation(convo)
+        }
+    }
+
+    private func highlightedText(_ text: String, query: String) -> Text {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty,
+              let range = text.range(of: q, options: .caseInsensitive) else {
+            return Text(text)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        let before = String(text[text.startIndex..<range.lowerBound])
+        let match = String(text[range])
+        let after = String(text[range.upperBound..<text.endIndex])
+        return Text(before).font(.subheadline).foregroundColor(.secondary)
+            + Text(match).font(.subheadline.bold()).foregroundColor(.primary)
+            + Text(after).font(.subheadline).foregroundColor(.secondary)
     }
 
     private var sidebar: some View {
         Group {
                 if vm.isLoading && vm.conversations.isEmpty {
-                    SkeletonList(count: 10, avatarSize: 50)
+                    SkeletonList(count: 10, avatarSize: 64)
                 } else if vm.conversations.isEmpty {
                     ContentUnavailableCompat(
                         title: "No conversations yet",
                         systemImage: "bubble.left.and.bubble.right",
                         description: "Tap the pencil icon to start one."
                     )
-                } else if filtered.isEmpty {
+                } else if isSearching {
+                    searchResultsList
+                } else if filteredChats.isEmpty {
                     ContentUnavailableCompat(
                         title: "No results",
                         systemImage: "magnifyingglass",
                         description: "Try a different search."
                     )
                 } else {
-                    List(filtered) { convo in
-                        conversationListRow(convo)
-                            .hideMacScrollIndicators()
+                    List {
+                        ForEach(filteredChats) { convo in
+                            conversationListRow(convo)
+                                .hideMacScrollIndicators()
+                        }
+                        if vm.isLoadingMore {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                Spacer()
+                            }
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                        }
                     }
                     .listStyle(.plain)
                     .macRowListContainer()
                     .scrollIndicators(.hidden, axes: .vertical)
-                    .refreshable { await vm.load() }
-                    .animation(.spring(response: 0.45, dampingFraction: 0.82), value: vm.conversations.map(\.id))
+                    .refreshable {
+                        await vm.load()
+                        Haptics.impact(.light)
+                    }
+                    .animation(vm.isLoadingMore ? .none : .spring(response: 0.45, dampingFraction: 0.82), value: vm.conversations.map(\.id))
                 }
             }
-            .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search chats")
+            .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
+            .onChange(of: filter) { runSearch($0) }
             .navigationTitle("Chats")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -530,6 +762,7 @@ struct ConversationsListView: View {
             }
             .task {
                 await vm.load()
+                DraftStore.shared.loadAll(for: vm.conversations.map(\.id))
                 socket.onConversationUpdated = { Task { await vm.load() } }
             }
             .onReceive(NotificationCenter.default.publisher(for: .gitchatMessageSent)) { note in
@@ -590,7 +823,7 @@ struct SyncingIndicator: View {
         TimelineView(.animation) { context in
             let seconds = context.date.timeIntervalSinceReferenceDate
             Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Color("AccentColor"))
                 .rotationEffect(.degrees(seconds.truncatingRemainder(dividingBy: 1) * 360))
         }
@@ -606,37 +839,42 @@ struct ConversationRow: View {
     /// in the sticky detail panel. Flips text/icon colors to white
     /// for contrast against the accent-color background.
     var isActive: Bool = false
+    @ObservedObject private var draftStore = DraftStore.shared
+    @ScaledMetric(relativeTo: .footnote) private var badgeMinSize: CGFloat = 24
+    @ScaledMetric(relativeTo: .caption) private var mentionBadgeSize: CGFloat = 20
+    @ScaledMetric(relativeTo: .caption) private var senderAvatarSize: CGFloat = 20
 
     private var primaryTextColor: Color { isActive ? .white : .primary }
     private var secondaryTextColor: Color { isActive ? .white.opacity(0.85) : .secondary }
 
     /// Avatar diameter — 44pt on Catalyst (Apple list standard),
-    /// 50pt on iOS for the Telegram-feeling chat-list look.
+    /// 64pt on iOS for the Telegram-feeling chat-list look.
     private var avatarSize: CGFloat {
         #if targetEnvironment(macCatalyst)
         return 44
         #else
-        return 50
+        return 64
         #endif
     }
 
     private var metaFont: Font {
-        #if targetEnvironment(macCatalyst)
-        return .footnote
-        #else
-        return .caption2
-        #endif
+        .footnote
     }
 
     private var displayedUnread: Int {
         isLocallyRead ? 0 : conversation.unreadCount
     }
 
+    /// Single cache lookup per row render — avoids repeated MessageCache.get() calls.
+    private var cachedEntry: MessageCache.Entry? {
+        MessageCache.shared.get(conversation.id)
+    }
+
     /// Pull the most recent attachment URL out of the message cache so
     /// "📷 Photo" preview rows can show an actual thumbnail instead of
     /// the camera emoji.
     private var lastPhotoURL: URL? {
-        guard let messages = MessageCache.shared.get(conversation.id)?.messages,
+        guard let messages = cachedEntry?.messages,
               let last = messages.last else { return nil }
         if let urlString = last.attachments?.first?.url, let url = URL(string: urlString) {
             return url
@@ -649,8 +887,8 @@ struct ConversationRow: View {
 
     private var lastSenderLogin: String? {
         guard conversation.isGroup else { return nil }
-        if let cached = MessageCache.shared.get(conversation.id)?.messages,
-           let last = cached.last, last.type == nil || last.type == "user" {
+        if let cached = cachedEntry?.messages,
+           let last = cached.last(where: { $0.type == nil || $0.type == "user" }) {
             return last.sender
         }
         return conversation.last_message?.sender
@@ -669,11 +907,180 @@ struct ConversationRow: View {
         return text
     }
 
+    private var isLastMessageUnsent: Bool {
+        if let cached = cachedEntry?.messages,
+           let last = cached.last { return last.unsent_at != nil }
+        return conversation.last_message?.unsent_at != nil
+    }
+
+    private var isLastMessageSystem: Bool {
+        if let cached = cachedEntry?.messages, let last = cached.last {
+            if last.unsent_at != nil { return true }
+            if let type = last.type, type != "user" { return true }
+        } else if let msg = conversation.last_message {
+            if msg.unsent_at != nil { return true }
+            if let type = msg.type, type != "user" { return true }
+        }
+        return false
+    }
+
+    private var systemPreviewText: String {
+        if isLastMessageUnsent { return "Message deleted" }
+        // For system messages (join/leave/pin/wave etc), use preview text
+        return conversation.previewText ?? ""
+    }
+
+    @ViewBuilder
+    private var previewContent: some View {
+        if isLastMessageSystem {
+            // System / deleted message — italic gray
+            Text(systemPreviewText)
+                .font(.subheadline)
+                .foregroundStyle(Color(.systemGray2))
+                .lineLimit(1)
+        } else if conversation.isGroup && isOutgoing {
+            // Group outgoing — preview only, "You" shown on sender line above
+            Text(previewWithoutPhotoEmoji)
+                .font(.subheadline)
+                .foregroundStyle(secondaryTextColor)
+                .lineLimit(1)
+        } else if conversation.isGroup {
+            Text(previewWithoutPhotoEmoji)
+                .font(.subheadline)
+                .foregroundStyle(secondaryTextColor)
+                .lineLimit(1)
+        } else {
+            // DM — allow 2 lines
+            Text(previewWithoutPhotoEmoji)
+                .font(.subheadline)
+                .foregroundStyle(secondaryTextColor)
+                .lineLimit(2)
+        }
+    }
+
+    private enum CheckmarkState {
+        case none, sending, sent, read, failed
+    }
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFallbackFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+    private static func parseISO8601(_ s: String) -> Date? {
+        isoFormatter.date(from: s) ?? isoFallbackFormatter.date(from: s)
+    }
+
+    private var isOutgoing: Bool {
+        guard let login = AuthStore.shared.login else { return false }
+        // Check cache first (may have newer messages than last_message)
+        if let cached = cachedEntry?.messages,
+           let last = cached.last(where: { $0.type == nil || $0.type == "user" }) {
+            return last.sender == login
+        }
+        guard let sender = conversation.last_message?.sender else { return false }
+        return sender == login
+    }
+
+    private var hasMention: Bool {
+        guard displayedUnread > 0 else { return false }
+        // Use BE flag if available
+        if conversation.hasMentionFromBE { return true }
+        // Fallback: check last message content
+        guard conversation.isGroup,
+              let content = conversation.last_message?.content,
+              !content.isEmpty,
+              let login = AuthStore.shared.login else { return false }
+        let pattern = "(?<![\\w])@\(NSRegularExpression.escapedPattern(for: login))(?![\\w])"
+        return content.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    private var hasReaction: Bool {
+        guard displayedUnread > 0 else { return false }
+        return conversation.hasReactionFromBE
+    }
+
+    private var checkmarkState: CheckmarkState {
+        guard isOutgoing else { return .none }
+        // Use cache message first, fallback to conversation.last_message
+        let msg: Message? = {
+            if let cached = cachedEntry?.messages,
+               let last = cached.last, last.type == nil || last.type == "user" {
+                return last
+            }
+            return conversation.last_message
+        }()
+        guard let msg else { return .none }
+        if msg.unsent_at != nil { return .none }
+        if msg.id.hasPrefix("local-") { return .sending }
+        guard let createdAt = msg.created_at else { return .sent }
+        if let cache = cachedEntry {
+            if conversation.isGroup {
+                if let cursors = cache.readCursors, let msgDate = Self.parseISO8601(createdAt) {
+                    let otherRead = cursors.contains { login, readAt in
+                        guard login != AuthStore.shared.login,
+                              let cursorDate = Self.parseISO8601(readAt) else { return false }
+                        return cursorDate >= msgDate
+                    }
+                    if otherRead { return .read }
+                }
+            } else if let otherReadAt = cache.otherReadAt {
+                if let readDate = Self.parseISO8601(otherReadAt),
+                   let msgDate = Self.parseISO8601(createdAt),
+                   readDate >= msgDate {
+                    return .read
+                }
+            }
+        }
+        return .sent
+    }
+
+    private var accessibilityRowLabel: String {
+        var parts: [String] = []
+        parts.append(conversation.displayTitle)
+
+        if let login = conversation.other_user?.login,
+           PresenceStore.shared.isOnline(login) {
+            parts.append("online")
+        }
+
+        if let draft = draftStore.draft(for: conversation.id) {
+            parts.append("Draft: \(draft)")
+        } else {
+            let preview = conversation.previewText ?? ""
+            if !preview.isEmpty { parts.append(preview) }
+        }
+
+        switch checkmarkState {
+        case .sending: parts.append("Sending")
+        case .sent: parts.append("Sent")
+        case .read: parts.append("Read")
+        case .failed: parts.append("Failed to send")
+        case .none: break
+        }
+
+        if displayedUnread > 0 {
+            parts.append("\(displayedUnread) unread message\(displayedUnread == 1 ? "" : "s")")
+        }
+        if hasMention { parts.append("You were mentioned") }
+        if isMuted { parts.append("Muted") }
+        if conversation.isPinned { parts.append("Pinned") }
+
+        return parts.joined(separator: ". ")
+    }
+
     var body: some View {
         HStack(spacing: 12) {
-            if conversation.isGroup && !conversation.participantsOrEmpty.isEmpty {
-                GroupAvatarCluster(
-                    participants: Array(conversation.participantsOrEmpty.prefix(3)),
+            if conversation.isGroup {
+                GroupAvatarView(
+                    name: conversation.group_name ?? conversation.displayTitle,
+                    avatarURL: conversation.group_avatar_url,
+                    groupId: conversation.id,
                     size: avatarSize
                 )
             } else {
@@ -684,111 +1091,189 @@ struct ConversationRow: View {
                 )
             }
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+                // Row 1: Name + Checkmark + Date
+                HStack(spacing: 4) {
                     Text(conversation.displayTitle)
-                        .font(.headline)
+                        .font(displayedUnread > 0 ? .headline : .body)
                         .foregroundStyle(primaryTextColor)
                         .lineLimit(1)
-                    if conversation.isPinned {
-                        Image(systemName: "pin.fill").font(.caption2).foregroundStyle(secondaryTextColor)
-                            .instantTooltip("Pinned")
-                    }
-                    if isMuted {
-                        Image(systemName: "bell.slash.fill").font(.caption2).foregroundStyle(secondaryTextColor)
-                            .instantTooltip("Muted")
-                    }
+                    Spacer(minLength: 4)
+                    checkmarkView
+                    Text(RelativeTime.chatListStamp(conversation.last_message_at))
+                        .font(metaFont)
+                        .foregroundStyle(displayedUnread > 0 && !isActive ? Color("AccentColor") : secondaryTextColor)
+                        .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
+                        .layoutPriority(1)
                 }
-                if let sender = lastSenderLogin {
-                    Text(sender)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(secondaryTextColor)
-                        .lineLimit(1)
-                }
-                HStack(alignment: .top, spacing: 6) {
-                    if let thumbURL = lastPhotoURL {
-                        CachedAsyncImage(
-                            url: thumbURL,
-                            contentMode: .fill,
-                            maxPixelSize: 80
-                        )
-                        .frame(width: 22, height: 22)
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                // Row 2: Sender (group) or Preview + right indicators
+                HStack(alignment: .bottom, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if conversation.isGroup && isOutgoing {
+                            Text("You")
+                                .font(.subheadline)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                        } else if let sender = lastSenderLogin, !isOutgoing {
+                            HStack(spacing: 4) {
+                                senderAvatarView(for: sender)
+                                Text(sender)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        HStack(alignment: .top, spacing: 4) {
+                            if let draft = draftStore.draft(for: conversation.id) {
+                                (Text("Draft: ").foregroundColor(Color(.systemRed)).font(.subheadline)
+                                + Text(draft).foregroundColor(secondaryTextColor).font(.subheadline))
+                                .lineLimit(1)
+                                .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+                            } else {
+                                if let thumbURL = lastPhotoURL {
+                                    CachedAsyncImage(
+                                        url: thumbURL,
+                                        contentMode: .fill,
+                                        maxPixelSize: 80
+                                    )
+                                    .frame(width: 22, height: 22)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                                }
+                                previewContent
+                            }
+                        }
                     }
-                    Text(previewWithoutPhotoEmoji)
-                        .font(.subheadline)
-                        .foregroundStyle(secondaryTextColor)
-                        .lineLimit(2)
-                }
-            }
-            Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(RelativeTime.chatListStamp(conversation.last_message_at))
-                    .font(metaFont)
-                    .foregroundStyle(secondaryTextColor)
-                    .instantTooltip(ChatMessageText.fullTimestamp(conversation.last_message_at))
-                if displayedUnread > 0 {
-                    let isMutedBadge = isMuted
-                    Text("\(displayedUnread)")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 8).padding(.vertical, 2)
-                        .background(
-                            isActive
-                                ? Color.white
-                                : (isMutedBadge ? Color(.systemGray3) : Color("AccentColor")),
-                            in: .capsule
-                        )
-                        .foregroundStyle(
-                            isActive
-                                ? Color("AccentColor")
-                                : (isMutedBadge ? Color(.label) : .white)
-                        )
-                } else {
-                    Color.clear.frame(width: 1, height: 18)
+                    Spacer(minLength: 4)
+                    rightIndicators
                 }
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityRowLabel)
         #if targetEnvironment(macCatalyst)
         .padding(.horizontal, macRowHorizontalPadding)
         .padding(.vertical, macRowVerticalPadding)
         #else
-        .padding(.vertical, 4)
+        .padding(.vertical, 12)
         #endif
     }
-}
 
-/// Cluster of up to 3 participant avatars arranged inside a fixed square so
-/// group rows feel distinct from single-user rows.
-struct GroupAvatarCluster: View {
-    let participants: [ConversationParticipant]
-    let size: CGFloat
+    @ViewBuilder
+    private var checkmarkView: some View {
+        let checkColor: Color = isMuted ? Color(.systemGray) : Color("AccentColor")
+        switch checkmarkState {
+        case .sending:
+            Image(systemName: "clock")
+                .font(.caption)
+                .foregroundStyle(Color(.systemGray))
+        case .sent:
+            Image(systemName: "checkmark")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(checkColor)
+        case .read:
+            ZStack(alignment: .leading) {
+                Image(systemName: "checkmark")
+                    .font(.caption.weight(.medium))
+                Image(systemName: "checkmark")
+                    .font(.caption.weight(.medium))
+                    .offset(x: 6)
+            }
+            .padding(.trailing, 4)
+            .foregroundStyle(checkColor)
+        case .failed:
+            Image(systemName: "exclamationmark.circle")
+                .font(.caption)
+                .foregroundStyle(Color(.systemRed))
+        case .none:
+            EmptyView()
+        }
+    }
 
-    var body: some View {
-        ZStack {
-            Color.clear.frame(width: size, height: size)
-            if participants.count >= 3 {
-                AvatarView(url: participants[2].avatar_url, size: size * 0.55)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: -size * 0.18, y: -size * 0.18)
-                AvatarView(url: participants[1].avatar_url, size: size * 0.45)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: size * 0.22, y: -size * 0.08)
-                AvatarView(url: participants[0].avatar_url, size: size * 0.40)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: -size * 0.02, y: size * 0.22)
-            } else if participants.count == 2 {
-                AvatarView(url: participants[1].avatar_url, size: size * 0.6)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: -size * 0.16, y: -size * 0.12)
-                AvatarView(url: participants[0].avatar_url, size: size * 0.55)
-                    .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1.5))
-                    .offset(x: size * 0.18, y: size * 0.14)
-            } else if let first = participants.first {
-                AvatarView(url: first.avatar_url, size: size * 0.8)
+    @ViewBuilder
+    private var rightIndicators: some View {
+        HStack(spacing: 4) {
+            if displayedUnread > 0 {
+                if hasMention {
+                    Text("@")
+                        .font(.caption.bold())
+                        .frame(width: mentionBadgeSize, height: mentionBadgeSize)
+                        .background(Color("AccentColor"), in: Circle())
+                        .foregroundStyle(.white)
+                        .transition(.scale.combined(with: .opacity))
+                }
+                if hasReaction {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 10))
+                        .frame(width: mentionBadgeSize, height: mentionBadgeSize)
+                        .background(Color("AccentColor"), in: Circle())
+                        .foregroundStyle(.white)
+                        .transition(.scale.combined(with: .opacity))
+                }
+                Text(displayedUnread > 99 ? "99+" : "\(displayedUnread)")
+                    .font(.footnote.bold())
+                    .padding(.horizontal, 8).padding(.vertical, 2)
+                    .frame(minWidth: badgeMinSize, minHeight: badgeMinSize)
+                    .background(
+                        isActive
+                            ? Color.white
+                            : (isMuted ? Color(.systemGray) : Color("AccentColor")),
+                        in: .capsule
+                    )
+                    .foregroundStyle(
+                        isActive
+                            ? Color("AccentColor")
+                            : .white
+                    )
+                    .transition(.scale.combined(with: .opacity))
+                if isMuted {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.caption)
+                        .foregroundStyle(secondaryTextColor)
+                }
+            } else if conversation.isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 12))
+                    .foregroundStyle(secondaryTextColor)
+                if isMuted {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.caption)
+                        .foregroundStyle(secondaryTextColor)
+                }
             }
         }
-        .frame(width: size, height: size)
+        .animation(.spring(response: 0.3), value: displayedUnread)
+        .animation(.spring(response: 0.3), value: hasMention)
+        .animation(.spring(response: 0.3), value: hasReaction)
+    }
+
+    @ViewBuilder
+    private func senderAvatarView(for sender: String) -> some View {
+        let url: URL? = {
+            if let p = conversation.participantsOrEmpty.first(where: { $0.login == sender }),
+               let urlStr = p.avatar_url, let u = URL(string: urlStr) { return u }
+            if let urlStr = conversation.last_message?.sender_avatar,
+               let u = URL(string: urlStr) { return u }
+            if let cached = cachedEntry?.messages,
+               let msg = cached.last(where: { $0.sender == sender }),
+               let urlStr = msg.sender_avatar, let u = URL(string: urlStr) { return u }
+            return URL(string: "https://github.com/\(sender).png")
+        }()
+        if let url {
+            CachedAsyncImage(url: url, contentMode: .fill, maxPixelSize: 60)
+                .frame(width: senderAvatarSize, height: senderAvatarSize)
+                .clipShape(Circle())
+        } else {
+            Circle()
+                .fill(Color(.systemGray4))
+                .frame(width: senderAvatarSize, height: senderAvatarSize)
+                .overlay {
+                    Text(String(sender.prefix(1)).uppercased())
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                }
+        }
     }
 }
+
 
 struct AvatarView: View {
     let url: String?
@@ -802,16 +1287,17 @@ struct AvatarView: View {
             .clipShape(Circle())
             .overlay(alignment: .bottomTrailing) {
                 if let login, presence.isOnline(login) {
-                    let dot = max(8, size * 0.28)
+                    let dot: CGFloat = 12
                     Circle()
-                        .fill(Color.green)
+                        .fill(Color(.systemGreen))
                         .frame(width: dot, height: dot)
-                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: max(1, dot * 0.18)))
+                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
                 }
             }
             .onAppear {
                 if let login { presence.ensure([login]) }
             }
+            .accessibilityHidden(true)
     }
 }
 
@@ -871,12 +1357,14 @@ struct ContentUnavailableCompat: View {
     let description: String
 
     var body: some View {
-        if #available(iOS 17, *) {
+        if #available(iOS 17, *), !title.isEmpty {
             ContentUnavailableView(title, systemImage: systemImage, description: Text(description))
         } else {
             VStack(spacing: 12) {
                 Image(systemName: systemImage).font(.system(size: 48)).foregroundStyle(.secondary)
-                Text(title).font(.title3.bold())
+                if !title.isEmpty {
+                    Text(title).font(.title3.bold())
+                }
                 Text(description).font(.subheadline).foregroundStyle(.secondary)
             }
             .padding()
@@ -922,40 +1410,46 @@ struct ConversationHoldPreview: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
-            if conversation.isGroup && !conversation.participantsOrEmpty.isEmpty {
-                GroupAvatarCluster(
-                    participants: Array(conversation.participantsOrEmpty.prefix(3)),
-                    size: 36
+        HStack(spacing: 12) {
+            if conversation.isGroup {
+                GroupAvatarView(
+                    name: conversation.group_name ?? conversation.displayTitle,
+                    avatarURL: conversation.group_avatar_url,
+                    groupId: conversation.id,
+                    size: 40
                 )
             } else {
                 AvatarView(
                     url: conversation.displayAvatarURL,
-                    size: 36,
+                    size: 40,
                     login: conversation.other_user?.login
                 )
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(conversation.displayTitle)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                 if conversation.isGroup {
                     Text("\(conversation.participantsOrEmpty.count) members")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                } else if let login = conversation.other_user?.login {
+                    Text(PresenceStore.shared.isOnline(login) ? "online" : "last seen recently")
+                        .font(.caption2)
+                        .foregroundStyle(PresenceStore.shared.isOnline(login) ? Color(.systemGreen) : .secondary)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 
     private var emptyBody: some View {
         VStack(spacing: 8) {
             Spacer()
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 28))
+                .font(.title)
                 .foregroundStyle(.secondary)
             Text(conversation.previewText ?? "No messages yet")
                 .font(.footnote)
@@ -969,13 +1463,13 @@ struct ConversationHoldPreview: View {
 
     private var messageColumn: some View {
         ScrollView {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 ForEach(messages, id: \.id) { msg in
                     previewBubble(for: msg)
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.vertical, 12)
         }
         .scrollDisabled(true)
         // ScrollView ships with an opaque systemBackground fill that
@@ -1000,16 +1494,16 @@ struct ConversationHoldPreview: View {
         VStack(alignment: .leading, spacing: 2) {
             if !isMe && conversation.isGroup {
                 Text(msg.sender)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
             Text(bubbleText(for: msg))
-                .font(.system(size: 13))
+                .font(.footnote)
                 .lineLimit(4)
                 .foregroundStyle(isMe ? Color.white : Color(.label))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(isMe ? Color("AccentColor") : Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
@@ -1020,6 +1514,130 @@ struct ConversationHoldPreview: View {
             return "📷 Photo"
         }
         return ""
+    }
+}
+
+// MARK: - Custom Swipe Actions (Telegram-style full-height blocks)
+
+struct SwipeAction {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+}
+
+struct CustomSwipeRow<Content: View>: View {
+    let leadingActions: [SwipeAction]
+    let trailingActions: [SwipeAction]
+    let content: () -> Content
+
+    @State private var offset: CGFloat = 0
+    @State private var prevOffset: CGFloat = 0
+    @GestureState private var isDragging = false
+
+    private let actionWidth: CGFloat = 74
+    private var trailingWidth: CGFloat { CGFloat(trailingActions.count) * actionWidth }
+    private var leadingWidth: CGFloat { CGFloat(leadingActions.count) * actionWidth }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // Leading actions (swipe right)
+            if offset > 0 && !leadingActions.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(Array(leadingActions.enumerated()), id: \.offset) { _, action in
+                        actionBlock(action)
+                    }
+                }
+                .frame(width: max(offset, 0))
+                .clipped()
+            }
+
+            // Trailing actions (swipe left)
+            if offset < 0 && !trailingActions.isEmpty {
+                HStack(spacing: 0) {
+                    ForEach(Array(trailingActions.reversed().enumerated()), id: \.offset) { _, action in
+                        actionBlock(action)
+                    }
+                }
+                .frame(width: max(-offset, 0))
+                .clipped()
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+
+            // Content
+            content()
+                .offset(x: offset)
+                .background(Color(.systemBackground))
+        }
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .updating($isDragging) { _, state, _ in state = true }
+                .onChanged { value in
+                    let translation = value.translation.width + prevOffset
+                    if leadingActions.isEmpty && translation > 0 { return }
+                    if trailingActions.isEmpty && translation < 0 { return }
+                    offset = translation
+                }
+                .onEnded { value in
+                    let velocity = value.predictedEndTranslation.width - value.translation.width
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        if offset > leadingWidth / 2 || velocity > 100 {
+                            // Full swipe right — trigger first leading action
+                            if let first = leadingActions.first {
+                                first.action()
+                            }
+                            offset = 0
+                        } else if offset < -trailingWidth / 2 {
+                            // Snap open trailing
+                            offset = -trailingWidth
+                        } else {
+                            offset = 0
+                        }
+                        prevOffset = offset
+                    }
+                }
+        )
+        .onChange(of: isDragging) { dragging in
+            if !dragging && offset != -trailingWidth && offset != 0 {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    offset = 0
+                    prevOffset = 0
+                }
+            }
+        }
+    }
+
+    private func actionBlock(_ action: SwipeAction) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                offset = 0
+                prevOffset = 0
+            }
+            action.action()
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: action.icon)
+                    .font(.system(size: 20))
+                Text(action.title)
+                    .font(.caption2)
+            }
+            .foregroundStyle(.white)
+            .frame(width: actionWidth)
+            .frame(maxHeight: .infinity)
+            .background(action.color)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct SectionSpacingModifier: ViewModifier {
+    let spacing: CGFloat
+    func body(content: Content) -> some View {
+        if #available(iOS 17, *) {
+            content.listSectionSpacing(spacing)
+        } else {
+            content
+        }
     }
 }
 

@@ -42,9 +42,12 @@ struct ChatAttachmentsGrid: View {
     /// matching this URL is marked as the matched transition source;
     /// other tiles stay out of the animation.
     var activePreviewURL: String? = nil
+    /// When false, tiles skip their own rounded clip — the parent
+    /// bubble's clipShape handles corners instead.
+    var applyClip: Bool = true
 
-    private let spacing: CGFloat = 3
-    private let corner: CGFloat = 14
+    private var spacing: CGFloat { applyClip ? 3 : 2 }
+    private var corner: CGFloat { applyClip ? 14 : 0 }
 
     var body: some View {
         switch attachments.count {
@@ -97,23 +100,49 @@ struct ChatAttachmentsGrid: View {
     @ViewBuilder
     private func one(_ a: MessageAttachment) -> some View {
         let url = URL(string: a.url)
-        ZStack {
-            CachedAsyncImage(
-                url: url,
-                contentMode: .fit,
-                placeholder: .filled,
-                fitMaxWidth: maxWidth,
-                fitMaxHeight: 320
-            )
-            if isUploading {
-                Color.black.opacity(0.25)
-                ProgressView().tint(.white).controlSize(.large)
+        if applyClip {
+            // Standalone: fit with own clip
+            ZStack {
+                CachedAsyncImage(
+                    url: url,
+                    contentMode: .fit,
+                    placeholder: .filled,
+                    fitMaxWidth: maxWidth,
+                    fitMaxHeight: 320
+                )
+                if isUploading {
+                    Color.black.opacity(0.25)
+                    ProgressView().tint(.white).controlSize(.large)
+                }
             }
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .contentShape(Rectangle())
+            .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
+            .onTapGesture { onTap(a.url) }
+        } else {
+            // Inside bubble: fill width, parent clips corners
+            let imgHeight = min(maxWidth * 0.75, 320)
+            ZStack {
+                CachedAsyncImage(
+                    url: url,
+                    contentMode: .fill,
+                    placeholder: .filled,
+                    fitMaxWidth: nil,
+                    fitMaxHeight: nil,
+                    maxPixelSize: maxWidth
+                )
+                .frame(width: maxWidth, height: imgHeight)
+                .clipped()
+                if isUploading {
+                    Color.black.opacity(0.25)
+                    ProgressView().tint(.white).controlSize(.large)
+                }
+            }
+            .frame(width: maxWidth, height: imgHeight)
+            .contentShape(Rectangle())
+            .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
+            .onTapGesture { onTap(a.url) }
         }
-        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
-        .contentShape(Rectangle())
-        .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
-        .onTapGesture { onTap(a.url) }
     }
 
     @ViewBuilder

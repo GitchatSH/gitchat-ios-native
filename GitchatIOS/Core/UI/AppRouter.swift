@@ -39,6 +39,8 @@ final class AppRouter: ObservableObject {
     /// Optional pending target message id — set alongside
     /// `pendingConversationId` so the chat detail can jump + pulse it.
     @Published var pendingMessageId: String?
+    /// Hint for fast cursor-jump when navigating to a search result.
+    @Published var pendingMessageCreatedAt: String?
 
     /// Pending profile login to present as a sheet on next tick.
     @Published var pendingProfileLogin: String?

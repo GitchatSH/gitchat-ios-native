@@ -2,20 +2,46 @@ import SwiftUI
 
 struct TypingIndicatorRow: View {
     let logins: [String]
+    var isGroup: Bool = false
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 6) {
-            if let first = logins.first {
-                AvatarView(url: "https://github.com/\(first).png", size: 28, login: first)
-            } else {
-                Color.clear.frame(width: 28, height: 28)
+        HStack(alignment: .bottom, spacing: 8) {
+            if isGroup {
+                if let first = logins.first {
+                    AvatarView(url: "https://github.com/\(first).png", size: 32, login: first)
+                } else {
+                    Color.clear.frame(width: 32, height: 32)
+                }
             }
-            TypingDots()
-                .padding(.horizontal, 14)
-                // Match the inner padding of a one-line message bubble
-                // (MessageBubble uses .padding(.vertical, 8)).
-                .padding(.vertical, 10)
-                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 18))
+            VStack(alignment: .leading, spacing: 2) {
+                TypingDots()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        Color(.secondarySystemGroupedBackground),
+                        in: UnevenRoundedRectangle(
+                            topLeadingRadius: 20,
+                            bottomLeadingRadius: 4,
+                            bottomTrailingRadius: 20,
+                            topTrailingRadius: 20
+                        )
+                    )
+                if isGroup, !logins.isEmpty {
+                    let text: String = {
+                        if logins.count == 1 {
+                            return "\(logins[0]) is typing..."
+                        } else if logins.count == 2 {
+                            return "\(logins[0]), \(logins[1]) are typing..."
+                        } else {
+                            return "\(logins.count) people are typing..."
+                        }
+                    }()
+                    Text(text)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 4)
+                }
+            }
             Spacer(minLength: 0)
         }
     }

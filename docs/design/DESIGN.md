@@ -145,7 +145,7 @@ Pinned (không active): same shape nhưng fill = `Color("AccentColor").opacity(0
 ### 2.6 iOS fallback
 
 Trên iOS (non-Catalyst), helpers tự fallback về defaults cũ:
-- Avatar: 40pt (Discover/Activity) hoặc 50pt (Chats — Telegram-feel)
+- Avatar: 40pt (Discover/Activity) hoặc 56pt (Chats — Telegram-clone, updated from 50pt)
 - Subtitle: `.caption` (12pt)
 - Meta: `.caption2` (11pt)
 - Padding: theo từng row hiện tại

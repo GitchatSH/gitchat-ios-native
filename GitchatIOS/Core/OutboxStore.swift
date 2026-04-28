@@ -14,7 +14,37 @@ import Combine
 @MainActor
 final class OutboxStore: ObservableObject {
     static let shared = OutboxStore()
-    private init() {}
+    private init() { loadFromDisk() }
+
+    // MARK: - Disk persistence
+
+    private static let fileURL: URL = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("outbox-pending.json")
+    }()
+
+    private func saveToDisk() {
+        // Only persist failed messages — sending ones will be
+        // re-attempted on next launch anyway.
+        var failed: [String: [PendingMessage]] = [:]
+        for (convId, list) in pending {
+            let failedOnly = list.filter { if case .failed = $0.state { return true }; return false }
+            if !failedOnly.isEmpty { failed[convId] = failedOnly }
+        }
+        do {
+            let data = try JSONEncoder().encode(failed)
+            try data.write(to: Self.fileURL, options: .atomic)
+        } catch {
+            // Best-effort persist — log but don't crash.
+        }
+    }
+
+    private func loadFromDisk() {
+        guard let data = try? Data(contentsOf: Self.fileURL),
+              let stored = try? JSONDecoder().decode([String: [PendingMessage]].self, from: data) else { return }
+        pending = stored
+    }
 
     /// Hoisted to avoid per-call allocation — `toMessage` is invoked
     /// from `ChatViewModel.visibleMessages` on every SwiftUI re-render.
@@ -29,7 +59,7 @@ final class OutboxStore: ObservableObject {
         return f
     }()
 
-    struct PendingMessage: Identifiable, Equatable {
+    struct PendingMessage: Identifiable, Equatable, Codable {
         let localID: String          // "local-<UUID>"
         let conversationID: String
         let senderLogin: String
@@ -39,7 +69,7 @@ final class OutboxStore: ObservableObject {
         let createdAt: Date
         var state: State
 
-        enum State: Equatable {
+        enum State: Equatable, Codable {
             case sending
             case failed(message: String)
         }
@@ -67,6 +97,7 @@ final class OutboxStore: ObservableObject {
 
     func enqueue(_ msg: PendingMessage) {
         pending[msg.conversationID, default: []].append(msg)
+        saveToDisk()
     }
 
     func markDelivered(conversationID: String, localID: String) {
@@ -77,6 +108,7 @@ final class OutboxStore: ObservableObject {
         } else {
             pending[conversationID] = list
         }
+        saveToDisk()
     }
 
     func markFailed(conversationID: String, localID: String, error: String) {
@@ -84,6 +116,7 @@ final class OutboxStore: ObservableObject {
               let idx = list.firstIndex(where: { $0.localID == localID }) else { return }
         list[idx].state = .failed(message: error)
         pending[conversationID] = list
+        saveToDisk()
     }
 
     /// User-initiated discard of a `.failed` pending. Same wire effect as

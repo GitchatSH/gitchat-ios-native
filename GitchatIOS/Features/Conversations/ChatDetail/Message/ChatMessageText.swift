@@ -51,7 +51,6 @@ enum ChatMessageText {
                       let r = Range(m.range, in: raw),
                       let aRange = attr.range(of: String(raw[r])) else { continue }
                 attr[aRange].link = url
-                attr[aRange].font = .body.bold()
                 attr[aRange].underlineStyle = .single
             }
         }
@@ -63,7 +62,6 @@ enum ChatMessageText {
                 guard let r = Range(m.range, in: raw) else { continue }
                 let token = String(raw[r])
                 if let aRange = attr.range(of: token) {
-                    attr[aRange].font = .body.bold()
                     let login = String(token.dropFirst())
                     attr[aRange].link = URL(string: "gitchat://user/\(login)")
                 }

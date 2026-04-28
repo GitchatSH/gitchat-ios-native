@@ -11,10 +11,14 @@ import SwiftUI
 /// user-type styles).
 struct ChatTheme: Equatable {
     // MARK: Bubble surfaces
-    var bubbleIncoming: Color = Color(.secondarySystemBackground)
+    var bubbleIncoming: Color = Color(.systemGray6)
     var bubbleOutgoing: Color = Color("AccentColor")
     var bubbleIncomingText: Color = Color(.label)
     var bubbleOutgoingText: Color = .white
+    /// Timestamp + checkmark color inside outgoing bubbles.
+    var bubbleMetaOut: Color = .white.opacity(0.7)
+    /// Timestamp + checkmark color inside incoming bubbles.
+    var bubbleMetaIn: Color = Color(.secondaryLabel)
 
     // MARK: Reply preview
     var replyAccent: Color = Color("AccentColor")
@@ -37,6 +41,10 @@ struct ChatTheme: Equatable {
     var sendBg: Color = Color("AccentColor")
     var sendDisabledBg: Color = Color.gray.opacity(0.5)
     var sendGlyph: Color = .white
+
+    // MARK: Feature flags
+    /// Decorative bubble tails — disable to rollback to plain rounded rect.
+    var useBubbleTails: Bool = false
 
     // MARK: Banners
     var blockedBannerBg: Color = Color(.secondarySystemBackground)

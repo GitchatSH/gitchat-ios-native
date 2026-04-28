@@ -46,8 +46,12 @@ struct Conversation: Codable, Identifiable, Hashable {
     let is_request: Bool?
     let updated_at: String?
     let is_muted: Bool?
+    let has_mention: Bool?
+    let has_reaction: Bool?
 
     var isGroup: Bool { is_group == true || type == "group" || type == "community" || type == "team" }
+    var hasMentionFromBE: Bool { has_mention == true }
+    var hasReactionFromBE: Bool { has_reaction == true }
 
     var participantsOrEmpty: [ConversationParticipant] { participants ?? [] }
     var unreadCount: Int { unread_count ?? 0 }
@@ -74,6 +78,31 @@ struct Conversation: Codable, Identifiable, Hashable {
     var displayAvatarURL: String? {
         if isGroup { return group_avatar_url }
         return other_user?.avatar_url ?? participantsOrEmpty.first?.avatar_url
+    }
+
+    func withLastMessage(_ msg: Message, preview: String? = nil) -> Conversation {
+        Conversation(
+            id: id,
+            type: type,
+            is_group: is_group,
+            group_name: group_name,
+            group_avatar_url: group_avatar_url,
+            repo_full_name: repo_full_name,
+            participants: participants,
+            other_user: other_user,
+            last_message: msg,
+            last_message_preview: preview ?? (msg.content.isEmpty ? last_message_preview : msg.content),
+            last_message_text: msg.content.isEmpty ? last_message_text : msg.content,
+            last_message_at: msg.created_at ?? last_message_at,
+            unread_count: unread_count,
+            pinned: pinned,
+            pinned_at: pinned_at,
+            is_request: is_request,
+            updated_at: updated_at,
+            is_muted: is_muted,
+            has_mention: has_mention,
+            has_reaction: has_reaction
+        )
     }
 }
 
@@ -286,6 +315,34 @@ struct Message: Codable, Identifiable, Hashable {
         try c.encodeIfPresent(type, forKey: .type)
         try c.encodeIfPresent(reply_to_id, forKey: .reply_to_id)
         try c.encodeIfPresent(reply, forKey: .reply)
+    }
+}
+
+extension Message {
+    /// "HH:mm" display string for the inline bubble timestamp.
+    var shortTime: String? {
+        guard let created = created_at else { return nil }
+        // Thread-local cache: avoid re-creating formatters per cell.
+        struct Cache {
+            static let iso: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                return f
+            }()
+            static let isoBasic: ISO8601DateFormatter = {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime]
+                return f
+            }()
+            static let hhmm: DateFormatter = {
+                let f = DateFormatter()
+                f.dateFormat = "HH:mm"
+                return f
+            }()
+        }
+        guard let date = Cache.iso.date(from: created)
+                ?? Cache.isoBasic.date(from: created) else { return nil }
+        return Cache.hhmm.string(from: date)
     }
 }
 

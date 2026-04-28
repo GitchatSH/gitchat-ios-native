@@ -89,18 +89,16 @@ struct SystemMessageRow: View {
                     Image(systemName: "pencil").font(.system(size: 9)).foregroundStyle(.secondary)
                 }
                 Text(attributed)
-                    .font(.caption)
+                    .font(.caption2)
+                    .italic()
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(Color(.secondarySystemBackground), in: Capsule())
-            .contentShape(Capsule())
+            .contentShape(Rectangle())
             .onTapGesture {
                 if isPinEvent { onTap?() }
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 8)
     }
 }

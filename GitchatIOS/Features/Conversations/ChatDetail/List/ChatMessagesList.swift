@@ -1,6 +1,30 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Sticky avatar state (shared between Coordinator and group cells)
+
+/// Coordinator updates this on every scroll tick with per-group-cell
+/// "excess below viewport" values.  Group cells observe it to offset
+/// their avatar upward when the group extends behind the composer.
+final class StickyAvatarState: ObservableObject {
+    /// Group row ID → points the cell extends below the visible viewport.
+    @Published var excess: [String: CGFloat] = [:]
+}
+
+// MARK: - Scroll proxy
+
+/// Lets SwiftUI views call scroll commands directly on the
+/// UITableView without going through the updateUIView cycle.
+final class ChatScrollProxy: ObservableObject {
+    weak var tableView: UITableView?
+
+    func scrollToBottom(animated: Bool = true) {
+        guard let tv = tableView else { return }
+        let target = CGPoint(x: 0, y: -tv.contentInset.top)
+        tv.setContentOffset(target, animated: animated)
+    }
+}
+
 // MARK: - Synthetic row identifiers
 
 /// Stable identifier for the typing-indicator row pinned to the end
@@ -11,6 +35,9 @@ let ChatTypingRowID: String = "__v2_typing__"
 /// Stable identifier for the "seen" avatar row pinned under the last
 /// outgoing message in a DM.
 let ChatSeenRowID: String = "__v2_seen__"
+
+/// Stable identifier for the "N unread messages" divider row.
+let ChatUnreadDividerID: String = "__v2_unread__"
 
 /// Prefix for synthetic date-pill rows. Using a regular row instead
 /// of a section footer avoids UITableView `.plain` style's
@@ -53,6 +80,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
     let items: [Message]
     let typingUsers: [String]
+    let isGroup: Bool
     let showSeen: Bool
     let seenAvatarURL: String?
     let pinnedIds: Set<String>
@@ -62,6 +90,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     let isLoadingMore: Bool
     let bottomInset: CGFloat
     let scrollToBottomToken: Int
+    let scrollProxy: ChatScrollProxy?
+    let composerHeight: CGFloat
+    let jumpMentionCount: Int
+    let jumpReactionCount: Int
+    var onJumpToMention: (() -> String?)? = nil
+    var onJumpToReaction: (() -> String?)? = nil
     @Binding var isAtBottom: Bool
     let onScrollToIdConsumed: () -> Void
     let onTopReached: () -> Void
@@ -69,7 +103,17 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     let isMe: (Message) -> Bool
     let onReply: (Message) -> Void
     let swipeState: ChatSwipeState
+    var onFirstVisibleDateChanged: ((Date?) -> Void)?
+    /// Height of the composer overlay for contentInset (scroll-behind blur).
+    /// Rotated table: visual-bottom = contentInset.top.
+    var composerOverlayHeight: CGFloat = 0
+    /// Height of the pinned banner overlay.
+    /// Rotated table: visual-top = contentInset.bottom.
+    var bannerOverlayHeight: CGFloat = 0
+    var unreadCount: Int = 0
+    var myReadAt: String? = nil
     let cellBuilder: (Message, Int) -> Cell
+    var groupCellBuilder: (([Message]) -> AnyView)? = nil
 
     // MARK: UIViewRepresentable plumbing
 
@@ -90,7 +134,23 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // appearing, reply bar in/out), which on a rotated table
         // shows up as a snap back toward the latest-message edge
         // mid-scroll.
+        // `.never` — we manage content insets manually for the
+        // frosted overlay (composer scrolls-behind) effect.
         tv.contentInsetAdjustmentBehavior = .never
+        // Rotated table: visual-bottom = contentInset.top,
+        // visual-top = contentInset.bottom.
+        // Nav bar height comes from adjustedContentInset automatically
+        // when contentInsetAdjustmentBehavior = .always, but we use
+        // .never + manual insets to avoid animation glitches. So we
+        // add the safe area top (nav bar) to contentInset.bottom
+        // (rotated visual-top).
+        let safeTop = tv.superview?.safeAreaInsets.top ?? 0
+        tv.contentInset = UIEdgeInsets(
+            top: composerOverlayHeight,
+            left: 0,
+            bottom: bannerOverlayHeight + safeTop,
+            right: 0
+        )
         tv.scrollsToTop = false
         // Self-sizing cells — UIHostingConfiguration reports its
         // intrinsic height.
@@ -164,6 +224,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         tv.delegate = context.coordinator
         tv.prefetchDataSource = context.coordinator
         context.coordinator.attach(table: tv)
+        scrollProxy?.tableView = tv
         context.coordinator.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: false)
         return tv
     }
@@ -171,21 +232,34 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
     func updateUIView(_ tv: UITableView, context: Context) {
         let coord = context.coordinator
         coord.parent = self
+        scrollProxy?.tableView = tv
+
+        // Setup jump button on first superview availability
+        if let superview = tv.superview, coord.jumpHostVC == nil {
+            coord.setupJumpButtons(in: superview)
+        }
+        coord.consumeMention = onJumpToMention
+        coord.consumeReaction = onJumpToReaction
+        coord.updateJumpButtons(
+            isAtBottom: isAtBottom,
+            composerHeight: composerHeight,
+            unreadCount: unreadCount,
+            mentionCount: jumpMentionCount,
+            reactionCount: jumpReactionCount
+        )
 
         let prevIDs = coord.lastItems.map(\.id)
         let newIDs = items.map(\.id)
 
-        // In-place edits (reactions, edit, unsend): reconfigure the
-        // specific rows so the cell re-renders with fresh content.
+        // In-place edits (reactions, edit, unsend): detect which rows
+        // changed content (same ID, different value). Reconfigure runs
+        // AFTER the structural snapshot apply to avoid being overshadowed.
+        var contentChangedIDs: [String] = []
         if !coord.lastItems.isEmpty {
             let prevById = Dictionary(uniqueKeysWithValues: coord.lastItems.map { ($0.id, $0) })
-            let changedIDs = items.compactMap { m -> String? in
+            contentChangedIDs = items.compactMap { m -> String? in
                 if let prev = prevById[m.id], prev != m { return m.id }
                 return nil
-            }
-            if !changedIDs.isEmpty {
-                coord.lastItems = items
-                coord.reconfigure(ids: changedIDs)
             }
         }
 
@@ -202,7 +276,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
         // Rotation-aware: "near bottom" visually = contentOffset near 0.
         let prevHeight = tv.contentSize.height
-        let prevOffset = tv.contentOffset.y
+        let prevOffset = tv.contentOffset.y + tv.contentInset.top
         let wasNearBottom = tv.bounds.height > 0 && prevOffset < 200
 
         // Apply the new snapshot. Animated for new-message arrivals +
@@ -216,12 +290,27 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // work and can briefly disturb the scroll.
         let typingToggled = coord.lastTypingUsers != typingUsers
         let seenToggled = coord.lastShowSeen != showSeen
+        let unreadChanged = coord.lastUnreadCount != unreadCount || coord.lastMyReadAt != myReadAt
         let itemsChanged = coord.lastItems.map(\.id) != newIDs
-        if itemsChanged || typingToggled || seenToggled {
+        if itemsChanged || typingToggled || seenToggled || unreadChanged {
+            coord.lastUnreadCount = unreadCount
+            coord.lastMyReadAt = myReadAt
             let animate = isAppend || typingToggled
             coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: animate)
         } else {
             coord.lastItems = items
+            coord.itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        }
+
+        // Reconfigure content-changed rows AFTER the structural apply
+        // so the update is never overshadowed by a concurrent snapshot.
+        // Force immediate layout so UIHostingConfiguration commits the
+        // new SwiftUI content without waiting for the next display link.
+        if !contentChangedIDs.isEmpty {
+            coord.lastItems = items
+            coord.itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+            coord.reconfigure(ids: contentChangedIDs)
+            tv.layoutIfNeeded()
         }
 
         // Pinned changes: reconfigure so the pin badge flips without
@@ -232,11 +321,13 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             coord.reconfigure(ids: Array(diff))
         }
 
-        // Read cursors: touch every message row so the seen-by avatars
-        // (rendered inside the cell) re-evaluate.
+        // Read cursors: only reconfigure outgoing messages — incoming
+        // bubbles don't render seen-by avatars, so touching every row
+        // was O(n) wasted work.
         if coord.lastReadCursors != readCursors {
             coord.lastReadCursors = readCursors
-            coord.reconfigure(ids: items.map(\.id))
+            let outgoingIds = items.filter { isMe($0) }.map(\.id)
+            coord.reconfigure(ids: outgoingIds)
         }
 
         // Pulse highlight — reconfigure leaving + entering rows so the
@@ -266,6 +357,19 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         }
         coord.lastBottomInset = bottomInset
 
+        // Sync overlay insets for scroll-behind blur.
+        // Rotated table: visual-bottom = .top, visual-top = .bottom.
+        let safeTop = tv.superview?.safeAreaInsets.top ?? 0
+        let wantedTop = composerOverlayHeight
+        let wantedBottom = bannerOverlayHeight + safeTop
+        if abs(tv.contentInset.top - wantedTop) > 0.5
+            || abs(tv.contentInset.bottom - wantedBottom) > 0.5 {
+            tv.contentInset = UIEdgeInsets(
+                top: wantedTop, left: 0,
+                bottom: wantedBottom, right: 0
+            )
+        }
+
         // With the rotated-table layout, prepending older messages
         // (pagination) adds rows at the FAR END of the data
         // (visually the top). The table stays parked at its current
@@ -281,28 +385,42 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         if !coord.didInitialScroll && !items.isEmpty {
             coord.didInitialScroll = true
             coord.initialScrollAt = Date()
-            DispatchQueue.main.async { [weak tv] in
-                guard let tv else { return }
-                tv.setContentOffset(.zero, animated: false)
+            // If there's an unread divider, scroll to it so the user
+            // lands right at the boundary between read and unread.
+            // Otherwise park at (0,0) as before.
+            let hasUnread = unreadCount > 0
+            DispatchQueue.main.async { [weak tv, weak coord] in
+                guard let tv, let coord else { return }
+                if hasUnread {
+                    coord.scrollTo(id: ChatUnreadDividerID, in: tv, animated: false)
+                } else {
+                    // Rest point with contentInset is -inset.top, not (0,0).
+                    let rest = CGPoint(x: 0, y: -tv.contentInset.top)
+                    tv.setContentOffset(rest, animated: false)
+                }
             }
         }
         _ = (wasNearBottom, prevHeight, prevOffset, isPrepend)
 
         // Jump-to-id (reply pulse + message search).
+        // Only consume the id when scroll succeeds — if the target
+        // message hasn't loaded yet, keep it pending so the next
+        // updateUIView cycle retries automatically once pages arrive.
         if let id = scrollToId {
             DispatchQueue.main.async {
-                coord.scrollTo(id: id, in: tv, animated: true)
-                onScrollToIdConsumed()
+                if coord.scrollTo(id: id, in: tv, animated: true) {
+                    onScrollToIdConsumed()
+                }
             }
         }
 
         // Imperative scroll-to-bottom token (send button, etc.).
+        // Must run AFTER contentInset sync above, and synchronously —
+        // async dispatch loses the race against preference-triggered
+        // re-renders that reset contentOffset.
         if coord.lastScrollToBottomToken != scrollToBottomToken {
             coord.lastScrollToBottomToken = scrollToBottomToken
-            DispatchQueue.main.async { [weak tv] in
-                guard let tv else { return }
-                coord.scrollToBottom(in: tv, animated: true)
-            }
+            coord.scrollToBottom(in: tv, animated: true)
         }
     }
 
@@ -315,6 +433,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         private var dataSource: UITableViewDiffableDataSource<String, String>!
 
         var lastItems: [Message] = []
+        var itemById: [String: Message] = [:]
         var lastTypingUsers: [String] = []
         var lastShowSeen: Bool = false
         var lastPinnedIds: Set<String> = []
@@ -323,9 +442,21 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         var lastBottomInset: CGFloat = 0
         var keyboardWasOpen: Bool = false
         var lastScrollToBottomToken: Int = 0
+        var lastUnreadCount: Int = 0
+        var lastMyReadAt: String?
         var didInitialScroll = false
         var initialScrollAt: Date?
+        /// Group row ID → ordered message IDs in that group.
+        var groupById: [String: [String]] = [:]
+        /// Individual message ID → the group row ID it belongs to.
+        var groupIdForMessage: [String: String] = [:]
         private var loadingMore = false
+
+        // Date pill: cached ISO8601 formatter for parsing created_at
+        private let isoFormatter = ISO8601DateFormatter()
+        /// Last date reported to the date pill callback, used to avoid
+        /// redundant dispatches on every scroll tick.
+        private var lastReportedDate: Date?
 
         // Swipe-to-reply state
         private var swipeActiveId: String?
@@ -338,8 +469,93 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         /// left-aligned (incoming) bubble and prevents reply-swipe.
         private weak var suspendedNavPopGR: UIGestureRecognizer?
 
+        // MARK: Jump button (UIHostingController-hosted JumpButtonStack)
+        fileprivate var jumpHostVC: UIHostingController<JumpButtonStack>?
+        private var jumpBottomConstraint: NSLayoutConstraint?
+        var isProgrammaticScroll = false
+        let stickyAvatarState = StickyAvatarState()
+
+        /// Callbacks that consume the next pending ID and return it.
+        /// Coordinator scrolls directly to the returned ID.
+        var consumeMention: (() -> String?)?
+        var consumeReaction: (() -> String?)?
+
         init(parent: ChatMessagesList) {
             self.parent = parent
+        }
+
+        func setupJumpButtons(in container: UIView) {
+            guard jumpHostVC == nil else { return }
+
+            let stack = JumpButtonStack(
+                isAtBottom: true,
+                unreadCount: 0,
+                mentionCount: 0,
+                reactionCount: 0,
+                onJumpToBottom: { [weak self] in self?.scrollToBottomTapped() },
+                onJumpToMention: { [weak self] in self?.mentionTapped() },
+                onJumpToReaction: { [weak self] in self?.reactionTapped() }
+            )
+            let host = UIHostingController(rootView: stack)
+            host.view.translatesAutoresizingMaskIntoConstraints = false
+            host.view.backgroundColor = .clear
+            host.sizingOptions = .intrinsicContentSize
+
+            container.addSubview(host.view)
+            let bottomConstraint = host.view.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8)
+            NSLayoutConstraint.activate([
+                host.view.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+                bottomConstraint
+            ])
+            jumpBottomConstraint = bottomConstraint
+            jumpHostVC = host
+        }
+
+        func updateJumpButtons(isAtBottom: Bool, composerHeight: CGFloat,
+                               unreadCount: Int, mentionCount: Int, reactionCount: Int) {
+            guard let host = jumpHostVC else { return }
+            host.rootView = JumpButtonStack(
+                isAtBottom: isAtBottom,
+                unreadCount: unreadCount,
+                mentionCount: mentionCount,
+                reactionCount: reactionCount,
+                onJumpToBottom: { [weak self] in self?.scrollToBottomTapped() },
+                onJumpToMention: { [weak self] in self?.mentionTapped() },
+                onJumpToReaction: { [weak self] in self?.reactionTapped() }
+            )
+            jumpBottomConstraint?.constant = -(composerHeight + 8)
+        }
+
+        private func scrollToBottomTapped() {
+            Haptics.selection()
+            guard let tv = table else { return }
+            // Always scroll to the latest message (bottom).
+            let target = CGPoint(x: 0, y: -tv.contentInset.top)
+            scrollToOffset(target, in: tv)
+        }
+
+        private func mentionTapped() {
+            Haptics.selection()
+            guard let tv = table, let id = consumeMention?() else { return }
+            _ = scrollTo(id: id, in: tv, animated: true)
+        }
+
+        private func reactionTapped() {
+            Haptics.selection()
+            guard let tv = table, let id = consumeReaction?() else { return }
+            _ = scrollTo(id: id, in: tv, animated: true)
+        }
+
+        private func scrollToOffset(_ target: CGPoint, in tv: UITableView) {
+            isProgrammaticScroll = true
+            UIView.animate(withDuration: 0.3, delay: 0, options: .curveEaseInOut) {
+                tv.contentOffset = target
+            } completion: { [weak self] _ in
+                self?.isProgrammaticScroll = false
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.isAtBottom = true
+                }
+            }
         }
 
         // Private cell reuse identifier. All rows use a single
@@ -392,8 +608,9 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             }
             if id == ChatTypingRowID {
                 let logins = lastTypingUsers
+                let isGroup = parent.isGroup
                 cell.contentConfiguration = UIHostingConfiguration {
-                    TypingIndicatorRow(logins: logins)
+                    TypingIndicatorRow(logins: logins, isGroup: isGroup)
                         .rotationEffect(.degrees(180))
                 }
                 .margins(.horizontal, 12)
@@ -405,18 +622,49 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 cell.contentConfiguration = UIHostingConfiguration {
                     HStack {
                         Spacer()
-                        AvatarView(url: avatarURL, size: 16)
+                        AvatarView(url: avatarURL, size: 20)
                             .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 1))
                     }
                     .padding(.trailing, 6)
                     .padding(.top, 2)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                     .rotationEffect(.degrees(180))
                 }
                 .margins(.horizontal, 12)
                 .margins(.vertical, 2)
                 return
             }
-            guard let msg = lastItems.first(where: { $0.id == id }) else { return }
+            if id == ChatUnreadDividerID {
+                let count = parent.unreadCount
+                cell.contentConfiguration = UIHostingConfiguration {
+                    UnreadDividerRow(count: count)
+                        .rotationEffect(.degrees(180))
+                }
+                .margins(.all, 0)
+                return
+            }
+            // Grouped sender cell: multiple messages rendered as one row.
+            if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                guard let messageIDs = groupById[id] else { return }
+                let messages = messageIDs.compactMap { itemById[$0] }
+                guard !messages.isEmpty else { return }
+                let swipeState = parent.swipeState
+                if let builder = parent.groupCellBuilder {
+                    let stickyState = stickyAvatarState
+                    cell.contentConfiguration = UIHostingConfiguration {
+                        builder(messages)
+                            .rotationEffect(.degrees(180))
+                            .environmentObject(swipeState)
+                            .environmentObject(stickyState)
+                    }
+                    .margins(.horizontal, 8)
+                    .margins(.vertical, 0)
+                    .minSize(width: 0, height: 0)
+                }
+                return
+            }
+            guard let msg = itemById[id] else { return }
             let idx = lastItems.firstIndex(where: { $0.id == id }) ?? indexPath.row
             let swipeState = parent.swipeState
             // Zero cell margins AND zero min-size. UIHostingConfiguration
@@ -433,7 +681,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     .rotationEffect(.degrees(180))
                     .environmentObject(swipeState)
             }
-            .margins(.horizontal, 12)
+            .margins(.horizontal, 8)
             .margins(.vertical, 0)
             .minSize(width: 0, height: 0)
         }
@@ -447,6 +695,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             animated: Bool
         ) {
             lastItems = items
+            itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
             lastTypingUsers = typingUsers
             lastShowSeen = showSeen
 
@@ -461,7 +710,10 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             //                              at the top
             // Pagination listens for "approached last section, last
             // row" via willDisplay below.
-            let groups = ChatSectioning.groupByDay(items)
+            let dayGroups = ChatSectioning.groupByDay(items)
+            // Reset group maps for this snapshot.
+            groupById.removeAll()
+            groupIdForMessage.removeAll()
             // Trailing rows (typing indicator / seen avatar row) belong
             // in data-space AFTER the latest message, so in the
             // rotated table they appear BELOW the latest bubble. In
@@ -471,28 +723,109 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             if !typingUsers.isEmpty { trailingRowsForLatestSection.append(ChatTypingRowID) }
             if showSeen { trailingRowsForLatestSection.append(ChatSeenRowID) }
 
-            for (offset, group) in groups.reversed().enumerated() {
-                snap.appendSections([group.sectionID])
-                var rows = Array(group.messageIDs.reversed())
+            // Determine where the unread divider belongs. In data
+            // space, items are oldest-first; in snapshot space (after
+            // reversal) they are newest-first. We want the divider
+            // between the last-read message and the first unread one.
+            // A message is "read" when its created_at <= myReadAt.
+            let unreadDividerMsgId: String? = {
+                guard parent.unreadCount > 0 else { return nil }
+                guard let readAt = parent.myReadAt else {
+                    // myReadAt nil = never opened → all messages unread.
+                    // Return special sentinel so divider goes at the very top.
+                    return "__all_unread__"
+                }
+                // items (lastItems) are oldest-first. Walk from the
+                // END (newest) toward the START (oldest) and find the
+                // first message whose created_at <= readAt — that's
+                // the last read message. The divider goes just after
+                // it in the original array (= just before it in the
+                // reversed snapshot rows).
+                for msg in lastItems.reversed() {
+                    if (msg.created_at ?? "") <= readAt {
+                        return msg.id
+                    }
+                }
+                return nil
+            }()
+
+            for (offset, dayGroup) in dayGroups.reversed().enumerated() {
+                snap.appendSections([dayGroup.sectionID])
+
+                // Run sender grouping within this day section.
+                let grouped = ChatSenderGrouping.group(
+                    messageIDs: dayGroup.messageIDs,
+                    lookup: { itemById[$0] },
+                    isMe: { parent.isMe($0) },
+                    isGroup: parent.isGroup
+                )
+
+                // Build row IDs (reversed for rotated table).
+                var rows: [String] = []
+                for item in grouped.reversed() {
+                    switch item {
+                    case .single(let id):
+                        rows.append(id)
+                    case .group(let g):
+                        rows.append(g.id)
+                        groupById[g.id] = g.messageIDs
+                        for mid in g.messageIDs {
+                            groupIdForMessage[mid] = g.id
+                        }
+                    }
+                }
+
                 if offset == 0 {
                     rows = trailingRowsForLatestSection + rows
+                }
+                // Insert unread divider if it belongs in this section.
+                // For grouped messages, the unread divider targets a
+                // message ID. If that ID is inside a group, we place
+                // the divider after the group row instead.
+                if let targetId = unreadDividerMsgId {
+                    if targetId == "__all_unread__" {
+                        // myReadAt nil → all unread. Place divider at
+                        // the end of the last section (= visual top).
+                        if offset == dayGroups.count - 1 {
+                            rows.append(ChatUnreadDividerID)
+                        }
+                    } else {
+                        // Resolve target: if the message is inside a
+                        // group, use the group row ID instead.
+                        let resolvedTarget = groupIdForMessage[targetId] ?? targetId
+                        if let idx = rows.firstIndex(of: resolvedTarget) {
+                            // Insert AFTER last-read msg in reversed array
+                            // = visually ABOVE it in rotated table
+                            rows.insert(ChatUnreadDividerID, at: idx + 1)
+                        }
+                    }
                 }
                 // Append the date pill at the END of the section
                 // (rotation-space bottom of section = visually TOP of
                 // the day's messages). Regular row — not a section
                 // footer — so the pill scrolls with content.
-                rows.append(chatDateRowID(for: group.sectionID))
-                snap.appendItems(rows, toSection: group.sectionID)
+                rows.append(chatDateRowID(for: dayGroup.sectionID))
+                snap.appendItems(rows, toSection: dayGroup.sectionID)
             }
             dataSource.apply(snap, animatingDifferences: animated)
         }
 
         func reconfigure(ids: [String]) {
             guard !ids.isEmpty else { return }
+            // Translate individual message IDs that are inside groups
+            // to their group row IDs (the snapshot only knows group IDs).
+            var resolved: Set<String> = []
+            for id in ids {
+                if let gid = groupIdForMessage[id] {
+                    resolved.insert(gid)
+                } else {
+                    resolved.insert(id)
+                }
+            }
             var snap = dataSource.snapshot()
-            let present = ids.filter { snap.itemIdentifiers.contains($0) }
+            let present = resolved.filter { snap.itemIdentifiers.contains($0) }
             guard !present.isEmpty else { return }
-            snap.reconfigureItems(present)
+            snap.reloadItems(Array(present))
             dataSource.apply(snap, animatingDifferences: false)
         }
 
@@ -500,18 +833,28 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
         /// "Bottom" visually = section 0, row 0 in the rotated table.
         func scrollToBottom(in tv: UITableView, animated: Bool) {
-            let snap = dataSource.snapshot()
-            guard let firstSection = snap.sectionIdentifiers.first else { return }
-            guard snap.numberOfItems(inSection: firstSection) > 0 else { return }
-            let indexPath = IndexPath(row: 0, section: 0)
-            // `.top` in rotated-table space maps to `.bottom` in
-            // visual space.
-            tv.scrollToRow(at: indexPath, at: .top, animated: animated)
+            // Rotated table: visual bottom (newest messages) is at
+            // contentOffset.y == -contentInset.top (adjustment behavior
+            // is .never, so adjustedContentInset may include unexpected
+            // safe-area additions).
+            let target = CGPoint(x: 0, y: -tv.contentInset.top)
+            tv.setContentOffset(target, animated: animated)
         }
 
-        func scrollTo(id: String, in tv: UITableView, animated: Bool) {
-            guard let indexPath = dataSource.indexPath(for: id) else { return }
-            tv.scrollToRow(at: indexPath, at: .middle, animated: animated)
+        /// Returns true if the row was found and scrolled to.
+        @discardableResult
+        func scrollTo(id: String, in tv: UITableView, animated: Bool) -> Bool {
+            if let indexPath = dataSource.indexPath(for: id) {
+                tv.scrollToRow(at: indexPath, at: .middle, animated: animated)
+                return true
+            }
+            // Fallback: the message may be inside a grouped cell.
+            if let groupId = groupIdForMessage[id],
+               let indexPath = dataSource.indexPath(for: groupId) {
+                tv.scrollToRow(at: indexPath, at: .middle, animated: animated)
+                return true
+            }
+            return false
         }
 
         // MARK: UITableViewDelegate
@@ -537,16 +880,11 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat { 0 }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            // Rotation-aware "at bottom" detection — visually at the
-            // bottom means content-offset near 0 (section 0 row 0 is
-            // just above the viewport's top edge, which is the
-            // screen's bottom after rotation).
-            //
-            // Hysteresis: we only flip to "not at bottom" past 120
-            // and back to "at bottom" under 40. A single threshold
-            // toggled on every tiny bounce, which in turn re-rendered
-            // the whole ChatView mid-scroll and felt like a jerk.
-            let offset = scrollView.contentOffset.y
+            // Skip isAtBottom updates during programmatic scroll to
+            // prevent re-render → contentInset change → offset reset.
+            guard !isProgrammaticScroll else { return }
+
+            let offset = scrollView.contentOffset.y + scrollView.contentInset.top
             let current = parent.isAtBottom
             let next: Bool
             if current {
@@ -563,10 +901,80 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
 
             // Pagination: approaching the far end of the content (=
             // visually the TOP of the screen, = oldest messages).
-            guard !loadingMore else { return }
-            let distanceToEnd = scrollView.contentSize.height
-                - (scrollView.contentOffset.y + scrollView.bounds.height)
-            if distanceToEnd < 600 { fireLoadMore() }
+            if !loadingMore {
+                let distanceToEnd = scrollView.contentSize.height
+                    - (scrollView.contentOffset.y + scrollView.bounds.height)
+                if distanceToEnd < 600 { fireLoadMore() }
+            }
+
+            // Date pill: find the oldest visible message (visually at
+            // the top). In the rotated table, `indexPathsForVisibleRows`
+            // is sorted by ascending IndexPath — `.last` is the highest
+            // section + row = the oldest message on screen.
+            guard let tv = scrollView as? UITableView,
+                  let visiblePaths = tv.indexPathsForVisibleRows,
+                  !visiblePaths.isEmpty else { return }
+            // Walk from the last visible path backwards to find the
+            // first real message row (skip date pills and synthetic rows).
+            var foundDate: Date?
+            for path in visiblePaths.reversed() {
+                guard let id = dataSource.itemIdentifier(for: path) else { continue }
+                if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID || chatIsDateRow(id) { continue }
+                // Resolve group row to its first message for date.
+                let resolvedId: String
+                if id.hasPrefix(ChatSenderGrouping.groupPrefix),
+                   let mids = groupById[id], let fid = mids.first {
+                    resolvedId = fid
+                } else {
+                    resolvedId = id
+                }
+                if let msg = itemById[resolvedId],
+                   let raw = msg.created_at,
+                   let d = isoFormatter.date(from: raw) {
+                    foundDate = d
+                    break
+                }
+            }
+            // Only notify when the calendar day actually changes —
+            // avoids churning SwiftUI state on every scroll tick.
+            let cal = Calendar.current
+            let changed: Bool
+            if let prev = lastReportedDate, let next = foundDate {
+                changed = !cal.isDate(prev, inSameDayAs: next)
+            } else {
+                changed = (lastReportedDate == nil) != (foundDate == nil)
+            }
+            if changed {
+                lastReportedDate = foundDate
+                let cb = parent.onFirstVisibleDateChanged
+                let date = foundDate
+                DispatchQueue.main.async { cb?(date) }
+            }
+
+            // Sticky avatar: compute per-group-cell excess below viewport.
+            updateStickyAvatarExcess(tv)
+        }
+
+        /// Compute how far each visible group cell extends below the
+        /// visible viewport (above the composer).  UIKit's `convert`
+        /// correctly accounts for the table's 180° rotation.
+        private func updateStickyAvatarExcess(_ tv: UITableView) {
+            guard let window = tv.window else { return }
+            let composerH = parent.composerOverlayHeight
+            let viewportBottom = window.bounds.height - composerH
+
+            var newExcess: [String: CGFloat] = [:]
+            for cell in tv.visibleCells {
+                guard let ip = tv.indexPath(for: cell),
+                      let id = dataSource.itemIdentifier(for: ip),
+                      id.hasPrefix(ChatSenderGrouping.groupPrefix) else { continue }
+                let cellInWindow = cell.convert(cell.bounds, to: window)
+                let ex = max(0, cellInWindow.maxY - viewportBottom)
+                if ex > 0 { newExcess[id] = ex }
+            }
+            if newExcess != stickyAvatarState.excess {
+                stickyAvatarState.excess = newExcess
+            }
         }
 
         private func fireLoadMore() {
@@ -593,11 +1001,33 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                     return
                 }
                 // Skip synthetic rows.
-                if id == ChatTypingRowID || id == ChatSeenRowID || chatIsDateRow(id) {
+                if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID || chatIsDateRow(id) {
                     gr.state = .cancelled
                     return
                 }
-                guard let msg = lastItems.first(where: { $0.id == id }) else {
+                // Grouped cell: use the last message for swipe-to-reply.
+                if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                    guard let messageIDs = groupById[id],
+                          let lastId = messageIDs.last,
+                          let msg = itemById[lastId] else {
+                        gr.state = .cancelled
+                        return
+                    }
+                    swipeActiveId = lastId
+                    swipeActiveIsMe = parent.isMe(msg)
+                    swipeTriggered = false
+                    let tablePan = tv.panGestureRecognizer
+                    tablePan.isEnabled = false
+                    tablePan.isEnabled = true
+                    if let nav = findNavPopRecognizer(), nav.isEnabled {
+                        nav.isEnabled = false
+                        suspendedNavPopGR = nav
+                    }
+                    parent.swipeState.messageId = lastId
+                    parent.swipeState.offsetX = 0
+                    return
+                }
+                guard let msg = itemById[id] else {
                     gr.state = .cancelled
                     return
                 }
@@ -671,7 +1101,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 }
                 if shouldFire,
                    let id = firedId,
-                   let msg = lastItems.first(where: { $0.id == id }) {
+                   let msg = itemById[id] {
                     parent.onReply(msg)
                 }
 
@@ -773,11 +1203,37 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard let indexPath = tv.indexPathForRow(at: point) else { return }
             guard let cell = tv.cellForRow(at: indexPath) else { return }
             guard let id = dataSource.itemIdentifier(for: indexPath) else { return }
-            if id == ChatTypingRowID || id == ChatSeenRowID { return }
+            if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { return }
             if chatIsDateRow(id) { return }
-            guard let msg = lastItems.first(where: { $0.id == id }) else { return }
+            // Grouped cell: find which message was tapped by touch Y.
+            if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                guard let messageIDs = groupById[id], !messageIDs.isEmpty else { return }
+                let touchInWindow = tv.convert(point, to: nil)
+                // Find the message whose cached bubble frame contains the touch Y
+                var targetMsg: Message?
+                for mid in messageIDs {
+                    if let f = BubbleFrameCache.shared.frame(for: mid),
+                       touchInWindow.y >= f.minY && touchInWindow.y <= f.maxY {
+                        targetMsg = itemById[mid]
+                        break
+                    }
+                }
+                // Fallback: last message if no cache hit
+                if targetMsg == nil, let lastId = messageIDs.last {
+                    targetMsg = itemById[lastId]
+                }
+                guard let msg = targetMsg else { return }
+                if haptic { Haptics.impact(.medium) }
+                let frame = BubbleFrameCache.shared.frame(for: msg.id)
+                    ?? cell.convert(cell.bounds, to: nil)
+                parent.onCellLongPressed(msg, frame)
+                return
+            }
+            guard let msg = itemById[id] else { return }
             if haptic { Haptics.impact(.medium) }
-            let frame = cell.convert(cell.bounds, to: nil)
+            // Use cached bubble frame for exact position, fallback to cell frame
+            let frame = BubbleFrameCache.shared.frame(for: msg.id)
+                ?? cell.convert(cell.bounds, to: nil)
             parent.onCellLongPressed(msg, frame)
         }
 
@@ -787,9 +1243,28 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             var urls: [URL] = []
             for ip in indexPaths {
                 guard let id = dataSource.itemIdentifier(for: ip) else { continue }
-                if id == ChatTypingRowID || id == ChatSeenRowID { continue }
+                if id == ChatTypingRowID || id == ChatSeenRowID || id == ChatUnreadDividerID { continue }
                 if chatIsDateRow(id) { continue }
-                guard let msg = lastItems.first(where: { $0.id == id }) else { continue }
+                // For group rows, collect URLs from all messages in the group.
+                if id.hasPrefix(ChatSenderGrouping.groupPrefix) {
+                    guard let mids = groupById[id] else { continue }
+                    for mid in mids {
+                        guard let msg = itemById[mid] else { continue }
+                        if let atts = msg.attachments {
+                            for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {
+                                if let u = URL(string: a.url), !u.isFileURL { urls.append(u) }
+                            }
+                        }
+                        if let s = msg.attachment_url, let u = URL(string: s), !u.isFileURL {
+                            urls.append(u)
+                        }
+                        if let s = msg.sender_avatar, let u = URL(string: s), !u.isFileURL {
+                            urls.append(u)
+                        }
+                    }
+                    continue
+                }
+                guard let msg = itemById[id] else { continue }
                 if let atts = msg.attachments {
                     for a in atts where (a.type == "image") || (a.mime_type?.hasPrefix("image/") == true) {
                         if let u = URL(string: a.url), !u.isFileURL { urls.append(u) }
@@ -816,6 +1291,24 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             guard !urls.isEmpty else { return }
             ImageCache.shared.cancelPrefetch(urls: urls, maxPixelSize: 800)
         }
+    }
+}
+
+// MARK: - Unread divider row
+
+struct UnreadDividerRow: View {
+    let count: Int
+    var body: some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(Color("AccentColor").opacity(0.2)).frame(height: 1)
+            Text("\(count) unread messages")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(Color("AccentColor"))
+                .fixedSize()
+            Rectangle().fill(Color("AccentColor").opacity(0.2)).frame(height: 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 }
 

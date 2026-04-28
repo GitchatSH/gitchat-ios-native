@@ -5,6 +5,8 @@ import UIKit
 final class ChatViewModel: ObservableObject {
     @Published var messages: [Message] = []
     @Published var pinnedIds: Set<String> = []
+    /// Full pinned Message objects for the banner — independent of pagination.
+    @Published var pinnedMessages: [Message] = []
     @Published var typingUsers: Set<String> = []
     @Published var otherReadAt: String?
     @Published var readCursors: [String: String] = [:]
@@ -67,31 +69,24 @@ final class ChatViewModel: ObservableObject {
         } else {
             UserDefaults.standard.set(draft, forKey: draftKey)
         }
+        NotificationCenter.default.post(
+            name: DraftStore.draftChangedNotification,
+            object: nil,
+            userInfo: ["conversationId": conversation.id]
+        )
     }
 
     // MARK: - Loading
 
     func load() async {
-        if messages.isEmpty { isLoading = true }
-        isSyncing = true
-        let started = Date()
+        let hadCache = !messages.isEmpty
+        if !hadCache { isLoading = true }
+        // Only show "syncing" when there's no cached data — returning
+        // users see the cached list instantly with no subtitle flicker.
+        if !hadCache { isSyncing = true }
         defer {
             isLoading = false
-            let elapsed = Date().timeIntervalSince(started)
-            if elapsed >= 2 {
-                isSyncing = false
-            } else {
-                let remaining = 2 - elapsed
-                // Strong-capture self so the deferred reset can't be
-                // dropped if SwiftUI rebuilds anything that referenced
-                // the view model. The view model lives as long as the
-                // chat detail view does.
-                let me = self
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
-                    me.isSyncing = false
-                }
-            }
+            isSyncing = false
         }
         do {
             let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
@@ -172,21 +167,99 @@ final class ChatViewModel: ObservableObject {
         }.sorted()
     }
 
-    func seenCursorLogins(for message: Message, at idx: Int) -> [String] {
+    func seenCursorLogins(for message: Message, nextCreatedAt: String?) -> [String] {
         guard conversation.isGroup, !readCursors.isEmpty else { return [] }
         let msgDate = message.created_at ?? ""
-        let nextDate: String? = (idx + 1 < messages.count) ? (messages[idx + 1].created_at ?? "") : nil
         return readCursors.compactMap { login, readAt in
             guard readAt >= msgDate else { return nil }
-            if let nextDate, readAt >= nextDate { return nil }
+            if let nextDate = nextCreatedAt, readAt >= nextDate { return nil }
             return login
         }.sorted()
+    }
+
+    /// Load pages until the target message is in `messages`, then return true.
+    /// Returns false if we exhaust all pages without finding it.
+    ///
+    /// Optimization: if a `createdAt` hint is provided (e.g. from a search
+    /// result), use it as cursor to jump directly to the page containing the
+    /// message instead of paging sequentially from the latest.
+    func ensureMessageLoaded(id: String, createdAt: String? = nil) async -> Bool {
+        if messages.contains(where: { $0.id == id }) { return true }
+
+        // Fast path: jump directly using createdAt as cursor.
+        // Backend pagination is exclusive (messages strictly BEFORE cursor),
+        // so bump the cursor forward by 1 second to ensure the target
+        // message itself is included in the response.
+        if let createdAt {
+            let cursor = Self.offsetCursor(createdAt, bySeconds: 1)
+            do {
+                let resp = try await APIClient.shared.getConversationMessages(
+                    id: conversation.id, cursor: cursor, limit: 50
+                )
+                let page = resp.messages.reversed()
+                let known = Set(messages.map(\.id))
+                let deduped = Array(page.filter { !known.contains($0.id) })
+                if !deduped.isEmpty {
+                    ChatMessageView.markSeen(deduped.map(\.id))
+                    // Insert in sorted position
+                    let insertIdx = messages.firstIndex {
+                        ($0.created_at ?? "") > (deduped.first?.created_at ?? "")
+                    } ?? 0
+                    messages.insert(contentsOf: deduped, at: insertIdx)
+                    persistCache()
+                }
+                if messages.contains(where: { $0.id == id }) { return true }
+            } catch { }
+        }
+
+        // Slow fallback: page backward sequentially.
+        var cursor = nextCursor
+        var attempts = 0
+        while let c = cursor, attempts < 10 {
+            attempts += 1
+            do {
+                let resp = try await APIClient.shared.getConversationMessages(
+                    id: conversation.id, cursor: c
+                )
+                let older = resp.messages.reversed()
+                let known = Set(messages.map(\.id))
+                let deduped = older.filter { !known.contains($0.id) }
+                ChatMessageView.markSeen(deduped.map(\.id))
+                messages.insert(contentsOf: deduped, at: 0)
+                nextCursor = resp.nextCursor
+                cursor = resp.nextCursor
+                persistCache()
+                if messages.contains(where: { $0.id == id }) { return true }
+                if resp.nextCursor == nil { break }
+            } catch { break }
+        }
+        return false
+    }
+
+    /// Bump an ISO-8601 cursor string forward by `seconds` so that
+    /// exclusive cursor pagination includes the row at the original
+    /// timestamp. Falls back to the original string if parsing fails.
+    private static func offsetCursor(_ iso: String, bySeconds seconds: Int) -> String {
+        let fmt = ISO8601DateFormatter()
+        // Accept both fractional-seconds and plain ISO strings.
+        fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fmt.date(from: iso) {
+            return fmt.string(from: date.addingTimeInterval(TimeInterval(seconds)))
+        }
+        fmt.formatOptions = [.withInternetDateTime]
+        if let date = fmt.date(from: iso) {
+            let fmtOut = ISO8601DateFormatter()
+            fmtOut.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return fmtOut.string(from: date.addingTimeInterval(TimeInterval(seconds)))
+        }
+        return iso
     }
 
     func loadPinned() async {
         do {
             let pins = try await APIClient.shared.pinnedMessages(conversationId: conversation.id)
             self.pinnedIds = Set(pins.map(\.id))
+            self.pinnedMessages = pins
         } catch { }
     }
 
@@ -280,6 +353,34 @@ final class ChatViewModel: ObservableObject {
         )
     }
 
+    func removeOptimisticReaction(messageId: String, emoji: String, myLogin: String?) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        var existing = messages[idx].reactions ?? []
+        if let ri = existing.firstIndex(where: { $0.emoji == emoji }) {
+            let r = existing[ri]
+            if r.count <= 1 {
+                existing.remove(at: ri)
+            } else {
+                existing[ri] = MessageReaction(emoji: emoji, count: r.count - 1, reacted: false)
+            }
+        }
+        let m = messages[idx]
+        var rows = m.reactionRows ?? []
+        if let rowIdx = rows.firstIndex(where: { $0.emoji == emoji && $0.user_login == myLogin }) {
+            rows.remove(at: rowIdx)
+        }
+        messages[idx] = Message(
+            id: m.id, conversation_id: m.conversation_id,
+            sender: m.sender, sender_avatar: m.sender_avatar,
+            content: m.content, created_at: m.created_at,
+            edited_at: m.edited_at, reactions: existing.isEmpty ? nil : existing,
+            attachment_url: m.attachment_url, type: m.type,
+            reply_to_id: m.reply_to_id, reply: m.reply,
+            attachments: m.attachments, unsent_at: m.unsent_at,
+            reactionRows: rows
+        )
+    }
+
     func react(messageId: String, emoji: String, myLogin: String? = nil) async {
         // Optimistic: bump the count (or add a new chip) on the local message immediately.
         if let idx = messages.firstIndex(where: { $0.id == messageId }) {
@@ -344,7 +445,9 @@ final class ChatViewModel: ObservableObject {
             pinned_at: c.pinned_at,
             is_request: c.is_request,
             updated_at: c.updated_at,
-            is_muted: c.is_muted
+            is_muted: c.is_muted,
+            has_mention: c.has_mention,
+            has_reaction: c.has_reaction
         )
     }
 
@@ -382,8 +485,10 @@ final class ChatViewModel: ObservableObject {
         // API call fails.
         if wasPinned {
             pinnedIds.remove(msg.id)
+            pinnedMessages.removeAll { $0.id == msg.id }
         } else {
             pinnedIds.insert(msg.id)
+            pinnedMessages.append(msg)
         }
         Haptics.impact(.light)
         do {
@@ -395,10 +500,13 @@ final class ChatViewModel: ObservableObject {
                 ToastCenter.shared.show(.success, "Pinned message")
             }
         } catch {
+            // Revert on failure
             if wasPinned {
                 pinnedIds.insert(msg.id)
+                pinnedMessages.append(msg)
             } else {
                 pinnedIds.remove(msg.id)
+                pinnedMessages.removeAll { $0.id == msg.id }
             }
             ToastCenter.shared.show(.error, "Couldn't pin", error.localizedDescription)
         }
@@ -429,7 +537,7 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Attachments
 
-    func uploadAndSendMany(items: [(Data, String, String)], senderLogin: String?) async {
+    func uploadAndSendMany(items: [(Data, String, String)], senderLogin: String?, caption: String = "") async {
         guard !items.isEmpty else { return }
         var compressed: [(Data, String, String)] = []
         compressed.reserveCapacity(items.count)
@@ -438,7 +546,7 @@ final class ChatViewModel: ObservableObject {
                 await Self.compressIfImageOffMain(data: item.0, filename: item.1, mimeType: item.2)
             )
         }
-        await sendEncodedAttachments(compressed, senderLogin: senderLogin)
+        await sendEncodedAttachments(compressed, senderLogin: senderLogin, caption: caption)
     }
 
     /// UIImage entry point for drop/paste/picker flows. Encodes each image
@@ -446,7 +554,7 @@ final class ChatViewModel: ObservableObject {
     /// pipeline. Avoids the previous pattern where the caller would
     /// `jpegData(...)` on MainActor and `uploadAndSendMany` would then
     /// decode + re-encode via `compressIfImage`.
-    func uploadImagesAndSend(images: [UIImage], senderLogin: String?) async {
+    func uploadImagesAndSend(images: [UIImage], senderLogin: String?, caption: String = "") async {
         guard !images.isEmpty else { return }
         var encoded: [(Data, String, String)] = []
         encoded.reserveCapacity(images.count)
@@ -455,12 +563,13 @@ final class ChatViewModel: ObservableObject {
                 encoded.append(tuple)
             }
         }
-        await sendEncodedAttachments(encoded, senderLogin: senderLogin)
+        await sendEncodedAttachments(encoded, senderLogin: senderLogin, caption: caption)
     }
 
     private func sendEncodedAttachments(
         _ encoded: [(Data, String, String)],
-        senderLogin: String?
+        senderLogin: String?,
+        caption: String = ""
     ) async {
         guard !encoded.isEmpty else { return }
         AnalyticsTracker.trackMessageSent(
@@ -487,7 +596,7 @@ final class ChatViewModel: ObservableObject {
             conversation_id: conversation.id,
             sender: senderLogin ?? "me",
             sender_avatar: nil,
-            content: "",
+            content: caption,
             created_at: ISO8601DateFormatter().string(from: Date()),
             edited_at: nil,
             reactions: nil,
@@ -518,7 +627,7 @@ final class ChatViewModel: ObservableObject {
             }
             let msg = try await APIClient.shared.sendMessage(
                 conversationId: conversation.id,
-                body: "",
+                body: caption,
                 attachmentURLs: urls
             )
             // Honor the seenIds dedupe contract that the WebSocket
@@ -662,4 +771,5 @@ final class ChatViewModel: ObservableObject {
             return (jpeg, filename, "image/jpeg")
         }.value
     }
+
 }
