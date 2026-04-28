@@ -668,15 +668,19 @@ struct ChatDetailView: View {
         let caption = dropCaption.trimmingCharacters(in: .whitespacesAndNewlines)
         pendingDropImages = []
         dropCaption = ""
+
+        // No images — send caption as plain text via the legacy outbox.
         guard !images.isEmpty else {
-            // No images — send caption as plain text if any
             if !caption.isEmpty {
                 vm.draft = caption
                 Task { await vm.send() }
             }
             return
         }
-        guard !images.isEmpty else { return }
+
+        // Images (with or without caption) — bundle into ONE message so
+        // sender + receiver see a single bubble in identical order.
+        // Spec §Ordering decision (A): "Bundle text + image into ONE message".
         Task {
             var attachments: [PendingAttachment] = []
             for (i, img) in images.enumerated() {
@@ -694,7 +698,7 @@ struct ChatDetailView: View {
                 }
             }
             guard !attachments.isEmpty else { return }
-            vm.send(content: "", attachments: attachments)
+            vm.send(content: caption, attachments: attachments)
         }
     }
 
