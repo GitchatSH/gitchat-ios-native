@@ -1,6 +1,16 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Sticky avatar state (shared between Coordinator and group cells)
+
+/// Coordinator updates this on every scroll tick with per-group-cell
+/// "excess below viewport" values.  Group cells observe it to offset
+/// their avatar upward when the group extends behind the composer.
+final class StickyAvatarState: ObservableObject {
+    /// Group row ID → points the cell extends below the visible viewport.
+    @Published var excess: [String: CGFloat] = [:]
+}
+
 // MARK: - Scroll proxy
 
 /// Lets SwiftUI views call scroll commands directly on the
@@ -463,6 +473,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         fileprivate var jumpHostVC: UIHostingController<JumpButtonStack>?
         private var jumpBottomConstraint: NSLayoutConstraint?
         var isProgrammaticScroll = false
+        let stickyAvatarState = StickyAvatarState()
 
         /// Callbacks that consume the next pending ID and return it.
         /// Coordinator scrolls directly to the returned ID.
@@ -647,10 +658,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 guard !messages.isEmpty else { return }
                 let swipeState = parent.swipeState
                 if let builder = parent.groupCellBuilder {
+                    let stickyState = stickyAvatarState
                     cell.contentConfiguration = UIHostingConfiguration {
                         builder(messages)
                             .rotationEffect(.degrees(180))
                             .environmentObject(swipeState)
+                            .environmentObject(stickyState)
                     }
                     .margins(.horizontal, 8)
                     .margins(.vertical, 0)
@@ -945,6 +958,30 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 DispatchQueue.main.async { cb?(date) }
             }
 
+            // Sticky avatar: compute per-group-cell excess below viewport.
+            updateStickyAvatarExcess(tv)
+        }
+
+        /// Compute how far each visible group cell extends below the
+        /// visible viewport (above the composer).  UIKit's `convert`
+        /// correctly accounts for the table's 180° rotation.
+        private func updateStickyAvatarExcess(_ tv: UITableView) {
+            guard let window = tv.window else { return }
+            let composerH = parent.composerOverlayHeight
+            let viewportBottom = window.bounds.height - composerH
+
+            var newExcess: [String: CGFloat] = [:]
+            for cell in tv.visibleCells {
+                guard let ip = tv.indexPath(for: cell),
+                      let id = dataSource.itemIdentifier(for: ip),
+                      id.hasPrefix(ChatSenderGrouping.groupPrefix) else { continue }
+                let cellInWindow = cell.convert(cell.bounds, to: window)
+                let ex = max(0, cellInWindow.maxY - viewportBottom)
+                if ex > 0 { newExcess[id] = ex }
+            }
+            if newExcess != stickyAvatarState.excess {
+                stickyAvatarState.excess = newExcess
+            }
         }
 
         private func fireLoadMore() {

@@ -488,23 +488,48 @@ struct ChatView: View {
             ?? messages[0].sender_avatar
             ?? "https://github.com/\(messages[0].sender).png"
         let avatarLogin = messages[0].sender
-        let composerH = composerOverlayHeight
+        let groupId = "__group__|\(messages[0].id)"
+
+        GroupedMessageRowInner(
+            groupId: groupId,
+            avatarURL: avatarURL,
+            avatarLogin: avatarLogin,
+            messages: messages,
+            vm: vm,
+            myLogin: myLogin,
+            pulsingId: pulsingId,
+            actions: actions,
+            resolveAvatar: resolveAvatar,
+            imageZoomNamespace: imageZoomNamespace
+        )
+    }
+}
+
+/// Extracted so it can read `StickyAvatarState` from the environment
+/// (injected by `ChatMessagesList`'s Coordinator).
+private struct GroupedMessageRowInner: View {
+    let groupId: String
+    let avatarURL: String
+    let avatarLogin: String
+    let messages: [Message]
+    @ObservedObject var vm: ChatViewModel
+    let myLogin: String?
+    let pulsingId: String?
+    let actions: ChatView.Actions
+    let resolveAvatar: (Message) -> String?
+    let imageZoomNamespace: Namespace.ID?
+
+    @EnvironmentObject private var stickyState: StickyAvatarState
+
+    var body: some View {
+        let excess = stickyState.excess[groupId] ?? 0
 
         HStack(alignment: .bottom, spacing: 8) {
-            // Avatar column — sticky: floats to viewport bottom,
-            // clamped within column bounds.
+            // Avatar column — sticky: offset upward when the group
+            // extends below the viewport (behind the composer).
             GeometryReader { geo in
-                let columnFrame = geo.frame(in: .global)
-                let screenH = UIScreen.main.bounds.height
-                let safeBottom = geo.safeAreaInsets.bottom
-                let viewportBottom = screenH - safeBottom - composerH
-
-                // How far the column bottom extends past the viewport bottom
-                let excess = max(0, columnFrame.maxY - viewportBottom)
-                // Don't push avatar above the column top
-                let maxOffset = max(0, columnFrame.height - 32)
+                let maxOffset = max(0, geo.size.height - 32)
                 let offset = min(excess, maxOffset)
-
                 VStack {
                     Spacer()
                     AvatarView(url: avatarURL, size: 32, login: avatarLogin)
@@ -549,9 +574,11 @@ struct ChatView: View {
         }
         .padding(.top, 8)
     }
+}
 
+extension ChatView {
     @ViewBuilder
-    private func seenByAvatarsRow(cursors: [String], isMe: Bool, for msg: Message) -> some View {
+    fileprivate func seenByAvatarsRow(cursors: [String], isMe: Bool, for msg: Message) -> some View {
         HStack(spacing: 0) {
             if isMe { Spacer() }
             let shown = Array(cursors.prefix(5))
@@ -827,3 +854,4 @@ private struct BannerHeightKey: PreferenceKey {
         value = max(value, nextValue())
     }
 }
+
