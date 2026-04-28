@@ -17,6 +17,7 @@
 		0F9DA620D390F737ABAF8E4A /* ChatAttachmentsGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ECB3ACEDD3F4DDBE05167BC /* ChatAttachmentsGrid.swift */; };
 		1002899F9F99F440D42DC48F /* GlassPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24DA1766BE87B16368E73F58 /* GlassPill.swift */; };
 		10832E2BD27509C69912DE76 /* ShareTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD425E44DCCAF06510180F2B /* ShareTokenStore.swift */; };
+		1143059D95115B515567A99F /* VisibleMessagesDedupeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B7822C753B8424FE59D9423 /* VisibleMessagesDedupeTests.swift */; };
 		114557993AACA02E6C7BB6CA /* MockAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B55252107C68792BF61CCADF /* MockAPIClient.swift */; };
 		128B2F995B3C428FA137E15E /* HideScrollIndicators.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2FDD46F7AAB3B78242FF13A /* HideScrollIndicators.swift */; };
 		1297F23217D80C72EB69A324 /* OneSignalExtension in Frameworks */ = {isa = PBXBuildFile; productRef = A804AE540868411FDE202E67 /* OneSignalExtension */; };
@@ -248,6 +249,7 @@
 		27684CA51AC1C530A7CB3348 /* MacFloatingPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacFloatingPill.swift; sourceTree = "<group>"; };
 		29DB6D36C8FCF7F2F666E797 /* ChatMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageView.swift; sourceTree = "<group>"; };
 		2AFC776F8EAF46612FBA12D7 /* InstantTooltip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstantTooltip.swift; sourceTree = "<group>"; };
+		2B7822C753B8424FE59D9423 /* VisibleMessagesDedupeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisibleMessagesDedupeTests.swift; sourceTree = "<group>"; };
 		2D243C68C74A2AC306A74DB8 /* ReactorsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReactorsSheet.swift; sourceTree = "<group>"; };
 		2D5340BD447D966282E2E67D /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 		2F3F9D645B6410E4BD1139FC /* ChatDetailTitleBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailTitleBar.swift; sourceTree = "<group>"; };
@@ -600,6 +602,7 @@
 				D7561D267DF7EC693EA28CDE /* MergeFromServerTests.swift */,
 				4DB43B0E432F8F3D6E79EC11 /* MessageCacheFilterTests.swift */,
 				510F87602FF09899A6C3C285 /* SocketHandlerMatchingTests.swift */,
+				2B7822C753B8424FE59D9423 /* VisibleMessagesDedupeTests.swift */,
 			);
 			path = Conversations;
 			sourceTree = "<group>";
@@ -1260,6 +1263,7 @@
 				146BD1CED03878B0132D7B34 /* SmokeUnitTest.swift in Sources */,
 				98BE48E15464DA64FAA0F96B /* SocketHandlerMatchingTests.swift in Sources */,
 				D89FF53B49AC2EE3B3E54170 /* StubURLProtocol.swift in Sources */,
+				1143059D95115B515567A99F /* VisibleMessagesDedupeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -58,7 +58,13 @@ final class ChatViewModel: ObservableObject {
         let pending = OutboxStore.shared.pendingFor(conversation.id)
             .map(OutboxStore.shared.toMessage)
         guard !pending.isEmpty else { return messages }
-        return (messages + pending).sorted {
+        // Pending projections share id "local-<cmid>" with optimistic placeholders
+        // already in `messages` (from vm.send(content:attachments:)). Skip pending
+        // whose id is already present to avoid UIDiffableDataSource duplicate-id crashes.
+        let existingIds = Set(messages.map(\.id))
+        let unique = pending.filter { !existingIds.contains($0.id) }
+        guard !unique.isEmpty else { return messages }
+        return (messages + unique).sorted {
             ($0.created_at ?? "") < ($1.created_at ?? "")
         }
     }
