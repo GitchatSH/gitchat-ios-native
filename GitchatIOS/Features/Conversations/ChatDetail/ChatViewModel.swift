@@ -245,14 +245,12 @@ final class ChatViewModel: ObservableObject {
 
     // MARK: - Send / edit / delete
 
-    /// Unified send entry point (Task 2.9). Creates an optimistic Message
-    /// with id="local-<cmid>" and client_message_id=cmid, appends it to
+    /// Unified send entry point. Creates an optimistic Message with
+    /// id="local-<cmid>" and client_message_id=cmid, appends it to
     /// `messages`, persists the cache, and enqueues a PendingMessage to
     /// the injected OutboxStore so the send pipeline can pick it up.
     ///
     /// Empty content (after trimming) + no attachments is a no-op.
-    /// Legacy uploadAndSend / sendEncodedAttachments / uploadImagesAndSend
-    /// are preserved until Task 2.13 reroutes their callers and removes them.
     func send(content: String, attachments: [PendingAttachment] = [], replyTo: Message? = nil) {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty else { return }
@@ -516,177 +514,6 @@ final class ChatViewModel: ObservableObject {
     }
 
     // MARK: - Attachments
-
-    func uploadAndSendMany(items: [(Data, String, String)], senderLogin: String?) async {
-        guard !items.isEmpty else { return }
-        var compressed: [(Data, String, String)] = []
-        compressed.reserveCapacity(items.count)
-        for item in items {
-            compressed.append(
-                await Self.compressIfImageOffMain(data: item.0, filename: item.1, mimeType: item.2)
-            )
-        }
-        await sendEncodedAttachments(compressed, senderLogin: senderLogin)
-    }
-
-    /// UIImage entry point for drop/paste/picker flows. Encodes each image
-    /// exactly once, off MainActor, then hands off to the shared upload
-    /// pipeline. Avoids the previous pattern where the caller would
-    /// `jpegData(...)` on MainActor and `uploadAndSendMany` would then
-    /// decode + re-encode via `compressIfImage`.
-    func uploadImagesAndSend(images: [UIImage], senderLogin: String?) async {
-        guard !images.isEmpty else { return }
-        var encoded: [(Data, String, String)] = []
-        encoded.reserveCapacity(images.count)
-        for (i, img) in images.enumerated() {
-            if let tuple = await Self.encodeForUploadOffMain(image: img, filename: "image-\(i).jpg") {
-                encoded.append(tuple)
-            }
-        }
-        await sendEncodedAttachments(encoded, senderLogin: senderLogin)
-    }
-
-    private func sendEncodedAttachments(
-        _ encoded: [(Data, String, String)],
-        senderLogin: String?
-    ) async {
-        guard !encoded.isEmpty else { return }
-        AnalyticsTracker.trackMessageSent(
-            conversationId: conversation.id,
-            isGroup: conversation.isGroup,
-            hasAttachment: true
-        )
-        var localURLs: [URL] = []
-        var localAttachments: [MessageAttachment] = []
-        for (data, filename, _) in encoded {
-            let tmpURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(UUID().uuidString)-\(filename)")
-            try? data.write(to: tmpURL)
-            localURLs.append(tmpURL)
-            localAttachments.append(MessageAttachment(
-                attachment_id: nil, url: tmpURL.absoluteString, type: "image",
-                filename: filename, mime_type: "image/jpeg",
-                width: nil, height: nil
-            ))
-        }
-        let localID = "local-\(UUID().uuidString)"
-        let optimistic = Message(
-            id: localID,
-            conversation_id: conversation.id,
-            sender: senderLogin ?? "me",
-            sender_avatar: nil,
-            content: "",
-            created_at: ISO8601DateFormatter().string(from: Date()),
-            edited_at: nil,
-            reactions: nil,
-            attachment_url: nil,
-            type: "user",
-            reply_to_id: nil,
-            attachments: localAttachments
-        )
-        messages.append(optimistic)
-        Haptics.impact(.light)
-
-        do {
-            let urls = try await withThrowingTaskGroup(of: (Int, String).self) { group -> [String] in
-                for (i, tuple) in encoded.enumerated() {
-                    group.addTask {
-                        let url = try await APIClient.shared.uploadAttachment(
-                            data: tuple.0,
-                            filename: tuple.1,
-                            mimeType: tuple.2,
-                            conversationId: self.conversation.id
-                        )
-                        return (i, url)
-                    }
-                }
-                var result = Array(repeating: "", count: encoded.count)
-                for try await (i, url) in group { result[i] = url }
-                return result
-            }
-            let msg = try await APIClient.shared.sendMessage(
-                conversationId: conversation.id,
-                body: "",
-                attachmentURLs: urls
-            )
-            // Honor the seenIds dedupe contract that the WebSocket
-            // and OutboxStore handlers also follow (ChatDetailView
-            // lines ~719 and ~728). If the WebSocket already delivered
-            // this message and appended it to `messages`, the optimistic
-            // entry is now alongside it — replacing the optimistic with
-            // `msg` would produce two entries with the same id and crash
-            // UIDiffableDataSource at snapshot time. Branch on insert
-            // result: first sighting → replace; already-seen → drop the
-            // optimistic.
-            if ChatMessageView.seenIds.insert(msg.id).inserted {
-                if let idx = messages.firstIndex(where: { $0.id == localID }) {
-                    messages[idx] = msg
-                }
-            } else {
-                messages.removeAll { $0.id == localID }
-            }
-            for u in localURLs { try? FileManager.default.removeItem(at: u) }
-        } catch {
-            messages.removeAll { $0.id == localID }
-            ToastCenter.shared.show(.error, "Upload failed", error.localizedDescription)
-        }
-    }
-
-    func uploadAndSend(data: Data, filename: String, mimeType: String, senderLogin: String?) async {
-        let (compressed, usedFilename, usedMime) = await Self.compressIfImageOffMain(
-            data: data, filename: filename, mimeType: mimeType
-        )
-        let tmpURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(UUID().uuidString)-\(usedFilename)")
-        try? compressed.write(to: tmpURL)
-        let localID = "local-\(UUID().uuidString)"
-        let optimistic = Message(
-            id: localID,
-            conversation_id: conversation.id,
-            sender: senderLogin ?? "me",
-            sender_avatar: nil,
-            content: "",
-            created_at: ISO8601DateFormatter().string(from: Date()),
-            edited_at: nil,
-            reactions: nil,
-            attachment_url: tmpURL.absoluteString,
-            type: "user",
-            reply_to_id: nil
-        )
-        messages.append(optimistic)
-        Haptics.impact(.light)
-
-        do {
-            let url = try await APIClient.shared.uploadAttachment(
-                data: compressed,
-                filename: usedFilename,
-                mimeType: usedMime,
-                conversationId: conversation.id
-            )
-            let msg = try await APIClient.shared.sendMessage(
-                conversationId: conversation.id,
-                body: "",
-                attachmentURL: url
-            )
-            // See note in `sendEncodedAttachments`. If the WebSocket
-            // raced ahead, the message is already in `messages`; drop
-            // the optimistic instead of replacing.
-            if ChatMessageView.seenIds.insert(msg.id).inserted {
-                if let idx = messages.firstIndex(where: { $0.id == localID }) {
-                    messages[idx] = msg
-                } else {
-                    messages.append(msg)
-                }
-            } else {
-                messages.removeAll { $0.id == localID }
-            }
-            try? FileManager.default.removeItem(at: tmpURL)
-        } catch {
-            self.error = error.localizedDescription
-            messages.removeAll { $0.id == localID }
-            ToastCenter.shared.show(.error, "Upload failed", error.localizedDescription)
-        }
-    }
 
     nonisolated private static func compressIfImage(
         data: Data, filename: String, mimeType: String

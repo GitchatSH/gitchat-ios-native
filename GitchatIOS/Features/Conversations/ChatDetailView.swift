@@ -598,7 +598,25 @@ struct ChatDetailView: View {
             Task { await vm.send() }
         }
         guard !images.isEmpty else { return }
-        Task { await vm.uploadImagesAndSend(images: images, senderLogin: auth.login) }
+        Task {
+            var attachments: [PendingAttachment] = []
+            for (i, img) in images.enumerated() {
+                if let (data, _, mime) = await ChatViewModel.encodeForUploadOffMain(
+                    image: img, filename: "image-\(i).jpg"
+                ) {
+                    attachments.append(PendingAttachment(
+                        clientAttachmentID: UUID().uuidString,
+                        sourceData: data,
+                        mimeType: mime,
+                        width: nil,
+                        height: nil,
+                        blurhash: nil
+                    ))
+                }
+            }
+            guard !attachments.isEmpty else { return }
+            vm.send(content: "", attachments: attachments)
+        }
     }
 
     /// Copy an image message to the system pasteboard using the raw
