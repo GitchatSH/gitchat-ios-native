@@ -173,7 +173,9 @@ struct APIClient {
     func getConversationMessages(id: String, cursor: String? = nil, limit: Int = 30) async throws -> MessagesResponse {
         var q = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let cursor { q.append(URLQueryItem(name: "cursor", value: cursor)) }
-        return try await request("messages/conversations/\(id)", query: q)
+        let resp: MessagesResponse = try await request("messages/conversations/\(id)", query: q)
+        print("[API-MESSAGES] id=\(id) | otherReadAt=\(resp.otherReadAt ?? "nil") | readCursors=\(resp.readCursors?.map { "\($0.login):\($0.readAt)" } ?? ["nil"])")
+        return resp
     }
 
     func createConversation(recipient: String) async throws -> Conversation {

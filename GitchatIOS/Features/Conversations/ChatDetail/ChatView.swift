@@ -46,6 +46,7 @@ struct ChatView: View {
     let participants: [ConversationParticipant]
     let blockedBannerLogin: String?
     let onUnblock: (String) -> Void
+    var totalUnreadCount: Int = 0
 
     /// Imperative actions wired from the caller.
     struct Actions {
@@ -276,6 +277,17 @@ struct ChatView: View {
                     .foregroundStyle(.primary)
                     .frame(width: 44, height: 44)
                     .modifier(GlassCircle())
+                    .overlay(alignment: .topTrailing) {
+                        if totalUnreadCount > 0 {
+                            Text(totalUnreadCount > 99 ? "99+" : "\(totalUnreadCount)")
+                                .font(.caption.weight(.bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .frame(minWidth: 22, minHeight: 22)
+                                .background(Color("AccentColor"), in: Capsule())
+                                .offset(x: 6, y: -6)
+                        }
+                    }
             }
             .buttonStyle(.plain)
 
@@ -340,8 +352,8 @@ struct ChatView: View {
                 items: visibleMessages,
                 typingUsers: Array(vm.typingUsers),
                 isGroup: vm.conversation.isGroup,
-                showSeen: showSeen,
-                seenAvatarURL: seenAvatarURL,
+                showSeen: false,
+                seenAvatarURL: nil,
                 pinnedIds: vm.pinnedIds,
                 readCursors: vm.readCursors,
                 pulsingId: pulsingId,
@@ -476,9 +488,6 @@ struct ChatView: View {
                 .padding(.top, showHeader ? 8 : 4)
                 .chatSwipeToReply(isMe: isMe, messageId: msg.id)
                 .onTapGesture(count: 2) { actions.onDoubleTapHeart(msg) }
-                if !cursors.isEmpty {
-                    seenByAvatarsRow(cursors: cursors, isMe: isMe, for: msg)
-                }
             }
         }
     }
@@ -691,6 +700,7 @@ extension ChatView {
                 currentReactions: currentUserReactions(for: t.message),
                 seenCount: seenByLogins(t.message).count,
                 seenLogins: seenByLogins(t.message),
+                isReadByOthers: vm.isReadByOthers(for: t.message),
                 participants: participants,
                 onReact: { emoji in actions.onReact(t.message, emoji) },
                 onMoreReactions: { actions.onMoreReactions(t.message) },

@@ -39,6 +39,7 @@ final class ChatViewModel: ObservableObject {
             if let cursors = cached.readCursors {
                 self.readCursors = cursors
             }
+            print("[SEEN-CACHE] otherReadAt: \(cached.otherReadAt ?? "nil") | readCursors: \(cached.readCursors ?? [:])")
             ChatMessageView.markSeen(cached.messages.map(\.id))
         }
     }
@@ -120,6 +121,7 @@ final class ChatViewModel: ObservableObject {
                 // pages from the previous session.
             }
             self.otherReadAt = resp.otherReadAt
+            print("[SEEN-LOAD] otherReadAt: \(resp.otherReadAt ?? "nil") | readCursors from API: \(resp.readCursors?.map { "\($0.login):\($0.readAt)" } ?? ["nil"])")
             if let cursors = resp.readCursors {
                 for c in cursors { readCursors[c.login] = c.readAt }
             }
@@ -159,12 +161,80 @@ final class ChatViewModel: ObservableObject {
         ))
     }
 
+    private static let isoFrac: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static func parseDate(_ s: String) -> Date? {
+        isoFrac.date(from: s) ?? isoBasic.date(from: s)
+    }
+
     func seenByLogins(for message: Message) -> [String] {
-        guard conversation.isGroup else { return [] }
-        let msgDate = message.created_at ?? ""
-        return readCursors.compactMap { login, readAt in
-            readAt >= msgDate ? login : nil
-        }.sorted()
+        let sender = message.sender
+        guard let msgDateStr = message.created_at,
+              let msgDate = Self.parseDate(msgDateStr) else { return [] }
+
+        var logins = Set<String>()
+
+        // 1. Per-user read cursors (from socket real-time events)
+        for (login, readAt) in readCursors {
+            guard login != sender,
+                  let readDate = Self.parseDate(readAt),
+                  readDate >= msgDate else { continue }
+            logins.insert(login)
+        }
+
+        // 2. Users who sent a message AFTER this one = they've been
+        //    in the conversation and seen it.
+        for msg in messages {
+            guard let createdAt = msg.created_at,
+                  let d = Self.parseDate(createdAt),
+                  d > msgDate,
+                  msg.sender != sender else { continue }
+            logins.insert(msg.sender)
+        }
+
+        // 3. Reaction users — if you reacted, you've seen it
+        if let rows = message.reactionRows {
+            for row in rows {
+                if let login = row.user_login, login != sender {
+                    logins.insert(login)
+                }
+            }
+        }
+
+        // 4. DM fallback: otherReadAt
+        if logins.isEmpty, !conversation.isGroup,
+           let readAt = otherReadAt,
+           let readDate = Self.parseDate(readAt),
+           readDate >= msgDate,
+           let other = conversation.other_user?.login, other != sender {
+            logins.insert(other)
+        }
+
+        return logins.sorted()
+    }
+
+    /// Returns true when we know at least one other user has read past
+    /// this message, even if we don't have per-user cursor details.
+    func isReadByOthers(for message: Message) -> Bool {
+        guard let msgDateStr = message.created_at,
+              let msgDate = Self.parseDate(msgDateStr) else { return false }
+        // Per-user cursors
+        let sender = message.sender
+        for (login, readAt) in readCursors {
+            if login != sender, let d = Self.parseDate(readAt), d >= msgDate { return true }
+        }
+        // otherReadAt fallback
+        if let readAt = otherReadAt, let d = Self.parseDate(readAt), d >= msgDate { return true }
+        return false
     }
 
     func seenCursorLogins(for message: Message, nextCreatedAt: String?) -> [String] {

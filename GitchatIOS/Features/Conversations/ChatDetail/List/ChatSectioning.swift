@@ -13,7 +13,16 @@ enum ChatSectioning {
         let messageIDs: [String]
     }
 
-    private static let iso = ISO8601DateFormatter()
+    private static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoBasic: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
     private static let dayKeyFmt: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -29,7 +38,7 @@ enum ChatSectioning {
         var currentKey = ""
         var currentIDs: [String] = []
         for m in messages {
-            let date = m.created_at.flatMap { iso.date(from: $0) } ?? Date()
+            let date = m.created_at.flatMap { iso.date(from: $0) ?? isoBasic.date(from: $0) } ?? Date()
             let key = dayKeyFmt.string(from: date)
             if key != currentKey {
                 if !currentIDs.isEmpty {
