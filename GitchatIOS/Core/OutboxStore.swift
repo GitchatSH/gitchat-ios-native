@@ -1,6 +1,24 @@
 import Foundation
 import Combine
 
+// MARK: - RetryClock (Task 2.7)
+
+protocol RetryClock {
+    func sleep(seconds: Double) async throws
+}
+
+struct RealRetryClock: RetryClock {
+    func sleep(seconds: Double) async throws {
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+}
+
+struct ImmediateClock: RetryClock {
+    func sleep(seconds: Double) async throws {
+        // no-op for tests — returns instantly
+    }
+}
+
 // MARK: - Attachment types (Task 2.3)
 
 struct PendingAttachment: Codable, Equatable {
@@ -68,15 +86,17 @@ final class OutboxStore: ObservableObject {
     static let shared = OutboxStore()
 
     private let api: APIClientProtocol
+    private let retryClock: RetryClock
 
-    /// Production singleton — uses the real APIClient.
+    /// Production singleton — uses the real APIClient and real clock.
     convenience init() {
-        self.init(api: APIClient.shared)
+        self.init(api: APIClient.shared, retryClock: RealRetryClock())
     }
 
-    /// Designated init — injects any APIClientProtocol for testability.
-    init(api: APIClientProtocol) {
+    /// Designated init — injects any APIClientProtocol and RetryClock for testability.
+    init(api: APIClientProtocol, retryClock: RetryClock = RealRetryClock()) {
         self.api = api
+        self.retryClock = retryClock
     }
 
     /// Hoisted to avoid per-call allocation — `toMessage` is invoked
@@ -158,6 +178,27 @@ final class OutboxStore: ObservableObject {
         runSend(for: list[idx])
     }
 
+    /// Cancels a pending message by removing it from the queue, but ONLY
+    /// when its current state is `.enqueued` or `.failed(...)`. In-flight
+    /// states (uploading, uploaded, sending, delivered) are left untouched —
+    /// interrupting an active URLSession task is V2 work.
+    @MainActor
+    func cancel(clientMessageID cmid: String) {
+        for (convId, list) in pending {
+            guard let idx = list.firstIndex(where: { $0.clientMessageID == cmid }) else { continue }
+            switch list[idx].state {
+            case .enqueued, .failed:
+                pending[convId]?.remove(at: idx)
+                if pending[convId]?.isEmpty == true {
+                    pending.removeValue(forKey: convId)
+                }
+            case .uploading, .uploaded, .sending, .delivered:
+                return  // V1: no-op on in-flight states
+            }
+            return
+        }
+    }
+
     /// Run the canonical send pipeline for an already-enqueued pending
     /// message. The send is appended to the conversation's FIFO queue so
     /// rapid taps result in serialized HTTP requests — preserving order
@@ -199,10 +240,12 @@ final class OutboxStore: ObservableObject {
                     updatePending(p)
                 } catch {
                     p.attempts += 1
-                    let retriable = isRetriableError(error)
+                    let retriable = isRetriableError(error) && p.attempts < 5
                     p.state = .failed(reason: "Upload failed: \(error)", retriable: retriable)
                     updatePending(p)
-                    // Retry scheduling is Task 2.7
+                    if retriable {
+                        scheduleRetry(p)
+                    }
                     return
                 }
             }
@@ -261,10 +304,12 @@ final class OutboxStore: ObservableObject {
             Haptics.error()
             ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
             p.attempts += 1
-            let retriable = isRetriableError(error)
+            let retriable = isRetriableError(error) && p.attempts < 5
             p.state = .failed(reason: "\(error)", retriable: retriable)
             updatePending(p)
-            // Retry scheduling is Task 2.7
+            if retriable {
+                scheduleRetry(p)
+            }
         }
     }
 
@@ -278,8 +323,9 @@ final class OutboxStore: ObservableObject {
         self.pending[p.conversationID] = list
     }
 
-    /// Returns true for transient errors that are worth retrying
-    /// automatically (Task 2.7 will wire these into the retry scheduler).
+    /// Returns true for transient errors worth retrying automatically.
+    /// 4xx HTTP errors are NOT retriable (client-side mistake); 5xx and
+    /// network errors are retriable.
     private func isRetriableError(_ error: Error) -> Bool {
         if let urlError = error as? URLError {
             return [
@@ -287,7 +333,38 @@ final class OutboxStore: ObservableObject {
                 .notConnectedToInternet, .cannotConnectToHost
             ].contains(urlError.code)
         }
+        if case .http(let code, _) = error as? APIError {
+            return code >= 500
+        }
         return false
+    }
+
+    /// Exponential backoff: attempt n → 2^(n+1) seconds, capped at 32s.
+    /// n=1→2s, n=2→4s, n=3→8s, n=4→16s, n=5→32s
+    private func backoffSeconds(forAttempt n: Int) -> Double {
+        let exp = pow(2.0, Double(n + 1))
+        return min(exp, 32.0)
+    }
+
+    /// Schedules a retry for `pending` after the appropriate backoff delay.
+    /// If the message has been removed from the queue (cancelled/delivered
+    /// concurrently), the retry is silently dropped.
+    @MainActor
+    private func scheduleRetry(_ pending: PendingMessage) {
+        let delay = backoffSeconds(forAttempt: pending.attempts)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await self.retryClock.sleep(seconds: delay)
+            // Confirm the pending still exists — might have been cancelled
+            // or delivered while we were sleeping.
+            guard self.pending[pending.conversationID]?
+                    .contains(where: { $0.clientMessageID == pending.clientMessageID }) == true
+            else { return }
+            var p = pending
+            p.state = .enqueued
+            self.updatePending(p)
+            self.runSend(for: p)
+        }
     }
 
     // MARK: - Delivery handler registration
@@ -312,6 +389,12 @@ final class OutboxStore: ObservableObject {
     // MARK: - Reads
 
     func pendingFor(_ conversationID: String) -> [PendingMessage] {
+        pending[conversationID] ?? []
+    }
+
+    /// Returns pending messages for a conversation. Synonym for `pendingFor`
+    /// with a named-parameter call-site style; added for test legibility.
+    func pending(conversationID: String) -> [PendingMessage] {
         pending[conversationID] ?? []
     }
 

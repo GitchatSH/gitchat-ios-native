@@ -27,6 +27,7 @@
 		BB22CC33DD44EE55FF66AA12 /* MockAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF66AA11 /* MockAPIClient.swift */; };
 		CC33DD44EE55FF66AA11BB23 /* Message+TestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC33DD44EE55FF66AA11BB22 /* Message+TestFixture.swift */; };
 		DD44EE55FF66AA11BB22CC34 /* OutboxStoreLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD44EE55FF66AA11BB22CC33 /* OutboxStoreLifecycleTests.swift */; };
+		EE55FF66AA11BB22CC33DD45 /* AsyncBlocker.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA11BB22CC33DD44 /* AsyncBlocker.swift */; };
 		15D2935141DC52D24193D42E /* MessageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59A17B5A12D4E5D6B5CB46D1 /* MessageCache.swift */; };
 		1F64E756A95BD31E664AAEE9 /* Skeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */; };
 		20081E843BE3E3BDF5E07E25 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EB0A8D1679C114641C9DB57 /* NotificationsView.swift */; };
@@ -354,6 +355,7 @@
 		AA11BB22CC33DD44EE55FF66 /* APIClient+Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Protocol.swift"; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF66AA11 /* MockAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAPIClient.swift; sourceTree = "<group>"; };
 		CC33DD44EE55FF66AA11BB22 /* Message+TestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Message+TestFixture.swift"; sourceTree = "<group>"; };
+		EE55FF66AA11BB22CC33DD44 /* AsyncBlocker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncBlocker.swift; sourceTree = "<group>"; };
 		DD44EE55FF66AA11BB22CC33 /* OutboxStoreLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxStoreLifecycleTests.swift; sourceTree = "<group>"; };
 		F0D8FDDB6F6CDBB4122B7CFE /* ComposerRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRegressionTests.swift; sourceTree = "<group>"; };
 		F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
@@ -703,6 +705,7 @@
 				6C2F57A00C4CFAFC24CD61DE /* StubURLProtocol.swift */,
 				BB22CC33DD44EE55FF66AA11 /* MockAPIClient.swift */,
 				CC33DD44EE55FF66AA11BB22 /* Message+TestFixture.swift */,
+				EE55FF66AA11BB22CC33DD44 /* AsyncBlocker.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -1228,6 +1231,7 @@
 				BB22CC33DD44EE55FF66AA12 /* MockAPIClient.swift in Sources */,
 				CC33DD44EE55FF66AA11BB23 /* Message+TestFixture.swift in Sources */,
 				DD44EE55FF66AA11BB22CC34 /* OutboxStoreLifecycleTests.swift in Sources */,
+				EE55FF66AA11BB22CC33DD45 /* AsyncBlocker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
