@@ -26,6 +26,7 @@ struct APIClient {
     let decoder: JSONDecoder
     let encoder: JSONEncoder
 
+    /// Production init — builds sessions with the standard configuration.
     init() {
         let headers: [AnyHashable: Any] = [
             "User-Agent": Config.userAgent,
@@ -49,6 +50,15 @@ struct APIClient {
         upCfg.httpAdditionalHeaders = headers
         self.uploadSession = URLSession(configuration: upCfg)
 
+        self.decoder = JSONDecoder()
+        self.encoder = JSONEncoder()
+    }
+
+    /// Test init — accepts an injected URLSession so tests can supply one
+    /// configured with StubURLProtocol.
+    init(session: URLSession, uploadSession: URLSession? = nil) {
+        self.session = session
+        self.uploadSession = uploadSession ?? session
         self.decoder = JSONDecoder()
         self.encoder = JSONEncoder()
     }
@@ -305,12 +315,14 @@ struct APIClient {
         body: String,
         replyTo: String? = nil,
         attachmentURL: String? = nil,
-        attachmentURLs: [String]? = nil
+        attachmentURLs: [String]? = nil,
+        clientMessageID: String? = nil
     ) async throws -> Message {
         struct Body: Encodable {
             let body: String
             let reply_to_id: String?
             let attachments: [[String: String]]?
+            let client_message_id: String?
         }
         var attachments: [[String: String]]? = nil
         if let many = attachmentURLs, !many.isEmpty {
@@ -318,7 +330,7 @@ struct APIClient {
         } else if let single = attachmentURL {
             attachments = [["url": single]]
         }
-        let req = Body(body: body, reply_to_id: replyTo, attachments: attachments)
+        let req = Body(body: body, reply_to_id: replyTo, attachments: attachments, client_message_id: clientMessageID)
         return try await request("messages/conversations/\(conversationId)", method: "POST", body: req)
     }
 

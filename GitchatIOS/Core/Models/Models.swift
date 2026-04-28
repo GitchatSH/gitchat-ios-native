@@ -136,6 +136,7 @@ struct MessageAttachment: Codable, Hashable, Identifiable {
 
 struct Message: Codable, Identifiable, Hashable {
     let id: String
+    let client_message_id: String?  // nil for legacy / extension-sent messages
     let conversation_id: String?
     let sender: String
     let sender_avatar: String?
@@ -155,6 +156,7 @@ struct Message: Codable, Identifiable, Hashable {
     // object `{ login, avatar_url }`, and may use slightly different keys.
     private enum CodingKeys: String, CodingKey {
         case id, sender, content, type, reply, attachments
+        case client_message_id
         case sender_login, senderLogin
         case conversation_id, conversationId
         case sender_avatar, senderAvatar, sender_avatar_url
@@ -174,6 +176,7 @@ struct Message: Codable, Identifiable, Hashable {
 
     init(
         id: String,
+        client_message_id: String? = nil,
         conversation_id: String?,
         sender: String,
         sender_avatar: String?,
@@ -190,6 +193,7 @@ struct Message: Codable, Identifiable, Hashable {
         reactionRows: [RawReactionRow]? = nil
     ) {
         self.id = id
+        self.client_message_id = client_message_id
         self.conversation_id = conversation_id
         self.sender = sender
         self.sender_avatar = sender_avatar
@@ -209,6 +213,7 @@ struct Message: Codable, Identifiable, Hashable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try c.decode(String.self, forKey: .id)
+        self.client_message_id = try c.decodeIfPresent(String.self, forKey: .client_message_id)
         self.conversation_id = try c.decodeIfPresent(String.self, forKey: .conversation_id)
             ?? c.decodeIfPresent(String.self, forKey: .conversationId)
 
@@ -273,6 +278,7 @@ struct Message: Codable, Identifiable, Hashable {
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(client_message_id, forKey: .client_message_id)
         try c.encodeIfPresent(conversation_id, forKey: .conversation_id)
         try c.encode(sender, forKey: .sender)
         try c.encodeIfPresent(sender_avatar, forKey: .sender_avatar)
