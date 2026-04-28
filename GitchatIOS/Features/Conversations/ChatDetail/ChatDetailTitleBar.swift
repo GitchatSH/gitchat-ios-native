@@ -4,6 +4,7 @@ import SwiftUI
 ///   1. "syncing up..." while a sync is in flight
 ///   2. for 1:1 chats: "online" or "last seen ..." for the other user
 ///   3. for group chats: "N online" (at least 1)
+///   4. topic targets: "emoji name" title + "in <group>" subtitle + chevron
 struct ChatDetailTitleBar: View {
     let conversation: Conversation
     @ObservedObject var vm: ChatViewModel
@@ -11,6 +12,42 @@ struct ChatDetailTitleBar: View {
     @ObservedObject private var presence = PresenceStore.shared
 
     var body: some View {
+        if case .topic(let topic, let parent) = vm.target {
+            topicHeader(topic: topic, parent: parent)
+        } else {
+            conversationHeader
+        }
+    }
+
+    // MARK: - Topic header
+
+    @ViewBuilder
+    private func topicHeader(topic: Topic, parent: Conversation) -> some View {
+        VStack(spacing: -2) {
+            HStack(spacing: 4) {
+                Text("\(topic.displayEmoji) \(topic.name)")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+            HStack(spacing: 2) {
+                Text("in \(parent.displayTitle)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
+    }
+
+    // MARK: - Conversation header
+
+    @ViewBuilder
+    private var conversationHeader: some View {
         VStack(spacing: -2) {
             HStack(spacing: 4) {
                 Text(conversation.displayTitle)

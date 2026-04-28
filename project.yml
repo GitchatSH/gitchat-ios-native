@@ -10,6 +10,8 @@ schemes:
     build:
       targets:
         GitchatIOS: all
+        GitchatIOSTests: [test]
+        GitchatIOSUITests: [test]
     run:
       config: Debug
     test:

@@ -48,6 +48,64 @@ struct PendingMessage: Codable, Equatable {
     var attempts: Int
     var createdAt: Date
     var state: State
+    /// Non-nil when this message targets a topic rather than a plain
+    /// conversation. Both fields are Optional so (a) old persisted outbox
+    /// items decode cleanly via Codable (decoder sets to nil), and
+    /// (b) plain-conversation pending entries pass `nil`.
+    let topicID: String?
+    let parentConversationID: String?         // present iff topicID is non-nil
+
+    /// Backward-compat convenience init for existing call sites and tests
+    /// that don't carry topic context. The synthesized memberwise init
+    /// (with all 10 fields including topicID + parentConversationID) is
+    /// still available for topic-aware callers — see ChatViewModel.send
+    /// where pendingTopicContext drives the values.
+    init(
+        clientMessageID: String,
+        conversationID: String,
+        content: String,
+        replyToID: String? = nil,
+        attachments: [PendingAttachment] = [],
+        attempts: Int = 0,
+        createdAt: Date = Date(),
+        state: State
+    ) {
+        self.clientMessageID = clientMessageID
+        self.conversationID = conversationID
+        self.content = content
+        self.replyToID = replyToID
+        self.attachments = attachments
+        self.attempts = attempts
+        self.createdAt = createdAt
+        self.state = state
+        self.topicID = nil
+        self.parentConversationID = nil
+    }
+
+    /// Topic-aware init. Use from ChatViewModel.send when target is `.topic`.
+    init(
+        clientMessageID: String,
+        conversationID: String,
+        content: String,
+        replyToID: String?,
+        attachments: [PendingAttachment],
+        attempts: Int,
+        createdAt: Date,
+        state: State,
+        topicID: String?,
+        parentConversationID: String?
+    ) {
+        self.clientMessageID = clientMessageID
+        self.conversationID = conversationID
+        self.content = content
+        self.replyToID = replyToID
+        self.attachments = attachments
+        self.attempts = attempts
+        self.createdAt = createdAt
+        self.state = state
+        self.topicID = topicID
+        self.parentConversationID = parentConversationID
+    }
 
     static func optimisticID(for clientMessageID: String) -> String {
         "local-\(clientMessageID)"
@@ -305,13 +363,28 @@ final class OutboxStore: ObservableObject {
                 if let bh = att.blurhash { dict["blurhash"] = bh }
                 return dict
             }
-            let serverMsg = try await api.sendMessage(
-                conversationID: p.conversationID,
-                body: p.content,
-                attachments: attachmentDicts,
-                replyToID: p.replyToID,
-                clientMessageID: p.clientMessageID
-            )
+            let serverMsg: Message
+            if let topicID = p.topicID, let parentID = p.parentConversationID {
+                // Topic send — bypass APIClientProtocol (which is hardcoded to
+                // /messages/conversations/{id}) and go directly through the
+                // topic-prefixed path. APIClientProtocol-based testability is
+                // unavailable for topic sends in v1; revisit by extending the
+                // protocol with a topicID/parentConversationID overload when
+                // topic outbox tests are needed.
+                serverMsg = try await APIClient.shared.sendMessage(
+                    at: TopicEndpoints.sendMessage(parentId: parentID, topicId: topicID),
+                    body: p.content,
+                    replyTo: p.replyToID
+                )
+            } else {
+                serverMsg = try await api.sendMessage(
+                    conversationID: p.conversationID,
+                    body: p.content,
+                    attachments: attachmentDicts,
+                    replyToID: p.replyToID,
+                    clientMessageID: p.clientMessageID
+                )
+            }
             // Re-stamp created_at with the client tap time (matching
             // ms-precision format) so the bubble doesn't jump order
             // relative to still-pending siblings. See original comment

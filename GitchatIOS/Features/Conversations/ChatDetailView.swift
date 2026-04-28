@@ -44,6 +44,8 @@ struct ChatDetailView: View {
     @State private var reportReason: String = "Spam"
     @State private var reportDetail: String = ""
     @State private var showReportConfirm = false
+    @State private var resolvedTarget: ChatTarget? = nil
+    @State private var showTopicSheet = false
     @State private var composerVisible = true
     @State private var isAtBottom: Bool = true
     @State private var scrollToBottomToken: Int = 0
@@ -144,48 +146,106 @@ struct ChatDetailView: View {
     // MARK: - Body
 
     var body: some View {
-        chatShell
-            .task { await onAppearTask() }
-            .onAppear {
-                if let mid = router.pendingMessageId {
-                    router.pendingMessageId = nil
-                    // Set jump target immediately — the list retries
-                    // each update cycle until the row appears. The
-                    // actual page-loading happens in onAppearTask
-                    // AFTER vm.load() completes to avoid race conditions.
-                    pendingJumpId = mid
-                }
+        Group {
+            if resolvedTarget != nil {
+                chatShell
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .onChange(of: scenePhase) { phase in
-                if phase == .active { Task { await vm.load() } }
-            }
-            .onChange(of: vm.messages.last?.id) { _ in
-                guard let last = vm.messages.last else { return }
-                // Tail-follow rules:
-                // - Always scroll on own sends (the user just hit
-                //   Send and wants to see their bubble).
-                // - Scroll on incoming only when the user is still
-                //   parked near the bottom (mirrors iMessage /
-                //   Telegram). Otherwise leave the offset alone so
-                //   browsing old messages isn't yanked.
-                if last.sender == auth.login || isAtBottom {
-                    scrollToBottomToken &+= 1
-                }
-            }
-            .onChange(of: vm.draft) { newValue in
-                socket.emitTyping(
-                    conversationId: vm.conversation.id,
-                    isTyping: !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        .task(id: vm.conversation.id) { await resolveTarget() }
+        .sheet(isPresented: $showTopicSheet) {
+            if case .topic(_, let parent) = resolvedTarget {
+                TopicListSheet(
+                    parent: parent,
+                    activeTopicId: resolvedTarget?.conversationId,
+                    onPickTopic: { picked in
+                        vm.setTarget(.topic(picked, parent: parent))
+                        resolvedTarget = .topic(picked, parent: parent)
+                        showTopicSheet = false
+                    }
                 )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
-            .onChange(of: photoItems) { newItems in
-                guard !newItems.isEmpty else { return }
-                Task { await routePickedPhotos(newItems) }
+        }
+        .task { await onAppearTask() }
+        .onAppear {
+            if let mid = router.pendingMessageId {
+                router.pendingMessageId = nil
+                // Set jump target immediately — the list retries
+                // each update cycle until the row appears. The
+                // actual page-loading happens in onAppearTask
+                // AFTER vm.load() completes to avoid race conditions.
+                pendingJumpId = mid
             }
-            .onDisappear { onDisappearCleanup() }
-            .onReceive(NotificationCenter.default.publisher(for: .gitchatConversationUpdated)) { _ in
-                syncMutedFromCache()
+            let parentConvId = vm.conversation.id
+            let topicsEnabled = vm.conversation.hasTopicsEnabled
+            socket.onReconnect = {
+                guard topicsEnabled else { return }
+                Task { @MainActor in
+                    if let fresh = try? await APIClient.shared.fetchTopics(parentId: parentConvId) {
+                        TopicListStore.shared.setTopics(fresh, forParent: parentConvId)
+                    }
+                }
             }
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { Task { await vm.load() } }
+        }
+        .onChange(of: vm.messages.last?.id) { _ in
+            guard let last = vm.messages.last else { return }
+            // Tail-follow rules:
+            // - Always scroll on own sends (the user just hit
+            //   Send and wants to see their bubble).
+            // - Scroll on incoming only when the user is still
+            //   parked near the bottom (mirrors iMessage /
+            //   Telegram). Otherwise leave the offset alone so
+            //   browsing old messages isn't yanked.
+            if last.sender == auth.login || isAtBottom {
+                scrollToBottomToken &+= 1
+            }
+        }
+        .onChange(of: vm.draft) { newValue in
+            socket.emitTyping(
+                conversationId: vm.conversation.id,
+                isTyping: !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+        }
+        .onChange(of: photoItems) { newItems in
+            guard !newItems.isEmpty else { return }
+            Task { await routePickedPhotos(newItems) }
+        }
+        .onDisappear { onDisappearCleanup() }
+        .onReceive(NotificationCenter.default.publisher(for: .gitchatConversationUpdated)) { _ in
+            syncMutedFromCache()
+        }
+    }
+
+    @MainActor
+    private func resolveTarget() async {
+        if vm.conversation.hasTopicsEnabled {
+            do {
+                let topics = try await APIClient.shared.fetchTopics(parentId: vm.conversation.id)
+                TopicListStore.shared.setTopics(topics, forParent: vm.conversation.id)
+                let general = topics.first(where: { $0.is_general }) ?? topics.first
+                let target: ChatTarget = general.map { .topic($0, parent: vm.conversation) }
+                    ?? .conversation(vm.conversation)
+                if resolvedTarget == nil {
+                    resolvedTarget = target
+                    vm.setTarget(target)
+                }
+            } catch {
+                if resolvedTarget == nil {
+                    resolvedTarget = .conversation(vm.conversation)
+                }
+            }
+        } else {
+            if resolvedTarget == nil {
+                resolvedTarget = .conversation(vm.conversation)
+            }
+        }
     }
 
     @ViewBuilder
@@ -232,7 +292,11 @@ struct ChatDetailView: View {
                     conversation: vm.conversation,
                     vm: vm,
                     onTap: {
-                        if vm.conversation.isGroup { showMembers = true }
+                        if case .topic = vm.target {
+                            showTopicSheet = true
+                        } else if vm.conversation.isGroup {
+                            showMembers = true
+                        }
                     }
                 )
             }
@@ -420,7 +484,11 @@ struct ChatDetailView: View {
         }
         a.onBack = { dismiss() }
         a.onHeaderTap = {
-            if vm.conversation.isGroup { showMembers = true }
+            if case .topic = vm.target {
+                showTopicSheet = true
+            } else if vm.conversation.isGroup {
+                showMembers = true
+            }
         }
         a.headerMenuContent = AnyView(headerMenuItems)
         return a
@@ -832,8 +900,14 @@ struct ChatDetailView: View {
         // it never arrives — e.g. WS disconnect, local API without WS).
         // Both handlers match by client_message_id first (replaces the
         // optimistic placeholder), then fall back to seenIds dedup.
+        // Keyed by `vm.target.conversationId` (topic id for topic targets,
+        // parent id for plain conversation) to match `PendingMessage.conversationID`.
+        // The socket handler's `conversation_id == vm.conversation.id` guard
+        // (vm.conversation = parent for topic) naturally filters out topic
+        // messages, which are routed via `Notification.gitchatTopicEvent`
+        // to ChatViewModel.handle(topicEvent:.message) instead.
         OutboxStore.shared.registerDeliveryHandler(
-            conversationID: vm.conversation.id,
+            conversationID: vm.target.conversationId,
             ChatDetailViewBindings.makeOutboxDeliveryHandler(vm: vm)
         )
         socket.onMessageSent = ChatDetailViewBindings.makeSocketMessageSentHandler(vm: vm)
@@ -886,14 +960,15 @@ struct ChatDetailView: View {
 
     private func syncMutedFromCache() {
         guard let fresh = ConversationsCache.shared.get()?.first(where: { $0.id == vm.conversation.id }) else { return }
-        vm.conversation = fresh
+        vm.updateConversation(fresh)
         vm.isMuted = fresh.is_muted == true
     }
 
     private func onDisappearCleanup() {
-        OutboxStore.shared.unregisterDeliveryHandler(conversationID: vm.conversation.id)
+        OutboxStore.shared.unregisterDeliveryHandler(conversationID: vm.target.conversationId)
         socket.unsubscribe(conversation: vm.conversation.id)
         socket.emitTyping(conversationId: vm.conversation.id, isTyping: false)
+        socket.onReconnect = nil
         if socket.currentConversationId == vm.conversation.id {
             socket.currentConversationId = nil
             ActiveConversationTracker.shared.id = nil

@@ -20,6 +20,34 @@
                ReferencedContainer = "container:GitchatIOS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "45A48EBFA571E78841077352"
+               BuildableName = "GitchatIOSTests.xctest"
+               BlueprintName = "GitchatIOSTests"
+               ReferencedContainer = "container:GitchatIOS.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "31FF3033EBD507A35E482DDA"
+               BuildableName = "GitchatIOSUITests.xctest"
+               BlueprintName = "GitchatIOSUITests"
+               ReferencedContainer = "container:GitchatIOS.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction

@@ -24,6 +24,12 @@ extension NSNotification.Name {
     /// a stale avatar / name until the next manual refresh.
     /// `userInfo`: `id: String`, `name: String?`, `avatarUrl: String?`.
     static let gitchatConversationMetadataChanged = NSNotification.Name("gitchat.conversationMetadataChanged")
+
+    /// Posted on the main actor for every incoming topic Socket.IO event.
+    /// The `object` is the `TopicSocketEvent`. Multiple consumers
+    /// (TopicListStore, ChatViewModel, ConversationsCache) can subscribe
+    /// to this without competing for the single `onTopicEvent` callback.
+    static let gitchatTopicEvent = NSNotification.Name("gitchat.topicEvent")
 }
 
 @MainActor
@@ -55,6 +61,10 @@ final class SocketClient: ObservableObject {
     var onConversationRead: ((String, String, String?) -> Void)? // conversationId, login, readAt
     var onMessagePinned: ((String, String) -> Void)? // conversationId, messageId
     var onMessageUnpinned: ((String, String) -> Void)? // conversationId, messageId
+    var onTopicEvent: ((TopicSocketEvent) -> Void)?
+    /// Fires after the existing reconnect re-subscribe sweep. Use to re-fetch
+    /// state that may have drifted during the offline window (e.g. topic list).
+    var onReconnect: (() -> Void)?
 
     private init() {}
 
@@ -93,6 +103,7 @@ final class SocketClient: ObservableObject {
                 // subscribed to so the WS server resumes streaming
                 // their online/offline status after a disconnect.
                 PresenceStore.shared.resubscribeAll()
+                self?.onReconnect?()
             }
         }
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
@@ -113,6 +124,21 @@ final class SocketClient: ObservableObject {
             Task { @MainActor in
                 self?.onConversationUpdated?()
                 NotificationCenter.default.post(name: .gitchatConversationUpdated, object: nil)
+            }
+        }
+        let topicEvents = [
+            "topic:created", "topic:updated", "topic:archived",
+            "topic:pinned", "topic:unpinned", "topic:settings-updated",
+            "topic:message",
+        ]
+        for evtName in topicEvents {
+            socket.on(evtName) { [weak self] data, _ in
+                guard let payload = self?.payloadDict(data),
+                      let evt = TopicSocketEvent.from(eventName: evtName, payload: payload) else { return }
+                Task { @MainActor in
+                    self?.onTopicEvent?(evt)
+                    NotificationCenter.default.post(name: .gitchatTopicEvent, object: evt)
+                }
             }
         }
         let presenceHandler: NormalCallback = { [weak self] data, _ in
@@ -220,5 +246,19 @@ final class SocketClient: ObservableObject {
 
     func emitTyping(conversationId: String, isTyping: Bool) {
         socket?.emit(isTyping ? "typing:start" : "typing:stop", ["conversationId": conversationId])
+    }
+
+    // MARK: - Private helpers
+
+    /// Unwraps a Socket.IO event payload from either of two BE shapes:
+    ///   - flat: `[{ ...fields }]`  → use the dict directly
+    ///   - enveloped: `[{ event_name, data: { ...fields } }]` → unwrap `data`
+    /// Both shapes appear across topic events (extension confirms enveloped
+    /// for `topic:message`, flat for `topic:archived`). Existing non-topic
+    /// handlers in this file use the flat shape only — leaving them on the
+    /// raw `data.first as? [String: Any]` path so behavior there is unchanged.
+    private func payloadDict(_ data: [Any]) -> [String: Any]? {
+        guard let dict = data.first as? [String: Any] else { return nil }
+        return (dict["data"] as? [String: Any]) ?? dict
     }
 }

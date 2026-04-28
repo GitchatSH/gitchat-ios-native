@@ -78,7 +78,10 @@ final class ConversationsViewModel: ObservableObject {
             updated_at: c.updated_at,
             is_muted: c.is_muted,
             has_mention: c.has_mention,
-            has_reaction: c.has_reaction
+            has_reaction: c.has_reaction,
+            topics_enabled: c.topics_enabled,
+            has_topics: c.has_topics,
+            topic_chips: c.topic_chips
         )
         ConversationsCache.shared.store(conversations)
     }
@@ -930,6 +933,26 @@ struct ConversationRow: View {
         return conversation.previewText ?? ""
     }
 
+    /// Inline topic indicator prefix for topics-enabled groups, e.g.
+    /// `"🚀 Debug · "` rendered before the preview text. Returns empty
+    /// AttributedString for non-topic groups or when no chip is available.
+    private var topicChipPrefix: AttributedString {
+        guard conversation.hasTopicsEnabled,
+              let chip = conversation.latestTopicChip else { return AttributedString("") }
+        var s = AttributedString("\(chip.displayEmoji) \(chip.name) · ")
+        s.foregroundColor = .secondary
+        return s
+    }
+
+    /// Compose the preview line with optional topic chip prefix.
+    private var previewAttributed: AttributedString {
+        var line = topicChipPrefix
+        var body = AttributedString(previewWithoutPhotoEmoji)
+        body.foregroundColor = secondaryTextColor
+        line += body
+        return line
+    }
+
     @ViewBuilder
     private var previewContent: some View {
         if isLastMessageSystem {
@@ -940,14 +963,12 @@ struct ConversationRow: View {
                 .lineLimit(1)
         } else if conversation.isGroup && isOutgoing {
             // Group outgoing — preview only, "You" shown on sender line above
-            Text(previewWithoutPhotoEmoji)
+            Text(previewAttributed)
                 .font(.subheadline)
-                .foregroundStyle(secondaryTextColor)
                 .lineLimit(1)
         } else if conversation.isGroup {
-            Text(previewWithoutPhotoEmoji)
+            Text(previewAttributed)
                 .font(.subheadline)
-                .foregroundStyle(secondaryTextColor)
                 .lineLimit(1)
         } else {
             // DM — allow 2 lines

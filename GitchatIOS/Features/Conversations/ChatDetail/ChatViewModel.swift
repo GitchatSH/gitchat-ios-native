@@ -23,19 +23,152 @@ final class ChatViewModel: ObservableObject {
     @Published var nextCursor: String?
     @Published var isLoadingMore = false
 
-    @Published var conversation: Conversation
+    @Published private(set) var target: ChatTarget
+
+    /// Legacy accessor. Returns the underlying `Conversation` for `.conversation`
+    /// targets and the parent conversation for `.topic` targets — sufficient for
+    /// every existing read site (draft key, mute lookup, participant list, etc.).
+    var conversation: Conversation {
+        switch target {
+        case .conversation(let c): return c
+        case .topic(_, let p):     return p
+        }
+    }
+
     private var draftKey: String { "gitchat.draft.\(conversation.id)" }
 
+    /// Outbox store used for pending sends. Injected so tests can supply a
+    /// fake. Production callers omit and get the shared singleton.
     private let outbox: OutboxStore
 
-    init(conversation: Conversation, outbox: OutboxStore = .shared) {
+    // MARK: - Pending message topic context
+
+    /// Derives (parentID, topicID) from the active target for use when
+    /// constructing `OutboxStore.PendingMessage`. Both values are nil for
+    /// plain-conversation targets so old pending items decode cleanly.
+    private var pendingTopicContext: (parentID: String?, topicID: String?) {
+        switch target {
+        case .conversation: return (nil, nil)
+        case .topic(let t, let p): return (p.id, t.id)
+        }
+    }
+
+    // MARK: - Endpoint resolution
+
+    var sendEndpoint: String {
+        switch target {
+        case .conversation(let c):
+            return "messages/conversations/\(c.id)"
+        case .topic(let t, let p):
+            return "messages/conversations/\(p.id)/topics/\(t.id)/messages"
+        }
+    }
+
+    var fetchEndpoint: String {
+        switch target {
+        case .conversation(let c):
+            return "messages/conversations/\(c.id)"
+        case .topic(let t, let p):
+            return "messages/conversations/\(p.id)/topics/\(t.id)/messages"
+        }
+    }
+
+    #if DEBUG
+    var testHook_sendEndpoint: String { sendEndpoint }
+    #endif
+
+    // MARK: - Topic event observer
+
+    private var topicEventObserver: NSObjectProtocol?
+
+    private func observeTopicEvents() {
+        guard topicEventObserver == nil else { return }
+        topicEventObserver = NotificationCenter.default.addObserver(
+            forName: .gitchatTopicEvent, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let evt = note.object as? TopicSocketEvent else { return }
+            Task { @MainActor [weak self] in
+                self?.handle(topicEvent: evt)
+            }
+        }
+    }
+
+    private func handle(topicEvent evt: TopicSocketEvent) {
+        switch evt {
+        case .message(let parentId, let topicId, let message):
+            ConversationsCache.shared.patchLastMessage(
+                conversationId: parentId,
+                text: message.content.isEmpty ? nil : message.content,
+                at: message.created_at
+            )
+            if target.conversationId == topicId {
+                guard ChatMessageView.seenIds.insert(message.id).inserted else { return }
+                messages.append(message)
+            } else {
+                TopicListStore.shared.bumpUnread(topicId: topicId, parentId: parentId, by: 1)
+            }
+        case .archived(let parentId, let topicId):
+            if target.conversationId == topicId {
+                ToastCenter.shared.show(.info, "This topic was archived", nil)
+                Task { await switchTargetAfterArchive(parentId: parentId) }
+            }
+        case .settingsUpdated(let parentId, let topicsEnabled):
+            if target.parentConversationId == parentId, !topicsEnabled {
+                ToastCenter.shared.show(.info, "Topics disabled by admin", nil)
+                if case .topic(_, let parent) = target {
+                    setTarget(.conversation(parent))
+                }
+            }
+        default:
+            break
+        }
+    }
+
+    private func switchTargetAfterArchive(parentId: String) async {
+        guard case .topic(_, let parent) = target else { return }
+        do {
+            let topics = try await APIClient.shared.fetchTopics(parentId: parent.id)
+            guard case .topic = target else { return }    // user already moved on
+            if let general = topics.first(where: { $0.is_general }) {
+                setTarget(.topic(general, parent: parent))
+            } else {
+                setTarget(.conversation(parent))
+            }
+        } catch {
+            guard case .topic = target else { return }
+            setTarget(.conversation(parent))
+        }
+    }
+
+    private var loadGeneration: Int = 0
+
+    func setTarget(_ newTarget: ChatTarget) {
+        guard newTarget.conversationId != target.conversationId else { return }
+        loadGeneration &+= 1
+        self.target = newTarget
+        self.messages = []
+        Task { await self.load() }
+    }
+
+    deinit {
+        topicEventObserver.map(NotificationCenter.default.removeObserver)
+    }
+
+    init(target: ChatTarget, outbox: OutboxStore = .shared) {
+        self.target = target
         self.outbox = outbox
-        self.conversation = conversation
-        self.isMuted = conversation.is_muted == true
-        if let saved = UserDefaults.standard.string(forKey: "gitchat.draft.\(conversation.id)") {
+        let conv: Conversation
+        switch target {
+        case .conversation(let c): conv = c
+        case .topic(_, let p):     conv = p
+        }
+        self.isMuted = conv.is_muted == true
+        if let saved = UserDefaults.standard.string(forKey: "gitchat.draft.\(conv.id)") {
             self.draft = saved
         }
-        if let cached = MessageCache.shared.get(conversation.id) {
+        if let cached = MessageCache.shared.get(conv.id) {
+            // Filter out optimistic pending entries — they live in the
+            // outbox now and are merged in render via `visibleMessages`.
             self.messages = cached.messages.filter { !$0.id.hasPrefix("local-") }
             self.nextCursor = cached.nextCursor
             self.otherReadAt = cached.otherReadAt
@@ -44,6 +177,14 @@ final class ChatViewModel: ObservableObject {
             }
             ChatMessageView.markSeen(self.messages.map(\.id))
         }
+        observeTopicEvents()
+    }
+
+    /// Backward-compatible convenience for the legacy `ChatViewModel(conversation:)`
+    /// call sites (`ChatDetailView.init` etc.). Wraps the conversation in a
+    /// `.conversation` target.
+    convenience init(conversation: Conversation, outbox: OutboxStore = .shared) {
+        self.init(target: .conversation(conversation), outbox: outbox)
     }
 
     // MARK: - Render-time merge (pending + server)
@@ -57,7 +198,7 @@ final class ChatViewModel: ObservableObject {
     /// `created_at` is an ISO8601 string; lexicographic `<` sorts these
     /// chronologically.
     var visibleMessages: [Message] {
-        let pending = OutboxStore.shared.pendingFor(conversation.id)
+        let pending = OutboxStore.shared.pendingFor(target.conversationId)
             .map(OutboxStore.shared.toMessage)
         guard !pending.isEmpty else { return messages }
         // Pending projections share id "local-<cmid>" with optimistic placeholders
@@ -88,6 +229,7 @@ final class ChatViewModel: ObservableObject {
     // MARK: - Loading
 
     func load() async {
+        let myGen = loadGeneration
         let hadCache = !messages.isEmpty
         if !hadCache { isLoading = true }
         // Only show "syncing" when there's no cached data — returning
@@ -98,7 +240,8 @@ final class ChatViewModel: ObservableObject {
             isSyncing = false
         }
         do {
-            let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
+            let resp = try await APIClient.shared.getMessages(at: fetchEndpoint)
+            guard myGen == loadGeneration else { return }
             let fetched = Array(resp.messages.reversed())
             // Merge the fetched newest page into our (possibly larger)
             // cached list instead of overwriting it. This preserves
@@ -129,11 +272,13 @@ final class ChatViewModel: ObservableObject {
 
     func loadMoreIfNeeded() async {
         guard !isLoadingMore, let cursor = nextCursor else { return }
+        let myGen = loadGeneration
         isLoadingMore = true; defer { isLoadingMore = false }
         do {
-            let resp = try await APIClient.shared.getConversationMessages(
-                id: conversation.id, cursor: cursor
+            let resp = try await APIClient.shared.getMessages(
+                at: fetchEndpoint, cursor: cursor
             )
+            guard myGen == loadGeneration else { return }
             let older = Array(resp.messages.reversed())
             let known = Set(messages.map(\.id))
             let deduped = older.filter { !known.contains($0.id) }
@@ -323,8 +468,8 @@ final class ChatViewModel: ObservableObject {
         if let createdAt {
             let cursor = Self.offsetCursor(createdAt, bySeconds: 1)
             do {
-                let resp = try await APIClient.shared.getConversationMessages(
-                    id: conversation.id, cursor: cursor, limit: 50
+                let resp = try await APIClient.shared.getMessages(
+                    at: fetchEndpoint, cursor: cursor, limit: 50
                 )
                 let page = resp.messages.reversed()
                 let known = Set(messages.map(\.id))
@@ -348,8 +493,8 @@ final class ChatViewModel: ObservableObject {
         while let c = cursor, attempts < 10 {
             attempts += 1
             do {
-                let resp = try await APIClient.shared.getConversationMessages(
-                    id: conversation.id, cursor: c
+                let resp = try await APIClient.shared.getMessages(
+                    at: fetchEndpoint, cursor: c
                 )
                 let older = resp.messages.reversed()
                 let known = Set(messages.map(\.id))
@@ -468,19 +613,25 @@ final class ChatViewModel: ObservableObject {
                 }
                 editingMessage = nil
             } else {
-                // Lowercase: see note in send(content:attachments:replyTo:).
+                // Lowercase cmid: see note in send(content:attachments:replyTo:).
                 let cmid = UUID().uuidString.lowercased()
+                let ctx = pendingTopicContext
                 let pending = PendingMessage(
                     clientMessageID: cmid,
-                    conversationID: conversation.id,
+                    // Outbox keys by `conversationID`. For topic targets we
+                    // key by the topic id (the "active chat surface"), so
+                    // pending bubbles render in the correct view.
+                    conversationID: target.conversationId,
                     content: body,
                     replyToID: replyId,
                     attachments: [],
                     attempts: 0,
                     createdAt: Date(),
-                    state: .enqueued
+                    state: .enqueued,
+                    topicID: ctx.topicID,
+                    parentConversationID: ctx.parentID
                 )
-                OutboxStore.shared.enqueue(pending)  // enqueue now auto-fires runSend
+                outbox.enqueue(pending)  // enqueue now auto-fires runSend
                 Haptics.impact(.light)
             }
         } catch {
@@ -595,7 +746,7 @@ final class ChatViewModel: ObservableObject {
     /// race where the user is still looking at the stale header.
     func applyLocalMetadata(name: String?, avatarUrl: String?) {
         let c = conversation
-        conversation = Conversation(
+        target = .conversation(Conversation(
             id: c.id,
             type: c.type,
             is_group: c.is_group,
@@ -615,8 +766,11 @@ final class ChatViewModel: ObservableObject {
             updated_at: c.updated_at,
             is_muted: c.is_muted,
             has_mention: c.has_mention,
-            has_reaction: c.has_reaction
-        )
+            has_reaction: c.has_reaction,
+            topics_enabled: c.topics_enabled,
+            has_topics: c.has_topics,
+            topic_chips: c.topic_chips
+        ))
     }
 
     func toggleMute() async {
@@ -704,6 +858,17 @@ final class ChatViewModel: ObservableObject {
     }
 
     // MARK: - Attachments
+    //
+    // Note: main rewrote attachment send to go through OutboxStore's FSM
+    // (PendingAttachment.uploaded → executeSend Phase 1 upload →
+    //  Phase 2 send). Vincent's topic feature only added topicID/
+    // parentConversationID context to PendingMessage; the upload pipeline
+    // is unchanged. Topic-targeted attachment sends route through
+    // OutboxStore.executeSend's topic branch which currently uses the
+    // simpler `sendMessage(at:body:replyTo:attachmentURL:attachmentURLs:)`
+    // path (no full attachment metadata). For full topic attachment
+    // parity (width/height/blurhash), extend that variant in a follow-up
+    // — out of scope for this merge.
 
     nonisolated private static func compressIfImage(
         data: Data, filename: String, mimeType: String
@@ -768,6 +933,21 @@ final class ChatViewModel: ObservableObject {
         }.value
     }
 
+}
+
+// MARK: - Target mutation
+
+extension ChatViewModel {
+    /// Replace the current target's conversation with a refreshed copy.
+    /// Used by `syncMutedFromCache` and similar call sites that receive
+    /// an updated `Conversation` from the cache or WebSocket and need
+    /// to propagate it into the view model. Only refreshes when the
+    /// target is already `.conversation` — silently demoting a `.topic`
+    /// target would lose the topic context.
+    func updateConversation(_ conv: Conversation) {
+        guard case .conversation = target else { return }
+        target = .conversation(conv)
+    }
 }
 
 // MARK: - Test helpers
