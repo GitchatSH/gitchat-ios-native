@@ -1,6 +1,58 @@
 import Foundation
 import Combine
 
+// MARK: - Attachment types (Task 2.3)
+
+struct PendingAttachment: Codable, Equatable {
+    let clientAttachmentID: String
+    var sourceData: Data
+    let mimeType: String
+    let width: Int?
+    let height: Int?
+    let blurhash: String?
+    var uploaded: UploadedRef?
+}
+
+struct UploadedRef: Codable, Equatable {
+    let url: String
+    let storagePath: String
+    let sizeBytes: Int
+}
+
+// MARK: - PendingMessage (Task 2.4)
+
+struct PendingMessage: Codable, Equatable {
+    let clientMessageID: String
+    let conversationID: String
+    var content: String
+    var replyToID: String?
+    var attachments: [PendingAttachment]
+    var attempts: Int
+    var createdAt: Date
+    var state: State
+
+    static func optimisticID(for clientMessageID: String) -> String {
+        "local-\(clientMessageID)"
+    }
+
+    /// Lifecycle states for the outbox FSM.
+    ///
+    /// - enqueued:            Queued but send task not yet started.
+    /// - uploading(progress): Attachment upload(s) in flight.
+    /// - uploaded:            All attachments uploaded; HTTP send not yet fired.
+    /// - sending:             HTTP send request in flight.
+    /// - delivered:           Server confirmed; entry is about to be removed.
+    /// - failed(reason, retriable): Terminal error; user can retry or discard.
+    enum State: Equatable, Codable {
+        case enqueued
+        case uploading(progress: Double)
+        case uploaded
+        case sending
+        case delivered
+        case failed(reason: String, retriable: Bool)
+    }
+}
+
 /// Lifetime-independent store of in-flight ("pending") sends, keyed by
 /// conversation id. Survives ChatDetailView dismissal so a re-entered
 /// conversation continues to show its pending bubbles.
@@ -29,24 +81,6 @@ final class OutboxStore: ObservableObject {
         return f
     }()
 
-    struct PendingMessage: Identifiable, Equatable {
-        let localID: String          // "local-<UUID>"
-        let conversationID: String
-        let senderLogin: String
-        let senderAvatar: String?
-        let content: String
-        let replyToID: String?
-        let createdAt: Date
-        var state: State
-
-        enum State: Equatable {
-            case sending
-            case failed(message: String)
-        }
-
-        var id: String { localID }
-    }
-
     /// Key: conversationID. Value: pending messages in enqueue order.
     @Published private(set) var pending: [String: [PendingMessage]] = [:]
 
@@ -69,9 +103,9 @@ final class OutboxStore: ObservableObject {
         pending[msg.conversationID, default: []].append(msg)
     }
 
-    func markDelivered(conversationID: String, localID: String) {
+    func markDelivered(conversationID: String, clientMessageID: String) {
         guard var list = pending[conversationID] else { return }
-        list.removeAll { $0.localID == localID }
+        list.removeAll { $0.clientMessageID == clientMessageID }
         if list.isEmpty {
             pending.removeValue(forKey: conversationID)
         } else {
@@ -79,26 +113,31 @@ final class OutboxStore: ObservableObject {
         }
     }
 
-    func markFailed(conversationID: String, localID: String, error: String) {
+    func markFailed(conversationID: String, clientMessageID: String, error: String) {
         guard var list = pending[conversationID],
-              let idx = list.firstIndex(where: { $0.localID == localID }) else { return }
-        list[idx].state = .failed(message: error)
+              let idx = list.firstIndex(where: { $0.clientMessageID == clientMessageID }) else { return }
+        list[idx].state = .failed(reason: error, retriable: true)
         pending[conversationID] = list
     }
 
-    /// User-initiated discard of a `.failed` pending. Same wire effect as
-    /// `markDelivered` (entry leaves the store), but the distinct name lets
-    /// call sites express intent ("the user threw it away" vs "the server
-    /// confirmed it").
-    func discard(conversationID: String, localID: String) {
-        markDelivered(conversationID: conversationID, localID: localID)
+    /// User-initiated discard of a `.failed` pending (keyed by optimistic ID,
+    /// e.g. "local-<cmid>"). Same wire effect as `markDelivered` (entry
+    /// leaves the store), but the distinct name lets call sites express intent.
+    func discard(conversationID: String, optimisticID: String) {
+        guard var list = pending[conversationID] else { return }
+        list.removeAll { PendingMessage.optimisticID(for: $0.clientMessageID) == optimisticID }
+        if list.isEmpty {
+            pending.removeValue(forKey: conversationID)
+        } else {
+            pending[conversationID] = list
+        }
     }
 
     /// Flip a failed pending back to .sending and re-fire the send
     /// pipeline.
     func retry(_ pendingMsg: PendingMessage) {
         guard var list = pending[pendingMsg.conversationID],
-              let idx = list.firstIndex(where: { $0.localID == pendingMsg.localID }) else { return }
+              let idx = list.firstIndex(where: { $0.clientMessageID == pendingMsg.clientMessageID }) else { return }
         list[idx].state = .sending
         pending[pendingMsg.conversationID] = list
         runSend(for: list[idx])
@@ -121,7 +160,7 @@ final class OutboxStore: ObservableObject {
 
     private func executeSend(for pending: PendingMessage) async {
         let convId = pending.conversationID
-        let localID = pending.localID
+        let clientMessageID = pending.clientMessageID
         do {
             let msg = try await APIClient.shared.sendMessage(
                 conversationId: convId,
@@ -154,7 +193,7 @@ final class OutboxStore: ObservableObject {
                 unsent_at: msg.unsent_at,
                 reactionRows: msg.reactionRows
             )
-            markDelivered(conversationID: convId, localID: localID)
+            markDelivered(conversationID: convId, clientMessageID: clientMessageID)
             // Hand off to the active view (if any). The handler dedupes via
             // its own atomic `seenIds.insert(...).inserted` against any
             // socket arrival of the same id. Do NOT pre-insert into
@@ -165,7 +204,7 @@ final class OutboxStore: ObservableObject {
             Haptics.error()
             ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
             markFailed(
-                conversationID: convId, localID: localID,
+                conversationID: convId, clientMessageID: clientMessageID,
                 error: error.localizedDescription
             )
         }
@@ -196,19 +235,21 @@ final class OutboxStore: ObservableObject {
         pending[conversationID] ?? []
     }
 
-    func pending(conversationID: String, localID: String) -> PendingMessage? {
-        pending[conversationID]?.first(where: { $0.localID == localID })
+    func pending(conversationID: String, optimisticID: String) -> PendingMessage? {
+        pending[conversationID]?.first(where: { PendingMessage.optimisticID(for: $0.clientMessageID) == optimisticID })
     }
 
     /// Adapt a PendingMessage to the existing Message shape so the same
     /// rendering code can render both. id keeps the "local-" prefix so
     /// downstream rendering can still detect "this is a pending bubble".
+    /// Pending messages are always the current user's outbound sends, so
+    /// sender identity is read from AuthStore.
     func toMessage(_ p: PendingMessage) -> Message {
         Message(
-            id: p.localID,
+            id: PendingMessage.optimisticID(for: p.clientMessageID),
             conversation_id: p.conversationID,
-            sender: p.senderLogin,
-            sender_avatar: p.senderAvatar,
+            sender: AuthStore.shared.login ?? "me",
+            sender_avatar: nil,
             content: p.content,
             created_at: Self.iso8601.string(from: p.createdAt),
             edited_at: nil,

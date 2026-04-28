@@ -228,15 +228,16 @@ final class ChatViewModel: ObservableObject {
                 }
                 editingMessage = nil
             } else {
-                let pending = OutboxStore.PendingMessage(
-                    localID: "local-\(UUID().uuidString)",
+                let cmid = UUID().uuidString
+                let pending = PendingMessage(
+                    clientMessageID: cmid,
                     conversationID: conversation.id,
-                    senderLogin: AuthStore.shared.login ?? "me",
-                    senderAvatar: nil,
                     content: body,
                     replyToID: replyId,
+                    attachments: [],
+                    attempts: 0,
                     createdAt: Date(),
-                    state: .sending
+                    state: .enqueued
                 )
                 OutboxStore.shared.enqueue(pending)
                 Haptics.impact(.light)

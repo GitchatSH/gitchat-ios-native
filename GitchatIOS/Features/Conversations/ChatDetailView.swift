@@ -375,7 +375,7 @@ struct ChatDetailView: View {
         a.onRetryPending = { message in
             guard let pending = OutboxStore.shared.pending(
                 conversationID: vm.conversation.id,
-                localID: message.id
+                optimisticID: message.id
             ) else {
                 // Race: pending was discarded between menu render and tap.
                 // Surface a hint so the user isn't left wondering.
@@ -387,7 +387,7 @@ struct ChatDetailView: View {
         a.onDiscardPending = { message in
             OutboxStore.shared.discard(
                 conversationID: vm.conversation.id,
-                localID: message.id
+                optimisticID: message.id
             )
         }
         return a
