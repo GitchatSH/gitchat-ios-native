@@ -250,14 +250,14 @@ struct APIClient {
         )
     }
 
-    /// Upload a file to a conversation. Returns the attachment URL the
-    /// backend will recognize when passed in `sendMessage(..., attachmentURL:)`.
+    /// Upload a file to a conversation. Returns a full `UploadedRef` with
+    /// the url, storage_path, and size_bytes from the upload response.
     func uploadAttachment(
         data: Data,
         filename: String,
         mimeType: String,
         conversationId: String
-    ) async throws -> String {
+    ) async throws -> UploadedRef {
         let boundary = "gitchat-\(UUID().uuidString)"
         var req = URLRequest(url: Config.apiBaseURL.appendingPathComponent("messages/upload"))
         req.httpMethod = "POST"
@@ -280,11 +280,23 @@ struct APIClient {
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError.http((resp as? HTTPURLResponse)?.statusCode ?? -1, String(data: respData, encoding: .utf8))
         }
-        struct Wrap: Decodable { let data: Inner?; let url: String? }
-        struct Inner: Decodable { let url: String }
+        struct UploadResponse: Decodable {
+            let url: String
+            let storage_path: String?
+            let filename: String?
+            let mime_type: String?
+            let size_bytes: Int?
+        }
+        struct Wrap: Decodable { let data: UploadResponse? }
         let w = try decoder.decode(Wrap.self, from: respData)
-        if let url = w.data?.url ?? w.url { return url }
-        throw APIError.decoding(NSError(domain: "upload", code: 0, userInfo: [NSLocalizedDescriptionKey: "no url in response"]))
+        guard let inner = w.data, !inner.url.isEmpty else {
+            throw APIError.decoding(NSError(domain: "upload", code: 0, userInfo: [NSLocalizedDescriptionKey: "no url in response"]))
+        }
+        return UploadedRef(
+            url: inner.url,
+            storagePath: inner.storage_path ?? "",
+            sizeBytes: inner.size_bytes ?? data.count
+        )
     }
 
     /// Send an upload request with one automatic retry after 2 s for

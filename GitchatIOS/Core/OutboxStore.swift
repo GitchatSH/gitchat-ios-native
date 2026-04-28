@@ -259,10 +259,17 @@ final class OutboxStore: ObservableObject {
         do {
             let attachmentDicts: [[String: Any]] = p.attachments.compactMap { att in
                 guard let u = att.uploaded else { return nil }
-                return [
+                var dict: [String: Any] = [
+                    "type": att.mimeType.hasPrefix("image/") ? "image" : "file",
                     "url": u.url,
-                    "storage_path": u.storagePath
+                    "storage_path": u.storagePath,
+                    "mime_type": att.mimeType,
+                    "size_bytes": u.sizeBytes
                 ]
+                if let w = att.width  { dict["width"]  = w }
+                if let h = att.height { dict["height"] = h }
+                if let bh = att.blurhash { dict["blurhash"] = bh }
+                return dict
             }
             let serverMsg = try await api.sendMessage(
                 conversationID: p.conversationID,

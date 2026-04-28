@@ -30,33 +30,37 @@ extension APIClient: APIClientProtocol {
         replyToID: String?,
         clientMessageID: String?
     ) async throws -> Message {
-        // Map the protocol's [[String: Any]] attachment dicts into the
-        // [[String: String]] that the existing sendMessage(conversationId:…)
-        // already encodes correctly.
-        let stringDicts: [[String: String]] = attachments.compactMap { dict in
-            guard let url = dict["url"] as? String else { return nil }
-            var out: [String: String] = ["url": url]
-            if let sp = dict["storage_path"] as? String { out["storage_path"] = sp }
-            return out
+        // Build the JSON body manually via JSONSerialization so the full
+        // attachment shape (type, url, storage_path, mime_type, size_bytes,
+        // width, height, blurhash) is forwarded without losing numeric types.
+        var jsonObj: [String: Any] = ["body": body]
+        if let replyToID { jsonObj["reply_to_id"] = replyToID }
+        if let clientMessageID { jsonObj["client_message_id"] = clientMessageID }
+        let validAttachments = attachments.filter { ($0["url"] as? String) != nil }
+        if !validAttachments.isEmpty { jsonObj["attachments"] = validAttachments }
+
+        let jsonData = try JSONSerialization.data(withJSONObject: jsonObj)
+
+        var req = URLRequest(url: Config.apiBaseURL.appendingPathComponent("messages/conversations/\(conversationID)"))
+        req.httpMethod = "POST"
+        guard let token = await AuthStore.shared.accessToken else { throw APIError.notAuthenticated }
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = jsonData
+
+        let (data, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.http(-1, nil) }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.http(http.statusCode, String(data: data, encoding: .utf8))
         }
-        let attachmentURLs: [String]? = stringDicts.isEmpty ? nil : stringDicts.map { $0["url"] ?? "" }
-        return try await sendMessage(
-            conversationId: conversationID,
-            body: body,
-            replyTo: replyToID,
-            attachmentURL: nil,
-            attachmentURLs: attachmentURLs,
-            clientMessageID: clientMessageID
-        )
+        if let wrapped = try? decoder.decode(APIEnvelope<Message>.self, from: data), let inner = wrapped.data {
+            return inner
+        }
+        return try decoder.decode(Message.self, from: data)
     }
 
-    /// Wraps the existing `uploadAttachment(data:filename:mimeType:conversationId:)`
-    /// which returns a plain URL string, and adapts it to the `UploadedRef` shape
-    /// that the FSM needs.
-    ///
-    /// Known V1 limitation: the upload endpoint returns only a URL; `storagePath`
-    /// is left empty and `sizeBytes` is taken from the raw data length because the
-    /// backend does not currently echo those fields back to iOS.
+    /// Wraps `uploadAttachment(data:filename:mimeType:conversationId:)` which now
+    /// returns a full `UploadedRef` decoded from the upload response.
     func uploadAttachment(
         conversationID: String,
         data: Data,
@@ -64,12 +68,11 @@ extension APIClient: APIClientProtocol {
     ) async throws -> UploadedRef {
         let ext = mimeType.split(separator: "/").last.map(String.init) ?? "bin"
         let filename = "upload.\(ext)"
-        let url = try await uploadAttachment(
+        return try await uploadAttachment(
             data: data,
             filename: filename,
             mimeType: mimeType,
             conversationId: conversationID
         )
-        return UploadedRef(url: url, storagePath: "", sizeBytes: data.count)
     }
 }
