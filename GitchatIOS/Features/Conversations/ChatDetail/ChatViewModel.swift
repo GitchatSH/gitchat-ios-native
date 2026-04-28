@@ -98,32 +98,20 @@ final class ChatViewModel: ObservableObject {
         }
         do {
             let resp = try await APIClient.shared.getConversationMessages(id: conversation.id)
-            let fetched = resp.messages.reversed()
+            let fetched = Array(resp.messages.reversed())
             // Merge the fetched newest page into our (possibly larger)
             // cached list instead of overwriting it. This preserves
             // older pages that the user already paged into via
             // scroll-up in a previous session.
             if messages.isEmpty {
-                self.messages = Array(fetched)
+                self.messages = fetched
                 self.nextCursor = resp.nextCursor
                 // Mark the initial page as already-seen so bubbles
                 // don't all pop in on first entry — only newly arrived
                 // messages should animate in.
                 ChatMessageView.markSeen(self.messages.map(\.id))
             } else {
-                var existing = messages
-                let existingIds = Set(existing.map(\.id))
-                // Replace edited/updated rows in place.
-                let fetchedById = Dictionary(uniqueKeysWithValues: fetched.map { ($0.id, $0) })
-                for i in existing.indices {
-                    if let updated = fetchedById[existing[i].id] {
-                        existing[i] = updated
-                    }
-                }
-                // Append truly new (newer than cache) messages.
-                let newOnes = fetched.filter { !existingIds.contains($0.id) }
-                existing.append(contentsOf: newOnes)
-                self.messages = existing
+                mergeFromServer(fetched)
                 // nextCursor stays as-is — we still know about older
                 // pages from the previous session.
             }
@@ -144,17 +132,79 @@ final class ChatViewModel: ObservableObject {
             let resp = try await APIClient.shared.getConversationMessages(
                 id: conversation.id, cursor: cursor
             )
-            let older = resp.messages.reversed()
+            let older = Array(resp.messages.reversed())
             let known = Set(messages.map(\.id))
             let deduped = older.filter { !known.contains($0.id) }
             // Older paginated messages should appear immediately, not
             // pop in — mark them seen before they hit the UI.
             ChatMessageView.markSeen(deduped.map(\.id))
-            messages.insert(contentsOf: deduped, at: 0)
+            // mergeFromServer appends, then sorts by created_at ascending,
+            // so older-page messages naturally sort to the front.
+            mergeFromServer(deduped)
             nextCursor = resp.nextCursor
             persistCache()
         } catch { }
         await loadPinned()
+    }
+
+    // MARK: - Merge
+
+    /// Merges a batch of server-fetched messages into `self.messages` with
+    /// cmid-aware matching:
+    ///
+    /// 1. If `client_message_id` matches an existing message's cmid → REPLACE
+    ///    (clears the optimistic `local-*` placeholder with the stable server id).
+    /// 2. Else if `id` matches existing → REPLACE in-place (handles edits /
+    ///    re-fetches).
+    /// 3. Else → APPEND (first sighting of this message).
+    ///
+    /// After incorporating all fetched messages, sweeps and removes:
+    /// - Any `local-*` whose cmid matches one of the fetched server messages
+    ///   (defensive cleanup of orphans whose cmid-match above didn't fire).
+    /// - Any `local-*` with nil cmid (legacy junk from old builds, per spec §4.3).
+    ///
+    /// Finally, sorts `messages` by `created_at` ascending. This is the single
+    /// source of ordering truth; it makes prepend/append semantics for paginated
+    /// loads equivalent — older page messages sort to the front naturally because
+    /// their `created_at` is earlier.
+    func mergeFromServer(_ fetched: [Message]) {
+        var existing = self.messages
+        for srv in fetched {
+            // Match by client_message_id first (replaces optimistic with stable id)
+            if let cmid = srv.client_message_id,
+               let idx = existing.firstIndex(where: { $0.client_message_id == cmid }) {
+                existing[idx] = srv
+                continue
+            }
+            // Fall back to id match (handles edited / re-fetched server messages)
+            if let idx = existing.firstIndex(where: { $0.id == srv.id }) {
+                existing[idx] = srv
+                continue
+            }
+            // First sighting — append
+            existing.append(srv)
+        }
+
+        // Collect fetched cmids for the defensive sweep below.
+        let fetchedCmids = Set(fetched.compactMap(\.client_message_id))
+
+        // Defensive sweep: remove any remaining local-* placeholder
+        //  - whose cmid matches a fetched server message (defensive against the
+        //    cmid-match path above missing it — e.g., if both cmid and id matched
+        //    different slots and the local-* was not the one replaced)
+        //  - OR whose cmid is nil (legacy junk from old builds — see spec §4.3)
+        existing.removeAll { msg in
+            guard msg.id.hasPrefix("local-") else { return false }
+            guard let cmid = msg.client_message_id else { return true }  // legacy junk
+            return fetchedCmids.contains(cmid)
+        }
+
+        // Sort by created_at ascending (ISO8601 strings are lexicographically
+        // ordered). This is stable relative to equal timestamps because Swift's
+        // sort is stable since Swift 5.
+        existing.sort { ($0.created_at ?? "") < ($1.created_at ?? "") }
+
+        self.messages = existing
     }
 
     private func persistCache() {
