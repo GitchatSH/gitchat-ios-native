@@ -350,6 +350,22 @@ struct ChatMessageView: View {
         }
     }
 
+    /// In-bubble "Forwarded from @login" header row, rendered above the
+    /// attachment when `parsed.forwardedFrom != nil`.
+    @ViewBuilder
+    private func forwardedHeader(from login: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrowshape.turn.up.right.fill")
+                .font(.caption2.weight(.bold))
+            Text("Forwarded from @\(login)")
+                .font(.caption2.weight(.semibold))
+        }
+        .foregroundStyle(isMe ? .white.opacity(0.85) : .secondary)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+
     /// Compact reply quote styled to live INSIDE the bubble (same
     /// rounded container as the text). Mirrors the iMessage /
     /// Telegram look where the quoted snippet reads as a nested
@@ -478,6 +494,14 @@ struct ChatMessageView: View {
         let hasReactions = message.reactions?.isEmpty == false
         let showSenderName = showHeader && !isMe && isGroup
         let bubble = VStack(alignment: .leading, spacing: 0) {
+            // Forwarded-from header sits at the top of the bubble so the
+            // attached image / shared card / body all render below it,
+            // matching Telegram's forward layout. The bubble overlay border
+            // (further down) already keys off `parsed.forwardedFrom != nil`,
+            // so no other layout change is needed.
+            if let from = parsed.forwardedFrom {
+                forwardedHeader(from: from)
+            }
             // Attachment inside bubble (when there's also text)
             if hasAttachment {
                 attachmentContentUnclipped
@@ -489,18 +513,6 @@ struct ChatMessageView: View {
                     .padding(.horizontal, 12)
                     .padding(.top, 8)
                     .padding(.bottom, 0)
-            }
-            if let from = parsed.forwardedFrom {
-                HStack(spacing: 4) {
-                    Image(systemName: "arrowshape.turn.up.right.fill")
-                        .font(.caption2.weight(.bold))
-                    Text("Forwarded from @\(from)")
-                        .font(.caption2.weight(.semibold))
-                }
-                .foregroundStyle(isMe ? .white.opacity(0.85) : .secondary)
-                .padding(.horizontal, 12)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
             }
             if showInlineReply, let reply = message.reply {
                 inlineReplyQuote(for: reply)
