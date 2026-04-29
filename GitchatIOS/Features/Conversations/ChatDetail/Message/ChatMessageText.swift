@@ -90,11 +90,18 @@ enum ChatMessageText {
     // MARK: Privates
 
     private static let forwardedRegex: NSRegularExpression? = {
-        // Matches both the backend's `> Forwarded from @<login>\n\n…`
-        // markdown-blockquote format and a future cleaner
-        // `Forwarded from @<login>\n…` form. Capture group 1 = login.
+        // Matches the backend's `> Forwarded from @<login>` prefix in three
+        // shapes the BE/sendMessage pipeline can produce:
+        //   1. `> Forwarded from @user\n\nbody`  — original-body present
+        //   2. `> Forwarded from @user`          — image-only forward where
+        //      sendMessage's body.trim() strips the trailing `\n\n`
+        //   3. `Forwarded from @user\nbody`      — future cleaner format
+        //      (no markdown blockquote)
+        // The `(?:\n+|$)` tail accepts either one-or-more newlines OR
+        // end-of-string, so empty-body forwards parse cleanly.
+        // Capture group 1 = login.
         try? NSRegularExpression(
-            pattern: #"^(?:>\s+)?Forwarded from @([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\n+"#,
+            pattern: #"^(?:>\s+)?Forwarded from @([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?:\n+|$)"#,
             options: []
         )
     }()
