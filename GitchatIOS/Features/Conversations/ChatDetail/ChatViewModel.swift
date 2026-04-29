@@ -102,8 +102,25 @@ final class ChatViewModel: ObservableObject {
                 at: message.created_at
             )
             if target.conversationId == topicId {
+                // Mirror ChatDetailViewBindings.makeOutboxDeliveryHandler:
+                // for our own outbound topic sends, BE echoes the
+                // client_message_id we sent. If an optimistic placeholder
+                // with that cmid is in `messages` (attachment send path),
+                // replace in-place rather than append — otherwise the
+                // server message duplicates the placeholder. Falls through
+                // to seenIds dedup for inbound messages with no cmid match.
+                if let cmid = message.client_message_id,
+                   let idx = messages.firstIndex(where: {
+                       $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame
+                   }) {
+                    messages[idx] = message
+                    ChatMessageView.seenIds.insert(message.id)
+                    persistCache()
+                    return
+                }
                 guard ChatMessageView.seenIds.insert(message.id).inserted else { return }
                 messages.append(message)
+                persistCache()
             } else {
                 TopicListStore.shared.bumpUnread(topicId: topicId, parentId: parentId, by: 1)
             }
@@ -166,7 +183,14 @@ final class ChatViewModel: ObservableObject {
         if let saved = UserDefaults.standard.string(forKey: "gitchat.draft.\(conv.id)") {
             self.draft = saved
         }
-        if let cached = MessageCache.shared.get(conv.id) {
+        // Cache is keyed by the active chat surface id (topic id when in
+        // a topic, parent id otherwise) so each topic gets its own slot
+        // and matches the key OutboxStore.executeSend uses when persisting
+        // delivered messages from a background-detached send. Reading the
+        // parent id here when in a topic would (a) lose outbox-cached
+        // server messages on re-entry, and (b) collide cache entries
+        // across different topics under the same parent.
+        if let cached = MessageCache.shared.get(target.conversationId) {
             // Filter out optimistic pending entries — they live in the
             // outbox now and are merged in render via `visibleMessages`.
             self.messages = cached.messages.filter { !$0.id.hasPrefix("local-") }
@@ -265,9 +289,24 @@ final class ChatViewModel: ObservableObject {
                 for c in cursors { readCursors[c.login] = c.readAt }
             }
             persistCache()
-            try? await APIClient.shared.markRead(conversationId: conversation.id)
+            // markRead targets the active chat surface — parent for plain
+            // conversations, topic for topic targets (separate BE endpoint
+            // and unread cursor). Calling the parent endpoint while in a
+            // topic would never clear the topic's unread badge.
+            try? await markActiveTargetRead()
         } catch { self.error = error.localizedDescription }
         await loadPinned()
+    }
+
+    /// Branch markRead by target type. Pulled out so any future call site
+    /// (foreground, focus, scroll-to-bottom) routes correctly.
+    private func markActiveTargetRead() async throws {
+        switch target {
+        case .conversation(let c):
+            try await APIClient.shared.markRead(conversationId: c.id)
+        case .topic(let t, let p):
+            try await APIClient.shared.markTopicRead(parentId: p.id, topicId: t.id)
+        }
     }
 
     func loadMoreIfNeeded() async {
@@ -357,7 +396,9 @@ final class ChatViewModel: ObservableObject {
     }
 
     func persistCache() {
-        MessageCache.shared.store(conversation.id, entry: MessageCache.Entry(
+        // Key by the active chat surface id (topic id when in a topic,
+        // parent id otherwise) — see init for full rationale.
+        MessageCache.shared.store(target.conversationId, entry: MessageCache.Entry(
             messages: self.messages.filter { !$0.id.hasPrefix("local-") },
             nextCursor: self.nextCursor,
             otherReadAt: self.otherReadAt,
@@ -559,9 +600,15 @@ final class ChatViewModel: ObservableObject {
         // string compare in the delivery handler would otherwise fail to
         // match the optimistic placeholder against the server's echoed cmid.
         let cmid = UUID().uuidString.lowercased()
+        // Key by the active chat surface id (topic id when in a topic) and
+        // pass topic context to the outbox so the send pipeline routes to
+        // the topic endpoint. Mirrors the text-path `send()` async — both
+        // paths must thread topic state identically, otherwise an attached
+        // image sent from a topic would land on the parent group.
+        let ctx = pendingTopicContext
         let optimistic = Message.optimistic(
             clientMessageID: cmid,
-            conversationID: conversation.id,
+            conversationID: target.conversationId,
             sender: AuthStore.shared.login ?? "me",
             content: trimmed,
             attachments: attachments
@@ -571,13 +618,15 @@ final class ChatViewModel: ObservableObject {
 
         outbox.enqueue(PendingMessage(
             clientMessageID: cmid,
-            conversationID: conversation.id,
+            conversationID: target.conversationId,
             content: trimmed,
             replyToID: replyTo?.id,
             attachments: attachments,
             attempts: 0,
             createdAt: Date(),
-            state: .enqueued
+            state: .enqueued,
+            topicID: ctx.topicID,
+            parentConversationID: ctx.parentID
         ))
     }
 
