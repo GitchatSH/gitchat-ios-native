@@ -18,7 +18,7 @@ struct GitHubEventStyle: Equatable {
         switch eventType {
         case "issue_opened":
             return GitHubEventStyle(
-                icon: "circle.dotted",
+                icon: "record.circle",
                 color: .orange,
                 verb: "opened issue"
             )

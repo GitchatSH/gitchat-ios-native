@@ -44,7 +44,7 @@ final class GitHubEventStyleTests: XCTestCase {
 
     func testIssueOpenedHasDetailStyle() {
         let s = GitHubEventStyle.from(eventType: "issue_opened")
-        XCTAssertEqual(s.icon, "circle.dotted")
+        XCTAssertEqual(s.icon, "record.circle")
         XCTAssertEqual(s.verb, "opened issue")
         // Color is .orange — compare via description since SwiftUI Color
         // doesn't expose a direct equality channel.
