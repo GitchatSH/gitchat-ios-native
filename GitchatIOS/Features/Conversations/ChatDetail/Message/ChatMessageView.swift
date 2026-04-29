@@ -350,18 +350,6 @@ struct ChatMessageView: View {
         }
     }
 
-    /// Compact reply quote styled to live INSIDE the bubble (same
-    /// rounded container as the text). Mirrors the iMessage /
-    /// Telegram look where the quoted snippet reads as a nested
-    /// block, not a separate row above the bubble.
-    ///
-    /// The accent strip is an `.overlay` on the text VStack rather
-    /// than a sibling in an HStack — a bare `RoundedRectangle.frame(width: 3)`
-    /// (no height) expands vertically to fill whatever the parent
-    /// offers, which in the menu preview context was a lot, and
-    /// ballooned the quote block to an enormous square. Overlay
-    /// gets height from the text column, so the strip is always
-    /// exactly as tall as the content.
     /// In-bubble "Forwarded from @login" header row, rendered above the
     /// attachment when `parsed.forwardedFrom != nil`.
     @ViewBuilder
@@ -378,6 +366,18 @@ struct ChatMessageView: View {
         .padding(.bottom, 4)
     }
 
+    /// Compact reply quote styled to live INSIDE the bubble (same
+    /// rounded container as the text). Mirrors the iMessage /
+    /// Telegram look where the quoted snippet reads as a nested
+    /// block, not a separate row above the bubble.
+    ///
+    /// The accent strip is an `.overlay` on the text VStack rather
+    /// than a sibling in an HStack — a bare `RoundedRectangle.frame(width: 3)`
+    /// (no height) expands vertically to fill whatever the parent
+    /// offers, which in the menu preview context was a lot, and
+    /// ballooned the quote block to an enormous square. Overlay
+    /// gets height from the text column, so the strip is always
+    /// exactly as tall as the content.
     @ViewBuilder
     private func inlineReplyQuote(for reply: ReplyPreview) -> some View {
         VStack(alignment: .leading, spacing: 4) {
