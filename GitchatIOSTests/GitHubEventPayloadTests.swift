@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Gitchat
 
 final class GitHubEventPayloadTests: XCTestCase {
@@ -36,5 +37,38 @@ final class GitHubEventPayloadTests: XCTestCase {
         {"title":"no event type"}
         """
         XCTAssertThrowsError(try decode(json))
+    }
+}
+
+final class GitHubEventStyleTests: XCTestCase {
+
+    func testIssueOpenedHasDetailStyle() {
+        let s = GitHubEventStyle.from(eventType: "issue_opened")
+        XCTAssertEqual(s.icon, "circle.dotted")
+        XCTAssertEqual(s.verb, "opened issue")
+        // Color is .orange — compare via description since SwiftUI Color
+        // doesn't expose a direct equality channel.
+        XCTAssertEqual(String(describing: s.color), String(describing: Color.orange))
+    }
+
+    func testUnknownEventUsesGenericFallback() {
+        let s = GitHubEventStyle.from(eventType: "pr_opened")
+        XCTAssertEqual(s.icon, "dot.radiowaves.left.and.right")
+        XCTAssertEqual(s.verb, "opened pr")
+        XCTAssertEqual(String(describing: s.color), String(describing: Color.secondary))
+    }
+
+    func testHumanizeSwapsNounAndVerb() {
+        XCTAssertEqual(GitHubEventStyle.humanize("issue_closed"), "closed issue")
+        XCTAssertEqual(GitHubEventStyle.humanize("pr_merged"), "merged pr")
+    }
+
+    func testHumanizeFallsBackForNoUnderscore() {
+        XCTAssertEqual(GitHubEventStyle.humanize("push"), "push")
+    }
+
+    func testHumanizeHandlesMultipleUnderscores() {
+        // "release_published" → object="release", verb="published"
+        XCTAssertEqual(GitHubEventStyle.humanize("release_published"), "published release")
     }
 }
