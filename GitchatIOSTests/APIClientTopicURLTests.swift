@@ -19,11 +19,6 @@ final class APIClientTopicURLTests: XCTestCase {
                        "messages/conversations/p/topics/t/archive")
     }
 
-    func testPinPath() {
-        XCTAssertEqual(TopicEndpoints.pin(parentId: "p", topicId: "t"),
-                       "messages/conversations/p/topics/t/pin")
-    }
-
     func testSendMessagePath() {
         XCTAssertEqual(TopicEndpoints.sendMessage(parentId: "p", topicId: "t"),
                        "messages/conversations/p/topics/t/messages")

@@ -414,7 +414,11 @@ struct ChatView: View {
 
     @ViewBuilder
     private func messageRow(for msg: Message, at idx: Int) -> some View {
-        if let t = msg.type, t != "user" {
+        if let payload = GitHubEventPayload.tryParse(msg.content) {
+            GitHubEventCard(payload: payload, timestamp: msg.shortTime)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
+        } else if let t = msg.type, t != "user" {
             SystemMessageRow(message: msg) {
                 if let target = msg.reply_to_id {
                     pendingJumpId = target
