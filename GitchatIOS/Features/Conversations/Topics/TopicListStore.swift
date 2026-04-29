@@ -6,12 +6,20 @@ final class TopicListStore: ObservableObject {
     static let shared = TopicListStore()
 
     @Published private(set) var topicsByParent: [String: [Topic]] = [:]
+    /// Local-only pin state (per parent → set of topic ids), persisted to
+    /// UserDefaults. Mirrors the VS Code extension's webview-state pin model:
+    /// pin is per-device, never sent to BE, never received via socket.
+    @Published private(set) var localPinnedByParent: [String: Set<String>] = [:]
 
     private var lru: [String] = []                       // recently accessed parentIds (front = newest)
     private let maxParents: Int
+    private let defaults: UserDefaults
+    private let pinDefaultsKey = "TopicListStore.localPinnedByParent.v1"
 
-    init(maxParents: Int = 10) {
+    init(maxParents: Int = 10, defaults: UserDefaults = .standard) {
         self.maxParents = maxParents
+        self.defaults = defaults
+        loadLocalPins()
     }
 
     // MARK: - Reads
@@ -20,10 +28,14 @@ final class TopicListStore: ObservableObject {
         topicsByParent[parentId] ?? []
     }
 
+    func isLocallyPinned(topicId: String, parentId: String) -> Bool {
+        localPinnedByParent[parentId]?.contains(topicId) == true
+    }
+
     // MARK: - Writes
 
     func setTopics(_ topics: [Topic], forParent parentId: String) {
-        topicsByParent[parentId] = sort(topics)
+        topicsByParent[parentId] = sort(topics, parentId: parentId)
         touchLRU(parentId)
     }
 
@@ -34,7 +46,7 @@ final class TopicListStore: ObservableObject {
         } else {
             arr.append(topic)
         }
-        topicsByParent[parentId] = sort(arr)
+        topicsByParent[parentId] = sort(arr, parentId: parentId)
         touchLRU(parentId)
     }
 
@@ -42,13 +54,29 @@ final class TopicListStore: ObservableObject {
         guard var arr = topicsByParent[parentId],
               let idx = arr.firstIndex(where: { $0.id == topicId }) else { return }
         mutate(&arr[idx])
-        topicsByParent[parentId] = sort(arr)
+        topicsByParent[parentId] = sort(arr, parentId: parentId)
+    }
+
+    func togglePin(topicId: String, parentId: String) {
+        var set = localPinnedByParent[parentId] ?? []
+        if set.contains(topicId) { set.remove(topicId) } else { set.insert(topicId) }
+        localPinnedByParent[parentId] = set
+        saveLocalPins()
+        if let arr = topicsByParent[parentId] {
+            topicsByParent[parentId] = sort(arr, parentId: parentId)
+        }
     }
 
     func archive(topicId: String, parentId: String) {
         guard var arr = topicsByParent[parentId] else { return }
         arr.removeAll { $0.id == topicId }
         topicsByParent[parentId] = arr
+        // If the archived topic was locally pinned, drop the pin so the
+        // user doesn't see a stale pinned id pointing nowhere.
+        if var set = localPinnedByParent[parentId], set.remove(topicId) != nil {
+            localPinnedByParent[parentId] = set
+            saveLocalPins()
+        }
     }
 
     func setPinOrder(topicId: String, parentId: String, order: Int?) {
@@ -114,14 +142,29 @@ final class TopicListStore: ObservableObject {
 
     // MARK: - Private
 
-    private func sort(_ arr: [Topic]) -> [Topic] {
-        arr.sorted { l, r in
-            switch (l.pin_order, r.pin_order) {
-            case let (a?, b?): return a < b
-            case (_?, nil):    return true
-            case (nil, _?):    return false
-            case (nil, nil):   return (l.last_message_at ?? "") > (r.last_message_at ?? "")
-            }
+    /// Sort: General first, then locally-pinned (per-device set), then by
+    /// `last_message_at` descending. Mirrors the extension's `sortTopics()`
+    /// in `media/webview/topic-list.js`.
+    private func sort(_ arr: [Topic], parentId: String) -> [Topic] {
+        let pinnedSet = localPinnedByParent[parentId] ?? []
+        return arr.sorted { l, r in
+            if l.is_general != r.is_general { return l.is_general }
+            let lp = pinnedSet.contains(l.id), rp = pinnedSet.contains(r.id)
+            if lp != rp { return lp }
+            return (l.last_message_at ?? "") > (r.last_message_at ?? "")
+        }
+    }
+
+    private func loadLocalPins() {
+        guard let data = defaults.data(forKey: pinDefaultsKey),
+              let dict = try? JSONDecoder().decode([String: [String]].self, from: data) else { return }
+        localPinnedByParent = dict.mapValues { Set($0) }
+    }
+
+    private func saveLocalPins() {
+        let dict = localPinnedByParent.mapValues { Array($0) }
+        if let data = try? JSONEncoder().encode(dict) {
+            defaults.set(data, forKey: pinDefaultsKey)
         }
     }
 

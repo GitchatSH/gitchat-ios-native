@@ -3,7 +3,15 @@ import SwiftUI
 struct TopicRow: View {
     let topic: Topic
     let isActive: Bool
+    let isPinned: Bool
     let onTap: () -> Void
+
+    init(topic: Topic, isActive: Bool, isPinned: Bool = false, onTap: @escaping () -> Void) {
+        self.topic = topic
+        self.isActive = isActive
+        self.isPinned = isPinned
+        self.onTap = onTap
+    }
 
     @ScaledMetric(relativeTo: .caption) private var mentionBadgeSize: CGFloat = 20
     @ScaledMetric(relativeTo: .footnote) private var badgeMinSize: CGFloat = 18
@@ -23,8 +31,16 @@ struct TopicRow: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 4) {
-                if let ts = topic.last_message_at {
-                    Text(RelativeTime.chatListStamp(ts)).font(.footnote).foregroundStyle(.tertiary)
+                HStack(spacing: 4) {
+                    if isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .accessibilityLabel("pinned")
+                    }
+                    if let ts = topic.last_message_at {
+                        Text(RelativeTime.chatListStamp(ts)).font(.footnote).foregroundStyle(.tertiary)
+                    }
                 }
                 badges
             }
@@ -92,12 +108,14 @@ extension Topic {
 #Preview {
     VStack(spacing: 0) {
         TopicRow(topic: .fixturePreview(id: "g", name: "General", emoji: "💬",
-                                         unread: 0, isPinned: true), isActive: true, onTap: {})
+                                         unread: 0, isPinned: true),
+                 isActive: true, isPinned: true, onTap: {})
         TopicRow(topic: .fixturePreview(id: "b", name: "Bugs", emoji: "🐛",
                                          unread: 12, mentions: 1, isPinned: true),
-                 isActive: false, onTap: {})
+                 isActive: false, isPinned: true, onTap: {})
         TopicRow(topic: .fixturePreview(id: "v", name: "v2.0", emoji: "🚀",
-                                         color: "red", unread: 1), isActive: false, onTap: {})
+                                         color: "red", unread: 1),
+                 isActive: false, isPinned: false, onTap: {})
     }
 }
 #endif

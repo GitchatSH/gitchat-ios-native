@@ -12,12 +12,6 @@ enum TopicEndpoints {
     static func archive(parentId: String, topicId: String) -> String {
         "messages/conversations/\(parentId)/topics/\(topicId)/archive"
     }
-    static func pin(parentId: String, topicId: String) -> String {
-        "messages/conversations/\(parentId)/topics/\(topicId)/pin"
-    }
-    static func unpin(parentId: String, topicId: String) -> String {
-        "messages/conversations/\(parentId)/topics/\(topicId)/unpin"
-    }
     static func read(parentId: String, topicId: String) -> String {
         "messages/conversations/\(parentId)/topics/\(topicId)/read"
     }
@@ -59,8 +53,6 @@ extension APIClient {
         let colorToken: String?
     }
 
-    struct PinTopicBody: Encodable { let order: Int }
-
     func fetchTopics(parentId: String,
                      includeArchived: Bool = false,
                      pinnedOnly: Bool = false,
@@ -92,17 +84,10 @@ extension APIClient {
                           body: EmptyBody())
     }
 
-    func pinTopic(parentId: String, topicId: String, order: Int) async throws -> Topic {
-        try await request(TopicEndpoints.pin(parentId: parentId, topicId: topicId),
-                          method: "PATCH",
-                          body: PinTopicBody(order: order))
-    }
-
-    func unpinTopic(parentId: String, topicId: String) async throws -> Topic {
-        try await request(TopicEndpoints.unpin(parentId: parentId, topicId: topicId),
-                          method: "PATCH",
-                          body: EmptyBody())
-    }
+    // Pin/unpin is intentionally NOT exposed: topic pin is per-device,
+    // persisted locally in TopicListStore (matches the VS Code extension's
+    // webview-state pin model). Calling BE pin/unpin requires admin/owner
+    // role and is not what the user expects.
 
     func markTopicRead(parentId: String, topicId: String) async throws {
         let _: EmptyResponse = try await request(

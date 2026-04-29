@@ -107,15 +107,25 @@ struct TopicCreateSheet: View {
             ToastCenter.shared.show(.success, "Topic created", nil)
             dismiss()
         } catch let APIError.http(status, body) where status == 409
-                                            && (body ?? "").contains("TOPIC_NAME_TAKEN") {
+                                            && (body ?? "").contains("TOPIC_NAME_DUPLICATE") {
             nameError = "Name already in use"
+        } catch let APIError.http(status, body) where status == 409
+                                            && (body ?? "").contains("TOPIC_LIMIT_REACHED") {
+            ToastCenter.shared.show(.error, "Topic limit reached",
+                                     "This conversation has 100 topics already")
+        } catch let APIError.http(status, body) where status == 409
+                                            && (body ?? "").contains("TOPIC_USER_LIMIT_REACHED") {
+            ToastCenter.shared.show(.error, "Your topic limit reached",
+                                     "You can create up to 5 topics per conversation")
         } catch let APIError.http(status, _) where status == 429 {
             ToastCenter.shared.show(.error, "You're creating topics too fast",
                                      "Try again later")
-        } catch let APIError.http(status, _) where status == 403 {
+        } catch let APIError.http(status, body) where status == 403 {
+            NSLog("[Topic.create] 403 body=%@", body ?? "<nil>")
             ToastCenter.shared.show(.error, "Only admins can create topics here", nil)
             dismiss()
         } catch {
+            NSLog("[Topic.create] error=%@", String(describing: error))
             ToastCenter.shared.show(.error, "Could not create topic", "Try again")
         }
         inFlight = false
