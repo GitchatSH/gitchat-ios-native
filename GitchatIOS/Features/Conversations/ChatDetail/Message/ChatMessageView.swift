@@ -363,6 +363,20 @@ struct ChatMessageView: View {
     /// gets height from the text column, so the strip is always
     /// exactly as tall as the content.
     @ViewBuilder
+    private func forwardedHeader(from login: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrowshape.turn.up.right.fill")
+                .font(.caption2.weight(.bold))
+            Text("Forwarded from @\(login)")
+                .font(.caption2.weight(.semibold))
+        }
+        .foregroundStyle(isMe ? .white.opacity(0.85) : .secondary)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
     private func inlineReplyQuote(for reply: ReplyPreview) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let login = reply.sender_login {
