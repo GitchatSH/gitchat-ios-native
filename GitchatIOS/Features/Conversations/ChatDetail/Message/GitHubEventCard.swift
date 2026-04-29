@@ -5,6 +5,7 @@ struct GitHubEventCard: View {
     let timestamp: String?     // pre-formatted, e.g. "02:20 PM"
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.chatTheme) private var theme
 
     private var style: GitHubEventStyle {
         GitHubEventStyle.from(eventType: payload.eventType)
@@ -59,7 +60,7 @@ struct GitHubEventCard: View {
                 .padding(.vertical, 10)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.tertiarySystemBackground))
+            .background(theme.bubbleIncoming)
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
