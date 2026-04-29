@@ -142,8 +142,15 @@ struct GroupSettingsSheet: View {
     private func save() async {
         saving = true
         defer { saving = false }
+        let newName: String? = nameChanged ? trimmedName : nil
+        // Debug log: input the API call is about to send. Captures the
+        // exact conversation id + payload so failures can be diagnosed
+        // by reading the device log (issue #90 reproduction).
+        NSLog("[GroupRename] convId=%@ name=%@ avatarUrl=%@",
+              conversation.id,
+              newName ?? "<unchanged>",
+              uploadedAvatarUrl ?? "<unchanged>")
         do {
-            let newName: String? = nameChanged ? trimmedName : nil
             try await APIClient.shared.updateGroup(
                 id: conversation.id,
                 name: newName,
@@ -152,7 +159,20 @@ struct GroupSettingsSheet: View {
             ToastCenter.shared.show(.success, "Group updated")
             onSaved?(newName, uploadedAvatarUrl)
             dismiss()
+        } catch let APIError.http(status, body) where status == 403 {
+            NSLog("[GroupRename] 403 body=%@", body ?? "<nil>")
+            ToastCenter.shared.show(.error, "Can't rename",
+                                     "Only the group creator can rename this group")
+        } catch let APIError.http(status, body) where status == 400 {
+            NSLog("[GroupRename] 400 body=%@", body ?? "<nil>")
+            ToastCenter.shared.show(.error, "Save failed",
+                                     "Not a group conversation")
+        } catch let APIError.http(status, body) {
+            NSLog("[GroupRename] HTTP %d body=%@", status, body ?? "<nil>")
+            ToastCenter.shared.show(.error, "Save failed",
+                                     "HTTP \(status) — \(body ?? "no body")")
         } catch {
+            NSLog("[GroupRename] error=%@", String(describing: error))
             ToastCenter.shared.show(.error, "Save failed", error.localizedDescription)
         }
     }
