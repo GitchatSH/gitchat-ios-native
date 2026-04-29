@@ -90,9 +90,11 @@ enum ChatMessageText {
     // MARK: Privates
 
     private static let forwardedRegex: NSRegularExpression? = {
-        // "Forwarded from @<login>\n" — capture login in group 1.
+        // Matches both the backend's `> Forwarded from @<login>\n\n…`
+        // markdown-blockquote format and a future cleaner
+        // `Forwarded from @<login>\n…` form. Capture group 1 = login.
         try? NSRegularExpression(
-            pattern: #"^Forwarded from @([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\n"#,
+            pattern: #"^(?:>\s+)?Forwarded from @([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\n+"#,
             options: []
         )
     }()
