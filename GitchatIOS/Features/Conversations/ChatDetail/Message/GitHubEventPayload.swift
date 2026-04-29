@@ -39,3 +39,19 @@ struct GitHubEventStyle: Equatable {
         return "\(parts[1]) \(parts[0])"
     }
 }
+
+extension GitHubEventPayload {
+    /// Returns a payload only when `raw` looks like a GitHub event JSON object
+    /// with non-empty `eventType` and `title`. Otherwise nil — the caller
+    /// should fall back to plain-text rendering.
+    static func tryParse(_ raw: String) -> GitHubEventPayload? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.first == "{" else { return nil }
+        guard let data = trimmed.data(using: .utf8),
+              let payload = try? JSONDecoder().decode(GitHubEventPayload.self, from: data),
+              !payload.eventType.isEmpty,
+              !payload.title.isEmpty
+        else { return nil }
+        return payload
+    }
+}

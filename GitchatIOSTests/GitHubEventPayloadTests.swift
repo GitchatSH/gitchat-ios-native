@@ -72,3 +72,45 @@ final class GitHubEventStyleTests: XCTestCase {
         XCTAssertEqual(GitHubEventStyle.humanize("release_published"), "published release")
     }
 }
+
+final class GitHubEventDetectionTests: XCTestCase {
+
+    func testPlainTextReturnsNil() {
+        XCTAssertNil(GitHubEventPayload.tryParse("hello world"))
+    }
+
+    func testEmptyStringReturnsNil() {
+        XCTAssertNil(GitHubEventPayload.tryParse(""))
+    }
+
+    func testMalformedJSONReturnsNil() {
+        XCTAssertNil(GitHubEventPayload.tryParse("{not valid json"))
+    }
+
+    func testValidPayloadReturnsStruct() {
+        let raw = #"{"eventType":"issue_opened","title":"Hi","url":"https://x","actor":"a"}"#
+        let p = GitHubEventPayload.tryParse(raw)
+        XCTAssertNotNil(p)
+        XCTAssertEqual(p?.title, "Hi")
+    }
+
+    func testEmptyTitleReturnsNil() {
+        let raw = #"{"eventType":"issue_opened","title":"","url":"https://x","actor":"a"}"#
+        XCTAssertNil(GitHubEventPayload.tryParse(raw))
+    }
+
+    func testEmptyEventTypeReturnsNil() {
+        let raw = #"{"eventType":"","title":"hi","url":"https://x","actor":"a"}"#
+        XCTAssertNil(GitHubEventPayload.tryParse(raw))
+    }
+
+    func testLeadingWhitespaceStillParses() {
+        let raw = "   \n" + #"{"eventType":"issue_opened","title":"Hi"}"#
+        XCTAssertNotNil(GitHubEventPayload.tryParse(raw))
+    }
+
+    func testTextStartingWithBraceButNotJSONReturnsNil() {
+        // Edge: someone literally typed "{hello}" as a chat message.
+        XCTAssertNil(GitHubEventPayload.tryParse("{hello}"))
+    }
+}
