@@ -105,8 +105,16 @@ struct ChatMessageView: View {
 
     // MARK: Body
 
+    private var githubEventPayload: GitHubEventPayload? {
+        GitHubEventPayload.tryParse(message.content)
+    }
+
     var body: some View {
-        if isInsideGroup {
+        if let payload = githubEventPayload {
+            eventCardRow(payload: payload)
+                .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
+                .onAppear(perform: onFirstAppear)
+        } else if isInsideGroup {
             // Inside a grouped sender cell — just the bubble, no avatar/spacers.
             // The parent group cell provides the avatar column.
             bubbleColumn
@@ -125,6 +133,12 @@ struct ChatMessageView: View {
             .opacity(Self.seenIds.contains(message.id) || appeared ? 1 : 0)
             .onAppear(perform: onFirstAppear)
         }
+    }
+
+    @ViewBuilder
+    private func eventCardRow(payload: GitHubEventPayload) -> some View {
+        GitHubEventCard(payload: payload, timestamp: message.shortTime)
+            .padding(.horizontal, 16)
     }
 
     // MARK: Avatar column
