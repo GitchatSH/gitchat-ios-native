@@ -8,12 +8,15 @@ import UIKit
 /// Placeholder: UITextView has no native placeholder; we render a
 /// `UILabel` overlay, hidden whenever `text` is non-empty.
 ///
-/// Sizing: `isScrollEnabled = false` makes UITextView publish an
-/// intrinsic content size that grows with content, matching the
-/// pre-existing SwiftUI `TextField(axis:lineLimit: 1...5)` behavior on
-/// iOS. The owning `ChatInputView` clamps min/max via SwiftUI frame
-/// modifiers; on Catalyst the surrounding pill keeps it visually
-/// single-line.
+/// Sizing: `isScrollEnabled = true` so once the frame reaches the
+/// 5-line cap (computed in `sizeThatFits`), the UITextView scrolls
+/// internally and keeps the caret in view. Previously this was set to
+/// `false` to force the field to publish a growing intrinsicContentSize,
+/// but that clipped any text past line 5 because the frame was capped
+/// while scrolling was disabled (see issue #87). The custom
+/// `sizeThatFits` below still drives SwiftUI sizing — UITextView's
+/// `sizeThatFits(_:)` returns the full content height regardless of
+/// `isScrollEnabled`, so frame clamping continues to work.
 ///
 /// Return key:
 /// - Catalyst: bare Return → `onSubmit` (handled in
@@ -36,7 +39,7 @@ struct PasteableTextField: UIViewRepresentable {
         tv.backgroundColor = .clear
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
-        tv.isScrollEnabled = false
+        tv.isScrollEnabled = true
         tv.focusEffect = nil
         tv.returnKeyType = .default
         tv.text = text
@@ -86,13 +89,12 @@ struct PasteableTextField: UIViewRepresentable {
     /// current text at the proposed width, clamped to:
     /// - 1 line minimum on both platforms
     /// - 1 line maximum on Mac Catalyst (single-line composer)
-    /// - 5 lines maximum on iOS (matches the prior `lineLimit(1...5)`)
+    /// - 5 lines maximum on iOS
     ///
-    /// This bypasses `intrinsicContentSize`, which SwiftUI was reading as
-    /// an unbounded value for an empty `UITextView` with
-    /// `isScrollEnabled = false` — causing the composer to render at the
-    /// SwiftUI frame's maxHeight regardless of content. iOS 16+ added
-    /// this hook precisely so representables can publish their own size.
+    /// When the content exceeds the iOS 5-line cap, the height stays at
+    /// `lineHeight * 5` and the UITextView (which has
+    /// `isScrollEnabled = true`) scrolls internally, keeping the caret
+    /// in view as the user keeps typing.
     func sizeThatFits(
         _ proposal: ProposedViewSize,
         uiView: PasteableUITextView,
