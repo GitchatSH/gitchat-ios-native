@@ -11,8 +11,12 @@ struct TopicListSheet: View {
     @State private var showCreate = false
 
     private var topics: [Topic] { store.topics(forParent: parent.id) }
-    private var pinned: [Topic] { topics.filter { $0.isPinned } }
-    private var unpinned: [Topic] { topics.filter { !$0.isPinned } }
+    private var pinned: [Topic] {
+        topics.filter { store.isLocallyPinned(topicId: $0.id, parentId: parent.id) }
+    }
+    private var unpinned: [Topic] {
+        topics.filter { !store.isLocallyPinned(topicId: $0.id, parentId: parent.id) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -68,7 +72,9 @@ struct TopicListSheet: View {
     }
 
     private func row(for topic: Topic) -> some View {
-        TopicRow(topic: topic, isActive: topic.id == activeTopicId) {
+        TopicRow(topic: topic,
+                 isActive: topic.id == activeTopicId,
+                 isPinned: store.isLocallyPinned(topicId: topic.id, parentId: parent.id)) {
             onPickTopic(topic)
         }
         .contextMenu { contextMenu(for: topic) }
@@ -81,18 +87,12 @@ struct TopicListSheet: View {
         Button { Task { await markRead(topic) } } label: {
             Label("Mark as read", systemImage: "checkmark.circle")
         }
-        if topic.isPinned {
-            Button { Task { await unpin(topic) } } label: {
-                Label("Unpin", systemImage: "pin.slash")
-            }
-        } else {
-            Menu {
-                ForEach(1...5, id: \.self) { slot in
-                    Button("Slot \(slot)") { Task { await pin(topic, order: slot) } }
-                }
-            } label: {
-                Label("Pin to position…", systemImage: "pin")
-            }
+        // Pin/Unpin is per-device only (matches the VS Code extension's
+        // webview-state pin model). No API call, no permission check.
+        let pinned = store.isLocallyPinned(topicId: topic.id, parentId: parent.id)
+        Button { togglePin(topic) } label: {
+            Label(pinned ? "Unpin" : "Pin",
+                  systemImage: pinned ? "pin.slash" : "pin")
         }
         if !topic.is_general {
             Button(role: .destructive) { Task { await archive(topic) } } label: {
@@ -159,33 +159,25 @@ struct TopicListSheet: View {
         try? await APIClient.shared.markTopicRead(parentId: parent.id, topicId: t.id)
     }
 
-    private func pin(_ t: Topic, order: Int) async {
-        do {
-            let updated = try await APIClient.shared.pinTopic(parentId: parent.id,
-                                                               topicId: t.id, order: order)
-            store.append(updated, parentId: parent.id)
-        } catch {
-            ToastCenter.shared.show(.error, "Could not pin", "Try another slot")
-        }
-    }
-
-    private func unpin(_ t: Topic) async {
-        do {
-            let updated = try await APIClient.shared.unpinTopic(parentId: parent.id,
-                                                                 topicId: t.id)
-            store.append(updated, parentId: parent.id)
-        } catch {
-            ToastCenter.shared.show(.error, "Could not unpin", nil)
-        }
+    private func togglePin(_ t: Topic) {
+        store.togglePin(topicId: t.id, parentId: parent.id)
     }
 
     private func archive(_ t: Topic) async {
         do {
             _ = try await APIClient.shared.archiveTopic(parentId: parent.id, topicId: t.id)
             store.archive(topicId: t.id, parentId: parent.id)
-        } catch {
+        } catch let APIError.http(status, body) where status == 403
+                                            && (body ?? "").contains("TOPIC_GENERAL_PROTECTED") {
+            ToastCenter.shared.show(.error, "Cannot archive General",
+                                     "The General topic is protected")
+        } catch let APIError.http(status, body) where status == 403 {
+            NSLog("[Topic.archive] 403 body=%@", body ?? "<nil>")
             ToastCenter.shared.show(.error, "Could not archive",
                                      "Only the creator or an admin can archive this topic")
+        } catch {
+            NSLog("[Topic.archive] error=%@", String(describing: error))
+            ToastCenter.shared.show(.error, "Could not archive", "Try again")
         }
     }
 }

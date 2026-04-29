@@ -927,12 +927,23 @@ struct ChatDetailView: View {
             Task { await vm.load() }
         }
         socket.onMessagePinned = { convId, msgId in
-            guard convId == vm.conversation.id else { return }
-            vm.pinnedIds.insert(msgId)
+            // BE emits MESSAGE_PINNED with the actual chat conversation id —
+            // when the user is in a topic, that's the topic id, not the
+            // parent group. `vm.conversation.id` is the legacy parent
+            // accessor and would never match. Compare against
+            // `target.conversationId` instead, then refresh the banner from
+            // BE so other-device pins surface with full message body
+            // (the socket payload only carries the id).
+            guard convId == vm.target.conversationId else { return }
+            if !vm.pinnedIds.contains(msgId) {
+                vm.pinnedIds.insert(msgId)
+                Task { await vm.loadPinned() }
+            }
         }
         socket.onMessageUnpinned = { convId, msgId in
-            guard convId == vm.conversation.id else { return }
+            guard convId == vm.target.conversationId else { return }
             vm.pinnedIds.remove(msgId)
+            vm.pinnedMessages.removeAll { $0.id == msgId }
         }
     }
 

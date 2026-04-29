@@ -531,8 +531,12 @@ final class ChatViewModel: ObservableObject {
     }
 
     func loadPinned() async {
+        // Pins live on the actual chat conversation row — when target is
+        // a topic, that's the topic id (not the parent group). `conversation.id`
+        // returns parent for topic targets (legacy accessor), so use
+        // `target.conversationId` instead.
         do {
-            let pins = try await APIClient.shared.pinnedMessages(conversationId: conversation.id)
+            let pins = try await APIClient.shared.pinnedMessages(conversationId: target.conversationId)
             self.pinnedIds = Set(pins.map(\.id))
             self.pinnedMessages = pins
         } catch { }
@@ -591,8 +595,10 @@ final class ChatViewModel: ObservableObject {
         )
         do {
             if let editing = editingMessage {
+                // BE looks up the message by (conversationId, messageId) —
+                // pass topic id when in a topic (see togglePin notes).
                 try await APIClient.shared.editMessage(
-                    conversationId: conversation.id,
+                    conversationId: target.conversationId,
                     messageId: editing.id,
                     body: body
                 )
@@ -733,8 +739,10 @@ final class ChatViewModel: ObservableObject {
     }
 
     func delete(_ msg: Message) async {
+        // BE looks up the message by (conversationId, messageId) — pass the
+        // topic id when in a topic (see togglePin notes for full rationale).
         do {
-            try await APIClient.shared.deleteMessage(conversationId: conversation.id, messageId: msg.id)
+            try await APIClient.shared.deleteMessage(conversationId: target.conversationId, messageId: msg.id)
             messages.removeAll { $0.id == msg.id }
         } catch { self.error = error.localizedDescription }
     }
@@ -804,28 +812,39 @@ final class ChatViewModel: ObservableObject {
     func togglePin(_ msg: Message) async {
         let wasPinned = pinnedIds.contains(msg.id)
         // Flip locally first so the UI updates instantly; revert if the
-        // API call fails.
+        // API call fails. BE returns pins ordered by `pinnedAt DESC`
+        // (newest first), so inserting at index 0 keeps the optimistic
+        // banner content consistent with what `loadPinned()` will return
+        // — otherwise the banner shows a stale pin until manual reload.
         if wasPinned {
             pinnedIds.remove(msg.id)
             pinnedMessages.removeAll { $0.id == msg.id }
         } else {
             pinnedIds.insert(msg.id)
-            pinnedMessages.append(msg)
+            pinnedMessages.insert(msg, at: 0)
         }
         Haptics.impact(.light)
+        // BE looks up the message by (conversationId, messageId). When the
+        // active target is a topic, the message lives on the topic row, not
+        // the parent group — pass `target.conversationId` (topic id when
+        // in topic) instead of `conversation.id` (legacy accessor that
+        // returns parent for topic targets).
+        let convId = target.conversationId
         do {
             if wasPinned {
-                try await APIClient.shared.unpinMessage(conversationId: conversation.id, messageId: msg.id)
+                try await APIClient.shared.unpinMessage(conversationId: convId, messageId: msg.id)
                 ToastCenter.shared.show(.info, "Unpinned message")
             } else {
-                try await APIClient.shared.pinMessage(conversationId: conversation.id, messageId: msg.id)
+                try await APIClient.shared.pinMessage(conversationId: convId, messageId: msg.id)
                 ToastCenter.shared.show(.success, "Pinned message")
             }
         } catch {
+            NSLog("[Pin] convId=%@ msgId=%@ wasPinned=%@ error=%@",
+                  convId, msg.id, wasPinned ? "true" : "false", String(describing: error))
             // Revert on failure
             if wasPinned {
                 pinnedIds.insert(msg.id)
-                pinnedMessages.append(msg)
+                pinnedMessages.insert(msg, at: 0)
             } else {
                 pinnedIds.remove(msg.id)
                 pinnedMessages.removeAll { $0.id == msg.id }
