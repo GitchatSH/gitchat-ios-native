@@ -47,6 +47,7 @@
 		3447209A70D5284522CAA6A1 /* PushSubscriptionSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C4210527E4A63652D48DEC /* PushSubscriptionSync.swift */; };
 		345DAB43FC963AC5DC04D6F6 /* ConversationsListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16BA9650859D21117E8FF1B /* ConversationsListView.swift */; };
 		354CA3C2BF0A5A320F72340D /* InvitePreviewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5504187F7E16505485EECBE /* InvitePreviewSheet.swift */; };
+		35CE628923F58DFA1F4E22C6 /* TopicTabsStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F0E95AC9678848B0DBE0F91 /* TopicTabsStrip.swift */; };
 		373D74BE3BC0816A5C64EE10 /* MacEscapeToHome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73F09F948E748AEF5080DB1B /* MacEscapeToHome.swift */; };
 		37506F82CD9AC83736AEFDF5 /* ShareAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 449D98B405970A2AF05994F1 /* ShareAPI.swift */; };
 		37A90D301655300DDA2E6111 /* ChatReplyPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 099A525B70EFC8BB24EDBA38 /* ChatReplyPreview.swift */; };
@@ -146,6 +147,7 @@
 		B7312742825A6973BA9FE86B /* AuthStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9A44DB5595F253E8FA0F678 /* AuthStore.swift */; };
 		B83DF2EEDFDD866D3AFE69E6 /* DesktopReturnToSend.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B4E0D7FC5BEBE8BD771C03 /* DesktopReturnToSend.swift */; };
 		B8FDA609D8161EA4A77671E1 /* ChatMessageText.swift in Sources */ = {isa = PBXBuildFile; fileRef = C09A284A65E6829E9107DC5B /* ChatMessageText.swift */; };
+		B9BF1CA0133329B39B916250 /* TopicListContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 896795B9C8F75F43A68DC187 /* TopicListContent.swift */; };
 		BA24D8E2CF19CCBD4345A975 /* MutedConversationsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */; };
 		BB54A7D21F3FFF7C735D3E51 /* GitHubEventPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C35C6EDE03C18F7E69EAAD7 /* GitHubEventPayloadTests.swift */; };
 		BC07AD1A5393406245A14CA4 /* KeyboardState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867F0CBC05168FBAABB0109C /* KeyboardState.swift */; };
@@ -303,6 +305,7 @@
 		3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		3CC840DF62F0D52265D6C401 /* GitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GitchatShareExtension.entitlements; sourceTree = "<group>"; };
 		3EACA3D0C53F605D0326E854 /* APIClient+Group.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Group.swift"; sourceTree = "<group>"; };
+		3F0E95AC9678848B0DBE0F91 /* TopicTabsStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicTabsStrip.swift; sourceTree = "<group>"; };
 		3F65970AD6EC34B2CDB0EB98 /* GitchatIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GitchatIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		401FF094D33B8716885A5985 /* GitchatIOSUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = GitchatIOSUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		40DB657ADF1F6FC16C8A2BA9 /* ImageCropSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageCropSheet.swift; sourceTree = "<group>"; };
@@ -356,6 +359,7 @@
 		869958F907BFE47F552079AF /* ChatTargetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTargetTests.swift; sourceTree = "<group>"; };
 		877BDA4EA59EAE485A2E7219 /* DiscoverViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverViewModel.swift; sourceTree = "<group>"; };
 		88E8DD4490C4D12489573615 /* MessageCacheUpsertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCacheUpsertTests.swift; sourceTree = "<group>"; };
+		896795B9C8F75F43A68DC187 /* TopicListContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicListContent.swift; sourceTree = "<group>"; };
 		89D44C363FDE6442F09E7C13 /* TopicCreateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicCreateSheet.swift; sourceTree = "<group>"; };
 		8A624F25A8589989F02FE384 /* Geist-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Geist-Regular.ttf"; sourceTree = "<group>"; };
 		8BF46F2B48FF7EC005412739 /* PendingAttachmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingAttachmentTests.swift; sourceTree = "<group>"; };
@@ -734,9 +738,11 @@
 			children = (
 				89D44C363FDE6442F09E7C13 /* TopicCreateSheet.swift */,
 				6311B0C0CFDB81C367C16FF8 /* TopicEmojiPresets.swift */,
+				896795B9C8F75F43A68DC187 /* TopicListContent.swift */,
 				3381F45EB5AC1A25D178B698 /* TopicListSheet.swift */,
 				AA0DC891F548EEBA0A31C07C /* TopicListStore.swift */,
 				A247648DCA945BE9E7934388 /* TopicRow.swift */,
+				3F0E95AC9678848B0DBE0F91 /* TopicTabsStrip.swift */,
 			);
 			path = Topics;
 			sourceTree = "<group>";
@@ -1350,10 +1356,12 @@
 				8DE798DC205BF80EAB219FDB /* TopicColor.swift in Sources */,
 				4E058E4A54C6BF60D5327982 /* TopicCreateSheet.swift in Sources */,
 				7C549C1AEAC820616D9E5BEE /* TopicEmojiPresets.swift in Sources */,
+				B9BF1CA0133329B39B916250 /* TopicListContent.swift in Sources */,
 				A2233FEBA35EAEA1A0E4FAE1 /* TopicListSheet.swift in Sources */,
 				D81934AFE5A73A2F1DA0C725 /* TopicListStore.swift in Sources */,
 				64FF054486B8A85A02E845AB /* TopicRow.swift in Sources */,
 				D4330533AA0D2636297E366E /* TopicSocketEvent.swift in Sources */,
+				35CE628923F58DFA1F4E22C6 /* TopicTabsStrip.swift in Sources */,
 				AB9FCA5C4BD98C40D7E5CC9C /* TypingIndicatorRow.swift in Sources */,
 				FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */,
 				589F007C9FC3C65B41E24DF1 /* WaveButton.swift in Sources */,

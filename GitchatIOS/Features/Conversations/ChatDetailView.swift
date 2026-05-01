@@ -155,6 +155,7 @@ struct ChatDetailView: View {
             }
         }
         .task(id: vm.conversation.id) { await resolveTarget() }
+        #if !targetEnvironment(macCatalyst)
         .sheet(isPresented: $showTopicSheet) {
             if case .topic(_, let parent) = resolvedTarget {
                 TopicListSheet(
@@ -170,6 +171,7 @@ struct ChatDetailView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        #endif
         .task { await onAppearTask() }
         .onAppear {
             if let mid = router.pendingMessageId {
@@ -281,6 +283,21 @@ struct ChatDetailView: View {
         )
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
+        #if targetEnvironment(macCatalyst)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if vm.conversation.hasTopicsEnabled,
+               case .topic(_, let parent) = resolvedTarget {
+                TopicTabsStrip(
+                    parent: parent,
+                    activeTopicId: resolvedTarget?.conversationId,
+                    onPickTopic: { picked in
+                        vm.setTarget(.topic(picked, parent: parent))
+                        resolvedTarget = .topic(picked, parent: parent)
+                    }
+                )
+            }
+        }
+        #endif
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
