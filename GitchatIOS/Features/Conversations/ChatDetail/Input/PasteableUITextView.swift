@@ -34,24 +34,30 @@ final class PasteableUITextView: UITextView {
 
 #if targetEnvironment(macCatalyst)
     /// Catalyst: bare Return submits via `onReturnSubmit`; Shift+Return
-    /// falls through to default newline insertion. Tracked here rather
-    /// than in `UITextViewDelegate.shouldChangeTextIn:` because the
-    /// text-replacement callback does not carry modifier-flag context.
+    /// falls through to default newline insertion.
+    ///
+    /// Implemented via `UIKeyCommand` with
+    /// `wantsPriorityOverSystemBehavior = true` rather than
+    /// `pressesBegan`. UITextView's `UIKeyInput` text-input pipeline
+    /// consumes Return as `\n` on Catalyst before unhandled presses
+    /// reach the responder chain, so a `pressesBegan` intercept gets
+    /// bypassed and the newline is inserted anyway. The key command
+    /// preempts that pipeline; Shift+Return doesn't match (different
+    /// modifier flags) so the system inserts the newline as usual.
     var onReturnSubmit: (() -> Void)?
 
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        for press in presses {
-            guard let key = press.key else { continue }
-            if key.keyCode == .keyboardReturnOrEnter {
-                if key.modifierFlags.contains(.shift) {
-                    super.pressesBegan(presses, with: event)
-                    return
-                }
-                onReturnSubmit?()
-                return
-            }
-        }
-        super.pressesBegan(presses, with: event)
+    override var keyCommands: [UIKeyCommand]? {
+        let plainReturn = UIKeyCommand(
+            input: "\r",
+            modifierFlags: [],
+            action: #selector(handleReturnSubmit)
+        )
+        plainReturn.wantsPriorityOverSystemBehavior = true
+        return (super.keyCommands ?? []) + [plainReturn]
+    }
+
+    @objc private func handleReturnSubmit() {
+        onReturnSubmit?()
     }
 #endif
 }
