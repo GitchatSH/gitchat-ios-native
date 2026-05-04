@@ -292,14 +292,41 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         let seenToggled = coord.lastShowSeen != showSeen
         let unreadChanged = coord.lastUnreadCount != unreadCount || coord.lastMyReadAt != myReadAt
         let itemsChanged = coord.lastItems.map(\.id) != newIDs
+
+        // Capture the scroll-to-bottom intent BEFORE applying the snapshot.
+        // setContentOffset(animated: true) loses to the diffable apply's row
+        // delete+insert animation: contentSize inflates as the new bubble
+        // expands, UITableView's internal offset-stability adjustment shifts
+        // contentOffset partway through, and our scroll target is overridden
+        // (lands at e.g. -11 instead of -92 → bubble parked behind composer).
+        // Fix: defer the scroll into dataSource.apply's completion handler so
+        // it runs after the row animation settles and contentSize is final.
+        let needsScroll = coord.lastScrollToBottomToken != scrollToBottomToken
+        if needsScroll {
+            coord.lastScrollToBottomToken = scrollToBottomToken
+        }
+        let scrollIfNeeded: () -> Void = { [weak tv] in
+            guard needsScroll, let tv = tv else { return }
+            coord.scrollToBottom(in: tv, animated: true)
+        }
+
         if itemsChanged || typingToggled || seenToggled || unreadChanged {
             coord.lastUnreadCount = unreadCount
             coord.lastMyReadAt = myReadAt
             let animate = isAppend || typingToggled
-            coord.apply(items: items, typingUsers: typingUsers, showSeen: showSeen, animated: animate)
+            coord.apply(
+                items: items,
+                typingUsers: typingUsers,
+                showSeen: showSeen,
+                animated: animate,
+                completion: scrollIfNeeded
+            )
         } else {
             coord.lastItems = items
             coord.itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+            // No snapshot animation in flight, so the race doesn't apply —
+            // scroll synchronously.
+            scrollIfNeeded()
         }
 
         // Reconfigure content-changed rows AFTER the structural apply
@@ -414,15 +441,9 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             }
         }
 
-        // Imperative scroll-to-bottom token (send button, etc.).
-        // Must run AFTER contentInset sync above, and synchronously —
-        // async dispatch loses the race against preference-triggered
-        // re-renders that reset contentOffset.
-        if coord.lastScrollToBottomToken != scrollToBottomToken {
-            coord.lastScrollToBottomToken = scrollToBottomToken
-            NSLog("[scroll-debug] updateUIView token bumped → scrollToBottom inset.top=\(tv.contentInset.top) offset.y=\(tv.contentOffset.y) contentSize.h=\(tv.contentSize.height) bounds.h=\(tv.bounds.height) composerOverlayHeight=\(composerOverlayHeight)")
-            coord.scrollToBottom(in: tv, animated: true)
-        }
+        // Imperative scroll-to-bottom token is handled earlier (gated on
+        // dataSource.apply completion) so the scroll runs after the row
+        // animation settles instead of racing it.
     }
 
     // MARK: - Coordinator
@@ -693,7 +714,8 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             items: [Message],
             typingUsers: [String],
             showSeen: Bool,
-            animated: Bool
+            animated: Bool,
+            completion: (() -> Void)? = nil
         ) {
             lastItems = items
             itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
@@ -808,7 +830,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 rows.append(chatDateRowID(for: dayGroup.sectionID))
                 snap.appendItems(rows, toSection: dayGroup.sectionID)
             }
-            dataSource.apply(snap, animatingDifferences: animated)
+            dataSource.apply(snap, animatingDifferences: animated, completion: completion)
         }
 
         func reconfigure(ids: [String]) {
