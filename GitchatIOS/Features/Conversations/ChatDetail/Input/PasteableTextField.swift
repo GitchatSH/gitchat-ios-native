@@ -20,7 +20,7 @@ import UIKit
 ///
 /// Return key:
 /// - Catalyst: bare Return → `onSubmit` (handled in
-///   `PasteableUITextView.pressesBegan`); Shift+Return → newline.
+///   `PasteableUITextView.keyCommands`); Shift+Return → newline.
 /// - iOS: Return inserts newline; send is via the send button.
 ///
 /// Focus ring: `focusEffect = nil` opts out of the system focus engine
