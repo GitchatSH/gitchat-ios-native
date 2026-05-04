@@ -101,6 +101,24 @@ struct ChatAttachmentsGrid: View {
     private func one(_ a: MessageAttachment) -> some View {
         let url = URL(string: a.url)
         if applyClip {
+            // Stable frame from intrinsic dimensions so cell height doesn't
+            // shift during the brief `.task` initial-frame placeholder
+            // window before CachedAsyncImage's load() resolves. Without this,
+            // the standalone path's placeholder is a min(maxW,maxH) square
+            // and the loaded image is fitted-aspect — cell visibly resizes.
+            // See spec 2026-05-04-chat-send-jank-fix-design §2.6.
+            let fittedSize: CGSize? = {
+                guard let w = a.width, let h = a.height, w > 0, h > 0 else { return nil }
+                let aspect = CGFloat(w) / CGFloat(h)
+                let maxH: CGFloat = 320
+                if aspect >= 1 {
+                    let fw = min(maxWidth, CGFloat(w))
+                    return CGSize(width: fw, height: fw / aspect)
+                } else {
+                    let fh = min(maxH, CGFloat(h))
+                    return CGSize(width: fh * aspect, height: fh)
+                }
+            }()
             // Standalone: fit with own clip
             ZStack {
                 CachedAsyncImage(
@@ -115,6 +133,7 @@ struct ChatAttachmentsGrid: View {
                     ProgressView().tint(.white).controlSize(.large)
                 }
             }
+            .frame(width: fittedSize?.width, height: fittedSize?.height)
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
             .contentShape(Rectangle())
             .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)

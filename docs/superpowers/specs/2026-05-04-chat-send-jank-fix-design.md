@@ -10,57 +10,57 @@
 
 ---
 
-## 0. Tóm tắt 1-phút
+## 0. One-minute summary
 
-Sau khi PR #103 đặt bubble đúng chỗ (hết "behind composer"), mỗi lần gửi vẫn thấy bubble "nhảy" nhẹ. Cụ thể: `scrollIfNeeded` của #103 snap `setContentOffset(animated:false)` ba lần trong 3 runloop ticks để win race với `UIHostingConfiguration` cell-sizing. Giữa các snap, `contentSize` đổi (log #103: `4092 → 4051.5`) → bubble visible jump. Trên rapid-send, nhiều snap-sequences chồng lên = chaos.
+After PR #103 placed the bubble at the right position (no more "behind composer"), each send still showed a small visible jump. Specifically: #103's `scrollIfNeeded` snaps `setContentOffset(animated:false)` three times across three runloop ticks to win the race against `UIHostingConfiguration` cell-sizing. Between those snaps, `contentSize` shifts (verification log from #103: `4092 → 4051.5`) → bubble visibly jumps. On rapid-send, multiple snap sequences overlap = chaos.
 
-Fix gồm 2 phần độc lập, đều surgical:
+The fix has two independent surgical parts:
 
-| # | Phần | File |
+| # | Part | File |
 |---|---|---|
-| 1 | **Data parity** ở `OutboxStore.toMessage` (populate `client_message_id`, `attachments`) — pending bubble và server-confirmed bubble render bit-identical cho text + attachments | `GitchatIOS/Core/OutboxStore.swift` |
-| 2 | **Settle-aware scroll** thay thế triple-snap — KVO `tableView.contentSize` trong window ≤ 300ms; re-anchor offset mỗi khi contentSize đổi và user vẫn ở đáy; tự stop khi stable hoặc deadline | `GitchatIOS/Features/Conversations/ChatDetail/List/ChatMessagesList.swift` |
+| 1 | **Data parity** in `OutboxStore.toMessage` (populate `client_message_id`, `attachments`) — pending bubble and server-confirmed bubble render bit-identical for text + attachments | `GitchatIOS/Core/OutboxStore.swift` |
+| 2 | **Settle-aware scroll** replacing the triple-snap — KVO on `tableView.contentSize` within a ≤ 300ms window; re-anchor offset on every contentSize change while user is at-bottom; auto-stops on stable / deadline | `GitchatIOS/Features/Conversations/ChatDetail/List/ChatMessagesList.swift` |
 
-Reply-quote pending → server-confirmed transition vẫn còn small reflow (yêu cầu mở rộng `PendingMessage` Codable schema → migration đĩa) → **out of scope b1**, track như v1.1.
+Reply-quote pending → server-confirmed transition still has a small reflow (would require expanding the `PendingMessage` Codable schema → on-disk migration) → **out of scope for b1**, tracked as v1.1.
 
-Out of scope hoàn toàn: thay rotated UITableView. Nói cách khác b1 không loại bỏ hẳn class lỗi do direction #4 trong issue mô tả; đó là Level 2 trong companion exploration.
+Fully out of scope: replacing the rotated UITableView. b1 does not eliminate the entire class of bugs described in direction #4 of the issue; that's covered by Level 2 in the companion exploration.
 
 ---
 
 ## 1. Diagnosis
 
-### 1.1 Nguyên nhân #103 vẫn còn jank
+### 1.1 Why #103 still janks
 
-Triple-snap là **open-loop**: pin offset tại 3 thời điểm rời rạc (`apply-completion`, `runloop+1`, `runloop+2`). Giữa các điểm này UIKit/SwiftUI có thể đổi `contentSize` mà cơ chế của #103 không phản ứng được. Hệ quả:
-- Cell vừa insert (server-id) qua nhiều passes của `UIHostingConfiguration` self-sizing — kích thước intrinsic ổn định sau vài frames, không phải ngay sau diff completion.
-- Cell vừa delete (local-cmid) cũng trigger contentSize shrink khi UITableView reclaim row height.
-- Trên rapid-send, nhiều `scrollIfNeeded` chains chạy đồng thời — mỗi cái có 3 ticks, không cancel cái cũ → "multiple overlapping snap sequences" mà issue mô tả.
+The triple-snap is **open-loop**: it pins offset at three discrete moments (`apply-completion`, `runloop+1`, `runloop+2`). Between those points, UIKit/SwiftUI may change `contentSize` and #103's mechanism cannot react. Consequences:
+- The newly-inserted cell (server-id) goes through multiple `UIHostingConfiguration` self-sizing passes — its intrinsic size only stabilizes after several frames, not immediately after diff completion.
+- The just-deleted cell (local-cmid) also triggers a contentSize shrink as UITableView reclaims the row height.
+- Under rapid-send, multiple `scrollIfNeeded` chains run concurrently — each has 3 ticks, none cancels the previous → "multiple overlapping snap sequences" as the issue describes.
 
-### 1.2 Nguyên nhân thứ hai — data parity gap
+### 1.2 Secondary cause — data parity gap
 
-`OutboxStore.toMessage` (`OutboxStore.swift:531`) chỉ populate subset của `Message`:
+`OutboxStore.toMessage` (`OutboxStore.swift:531`) only populates a subset of `Message`:
 ```swift
 Message(id: ..., conversation_id: ..., sender: ..., sender_avatar: nil,
         content: p.content, created_at: ..., edited_at: nil,
         reactions: nil, attachment_url: nil, type: "user", reply_to_id: p.replyToID)
 ```
-**Thiếu:** `client_message_id`, `attachments`, `reply`, `reactionRows`, `unsent_at`.
+**Missing:** `client_message_id`, `attachments`, `reply`, `reactionRows`, `unsent_at`.
 
-Cho text-only thì pending vs server-confirmed đều có các field này = nil, không gây reflow. Nhưng:
-- **Attachments:** `PendingMessage.attachments: [PendingAttachment]` có sẵn (data + mime + w/h). Pending bubble hiện không vẽ thumbnail, server-confirmed vẽ thumbnail → resize lớn (chiều cao 5–10×) khi swap. **Fix ở b1.**
-- **Reply preview:** `PendingMessage` chỉ có `replyToID: String?`, không có `ReplyPreview` snapshot → quote-preview chỉ xuất hiện sau khi server confirm → reflow nhỏ (~30–50pt). **Out of scope b1** (cần expand PendingMessage Codable + on-disk migration).
+For text-only sends, both pending and server-confirmed have these fields = nil, so no reflow. But:
+- **Attachments:** `PendingMessage.attachments: [PendingAttachment]` already carries data + mime + w/h. The pending bubble currently doesn't draw a thumbnail; the server-confirmed bubble does → large resize (5–10× height) on swap. **Fixed in b1.**
+- **Reply preview:** `PendingMessage` only has `replyToID: String?`, no `ReplyPreview` snapshot → quote-preview only appears after server confirm → small reflow (~30–50pt). **Out of scope for b1** (would require expanding PendingMessage Codable + on-disk migration).
 
-### 1.3 Acceptance từ issue
+### 1.3 Acceptance from the issue
 
 > Sends look smooth (Telegram / iMessage parity): the bubble appears at the bottom and stays there without visible offset adjustment.
 
-Cụ thể hóa thành measurable AC ở §4.
+Concretized into measurable AC in §4.
 
 ---
 
-## 2. Phần 1 — Data parity ở `OutboxStore.toMessage`
+## 2. Part 1 — Data parity in `OutboxStore.toMessage`
 
-### 2.1 Thay đổi
+### 2.1 Change
 
 ```swift
 func toMessage(_ p: PendingMessage) -> Message {
@@ -97,37 +97,62 @@ func toMessage(_ p: PendingMessage) -> Message {
 }
 ```
 
-Pattern bám theo `Message.optimistic(...)` ở `Models.swift:709` (đã là chuẩn cho legacy flow), tránh tái phát minh mapping.
+The pattern follows `Message.optimistic(...)` at `Models.swift:709` (already the standard for the legacy flow), avoiding any reinvention of the mapping.
 
 ### 2.2 Invariants check
 
-Đối chiếu `optimistic-send-pipeline.md`:
-- **Inv-1** (pending only in OutboxStore, server only in vm.messages, merge in `visibleMessages`): ✅ — vẫn render pending từ store, chỉ đổi cách project sang Message.
-- **Inv-4** (pre-stamp createdAt với client tap time): ✅ — vẫn dùng `Self.iso8601.string(from: p.createdAt)`.
-- **Inv-5** (ms precision): ✅ — `Self.iso8601` đã set `.withFractionalSeconds`.
-- **Inv-6** (không touch `seenIds` từ executeSend success path): n/a, không sửa send flow.
+Cross-checked against `optimistic-send-pipeline.md`:
+- **Inv-1** (pending only in OutboxStore, server only in vm.messages, merge in `visibleMessages`): ✅ — pending is still rendered from the store; only the projection to Message changes.
+- **Inv-4** (pre-stamp createdAt with client tap time): ✅ — still uses `Self.iso8601.string(from: p.createdAt)`.
+- **Inv-5** (ms precision): ✅ — `Self.iso8601` already configured with `.withFractionalSeconds`.
+- **Inv-6** (don't touch `seenIds` from executeSend success path): n/a, the send flow is unchanged.
 
 ### 2.3 Schema/migration
 
-Không đổi `PendingMessage` Codable → `outbox-pending.json` trên user devices đọc tự động. Không cần migration.
+No change to `PendingMessage` Codable → `outbox-pending.json` on user devices decodes automatically. No migration required.
 
 ### 2.4 Edge cases
 
-- **Empty attachments** (text-only): `mappedAttachments == nil` — không khác trước → không thay đổi behavior text-only.
-- **Attachment chưa upload xong** (`att.uploaded == nil`): map với `url: ""`. UI render path đã chấp nhận empty url (xem §2.5 finding). Cell height vẫn đúng vì `ChatAttachmentsGrid` set `.frame(width:height:)` cố định theo attachment count + bubble maxWidth, không phụ thuộc URL được resolve hay chưa.
-- **Attachment đã upload** (`att.uploaded != nil`): dùng `uploaded.url` — bubble pending hiển thị đúng URL, swap sang server-confirmed cùng URL → no reflow.
+- **Empty attachments** (text-only): `mappedAttachments == nil` — identical to the previous behavior → text-only behavior unchanged.
+- **Attachment not yet uploaded** (`att.uploaded == nil`): mapped with `url: ""`. The UI render path already accepts an empty url (see §2.5 finding). Cell height is still correct because `ChatAttachmentsGrid` sets `.frame(width:height:)` deterministically based on attachment count + bubble maxWidth, independent of whether the URL has resolved.
+- **Attachment already uploaded** (`att.uploaded != nil`): uses `uploaded.url` — pending bubble shows the correct URL, swapping to the server-confirmed Message uses the same URL → no reflow.
 
 ### 2.5 Empty-URL probe finding (Task 3 result)
 
-Probe ngày 2026-05-04: `ChatAttachmentsGrid` (`GitchatIOS/Features/Conversations/ChatDetail/Message/ChatAttachmentsGrid.swift:69-98`) gọi `URL(string: a.url)` và truyền vào `CachedAsyncImage(url:)`. Empty string → `URL(string: "")` returns `nil` → `CachedAsyncImage` không attempt load, render filled placeholder. `isUploading` flag (set bằng `message.id.hasPrefix("local-")` trong `ChatMessageView.swift:433/455`) overlay ProgressView lên placeholder cho pending state. Frame width/height fixed theo attachment count + bubble maxWidth (không phụ thuộc URL resolve), nên cell intrinsic height giống hệt giữa pending placeholder và server-confirmed real-image. Không cần defensive guard — render path đã robust với empty url.
+Probe on 2026-05-04: `ChatAttachmentsGrid` (`GitchatIOS/Features/Conversations/ChatDetail/Message/ChatAttachmentsGrid.swift:69-98`) calls `URL(string: a.url)` and passes the result into `CachedAsyncImage(url:)`. An empty string → `URL(string: "")` returns `nil` → `CachedAsyncImage` does not attempt to load and renders a filled placeholder. The `isUploading` flag (set via `message.id.hasPrefix("local-")` in `ChatMessageView.swift:433/455`) overlays a ProgressView on top of the placeholder for the pending state. The render path does not crash on empty url. **However**, §2.6 below shows this is a half-fix — the placeholder→image transition when the real URL arrives still causes jank.
+
+### 2.6 Image-jank follow-up (Mac Catalyst regression report 2026-05-04)
+
+After the initial b1 was merged, EthanMiller0x tested on Mac Catalyst and reported: sending an image (with or without caption) still felt like a jump when the upload completed. Re-investigation surfaced:
+
+**Root cause #1 (cell-height shift, standalone path only):**
+`ChatAttachmentsGrid.one(applyClip: true)` has no fixed `.frame(width:height:)`. `CachedAsyncImage`'s placeholder renders `Color.frame(width: side, height: side)` as a square (`side = min(260, 320) = 260`). Once the image loads, `.frame(width: fitted.w, height: fitted.h)` sizes by the actual aspect ratio (e.g., 240×320 portrait, 260×146 landscape). The cell's intrinsic height changes → contentSize shift → unanchored jump.
+
+**Root cause #2 (placeholder→image visual flash, both paths):**
+On a slow network (Mac Catalyst real Wi-Fi vs iOS sim local cache), `CachedAsyncImage`'s `.task(id: url)` takes a few hundred milliseconds to seconds to fetch + decode. When the local→server ID flip happens, the cell rebuilds with the new url → CachedAsyncImage state resets → placeholder shows up again while the network fetch runs → user sees a flash. The iOS simulator doesn't show this because the local cache hits or the fetch is instant.
+
+**Fix:**
+1. **Photo picker captures pixel dims** (`ChatDetailView.swift:781-792`): set `width: Int(img.size.width * img.scale)`, `height: ...` instead of nil. BE-format pixel dimensions; consumed by (3) below.
+2. **OutboxStore transient temp-file map** (`OutboxStore.swift`):
+   - `localPreviewPaths: [clientAttachmentID: URL]` (in-memory only, not Codable, not persisted).
+   - `enqueue` calls `registerLocalPreview` for every image attachment → writes `sourceData` to `tmp/gitchat-outbox-previews/<id>.<ext>`, stores the URL in the map.
+   - `markDelivered`/`discard`/`cancel` call `cleanupLocalPreviews` to remove the file + drop the entry.
+3. **`toMessage` URL preference** (`OutboxStore.swift:531`): `att.uploaded?.url ?? localPreviewPaths[att.id]?.absoluteString ?? ""`. The pending bubble uses a `file://` URL; CachedAsyncImage's `load()` takes the `if url.isFileURL` branch → `UIImage(contentsOfFile:)` synchronous → image renders without going through the placeholder.
+4. **ImageCache prime after upload** (`OutboxStore.executeSend`): right after `att.uploaded = ref` is set, call `ImageCache.shared.store(uiImage, for: serverURL)` + `storeRawData(...)`. Later, when the ID flips → cell rebuilds with the server URL → CachedAsyncImage `load()` → `ImageCache.shared.image(for:)` cache hit immediately → no network fetch, no placeholder flash.
+5. **`ChatAttachmentsGrid.one(applyClip: true)` frame wrap** (`ChatAttachmentsGrid.swift:101`): compute fittedSize from `a.width/a.height` (the same aspect-fit math as CachedAsyncImage's loaded-image branch), wrap the ZStack in `.frame(width: fittedSize?.width, height: fittedSize?.height)`. If dims are nil (legacy messages from before this fix) → `.frame(width: nil, height: nil)` is identity, behavior unchanged.
+
+**Edge cases:**
+- File write failure (full disk): the `localPreviewPaths` map has no entry → falls back to URL = "" → placeholder. Acceptable.
+- App restart during a failed-message retry: the temp directory may have been cleaned by the OS (sandbox `/tmp/...` usually persists across restart but it's not guaranteed) → file missing → CachedAsyncImage placeholder shows briefly → on ID flip, the cache prime didn't happen in this session → falls back to a normal network fetch. Acceptable for the rare retry-after-restart case.
+- Non-image attachment (file/document): the `mimeType.hasPrefix("image/")` guard skips both registration and cache priming → behavior unchanged.
 
 ---
 
-## 3. Phần 2 — Settle-aware scroll thay triple-snap
+## 3. Part 2 — Settle-aware scroll replacing the triple-snap
 
-### 3.1 Cơ chế
+### 3.1 Mechanism
 
-Thay block `scrollIfNeeded` (`ChatMessagesList.swift:311–329`) bằng phương thức trên Coordinator:
+Replace the `scrollIfNeeded` block (`ChatMessagesList.swift:311–329`) with methods on the Coordinator:
 
 ```swift
 // MARK: Anchored scroll (settle-aware)
@@ -141,7 +166,7 @@ private var anchorStableTicks: Int = 0
 private var anchorStartedAt: Date?
 
 func beginAnchoredScrollToBottom(in tv: UITableView) {
-    cancelAnchor(reason: "superseded")  // rapid-send: hủy window cũ trước khi setup window mới
+    cancelAnchor(reason: "superseded")  // rapid-send: cancel old window before setting up a new one
 
     let snap: () -> Void = { [weak tv] in
         guard let tv else { return }
@@ -199,7 +224,7 @@ private func cancelAnchor(reason: String) {
 }
 ```
 
-Wiring (thay `scrollIfNeeded` block hiện tại):
+Wiring (replacing the existing `scrollIfNeeded` block):
 ```swift
 let scrollIfNeeded: () -> Void = { [weak tv, weak coord] in
     guard needsScroll, let tv = tv, let coord = coord else { return }
@@ -207,76 +232,76 @@ let scrollIfNeeded: () -> Void = { [weak tv, weak coord] in
 }
 ```
 
-Còn lại của `updateUIView` không đổi (animated path / non-animated path đều gọi `scrollIfNeeded`).
+The rest of `updateUIView` is unchanged (the animated path and the non-animated path both call `scrollIfNeeded`).
 
-### 3.2 Lý do KVO thay vì 2 alternatives
+### 3.2 Why KVO over the two alternatives
 
-| Approach | Ưu | Nhược | Verdict |
+| Approach | Pros | Cons | Verdict |
 |---|---|---|---|
-| **KVO contentSize** (chosen) | đóng vòng kín — bắt mọi contentSize change UIKit gây ra; auto-stop khi stable | KVO trên `UIScrollView.contentSize` không phải fully-documented public; pattern dùng phổ biến trong iOS chat apps thực tế | đủ tin cậy cho b1 |
-| Custom `UITableView` subclass override `setContentSize:` | reliable nhất, không phụ thuộc KVO behavior | đụng path khởi tạo `UITableView(frame:style:)` ở `makeUIView`; lan ra cell registration; nặng tay cho 1 fix | **đẩy sang Level 2** — chính là cơ sở cho rotated-table replacement |
-| CADisplayLink N frames | đơn giản, frame-driven | wasted work nếu settle 1 frame; có thể miss late shift sau N frames; không có stop condition tự nhiên | rejected |
+| **KVO contentSize** (chosen) | closed-loop — catches every contentSize change UIKit triggers; auto-stops on stable | KVO on `UIScrollView.contentSize` is not a fully-documented public contract; the pattern is widely used in real iOS chat apps | reliable enough for b1 |
+| Custom `UITableView` subclass overriding `setContentSize:` | most reliable, doesn't depend on KVO behavior | touches the `UITableView(frame:style:)` init path in `makeUIView`; spreads into cell registration; heavy-handed for one fix | **deferred to Level 2** — this is the foundation for the rotated-table replacement |
+| CADisplayLink for N frames | simple, frame-driven | wasted work if it settles in 1 frame; may miss late shifts after the N-frame window; no natural stop condition | rejected |
 
-### 3.3 Stop conditions (3 cơ chế chồng nhau)
+### 3.3 Stop conditions (3 overlapping mechanisms)
 
-1. ContentSize stable 2 KVO ticks liên tiếp (delta < 0.5pt) → `reason=stable`.
-2. Hard deadline 300ms từ start → `reason=deadline`.
-3. User scroll lên (`offset > -inset.top + 120`) → `reason=user-scrolled-up`.
+1. ContentSize stable for 2 consecutive KVO ticks (delta < 0.5pt) → `reason=stable`.
+2. Hard 300ms deadline from start → `reason=deadline`.
+3. User scrolls up (`offset > -inset.top + 120`) → `reason=user-scrolled-up`.
 
-Khi `beginAnchoredScrollToBottom` gọi lại trên rapid-send, phía đầu tự gọi `cancelAnchor(reason: "superseded")` → ngăn 2 windows chồng lên đồng thời.
+When `beginAnchoredScrollToBottom` is called again under rapid-send, the very first thing it does is call `cancelAnchor(reason: "superseded")` → preventing two windows from overlapping concurrently.
 
 ### 3.4 Threshold rationale
 
-- **300ms hard ceiling**: PR #103 verification log cho thấy late shift kết thúc trong 2 runloop ticks (~33ms ở 60Hz) sau apply-completion. 300ms là 10× margin, đủ cho slow Catalyst frames và async image-load reflow nếu có.
-- **120pt at-bottom threshold**: bám theo `scrollViewDidScroll` `current==true → next = offset < 120` (line 932) — nhất quán với `isAtBottom` semantics đã có.
-- **0.5pt delta threshold**: pixel-level noise floor; nhỏ hơn dưới mức mắt người nhìn được; ngăn vòng lặp KVO khi `contentSize` rung lắc 0.01pt.
-- **2 stable ticks**: 1 tick có thể là pause giữa 2 layout passes; 2 ticks = thật sự settle.
+- **300ms hard ceiling**: PR #103's verification logs showed late shifts ending within 2 runloop ticks (~33ms at 60Hz) after apply-completion. 300ms is a 10× margin, plenty for slow Catalyst frames and async image-load reflow if needed.
+- **120pt at-bottom threshold**: matches `scrollViewDidScroll`'s `current==true → next = offset < 120` (line 932) — consistent with the existing `isAtBottom` semantics.
+- **0.5pt delta threshold**: pixel-level noise floor; below the threshold of human visibility; prevents KVO loops when `contentSize` jitters by 0.01pt.
+- **2 stable ticks**: 1 tick may be a pause between two layout passes; 2 ticks = genuinely settled.
 
 ---
 
 ## 4. Acceptance Criteria
 
-### 4.1 Đo định lượng (từ NSLog với `kAnchorLog = true`)
+### 4.1 Quantitative measurement (from NSLog with `kAnchorLog = true`)
 
-| AC | Tiêu chí |
+| AC | Criterion |
 |---|---|
-| **AC1** | Sau dòng `[anchor] end`, đọc lại `tv.contentOffset.y` qua một probe → bằng `-contentInset.top` ± 0.5pt. (Có thể thêm 1 dòng log sau `end` để dump giá trị cuối.) |
-| **AC2** | Mọi `[anchor] end` có `duration ≤ 300ms`. |
-| **AC3** | Mỗi dòng `[anchor] kvo` có `cs.h` thay đổi ≥ 0.5pt phải kèm `offset = -inset.top` (tức snap đã chạy ngay trong cùng tick). |
-| **AC4** | Trong rapid-send: log sequence cho 2 sends liên tiếp phải có pattern `[anchor] start ... [anchor] end reason=superseded ... [anchor] start ...` — KHÔNG được có 2 cặp `[anchor] start` mà ở giữa không có `[anchor] end`. |
+| **AC1** | After the `[anchor] end` line, reading `tv.contentOffset.y` via a probe should equal `-contentInset.top` ± 0.5pt. (One could add an extra log line after `end` to dump the final value.) |
+| **AC2** | Every `[anchor] end` has `duration ≤ 300ms`. |
+| **AC3** | Every `[anchor] kvo` line whose `cs.h` changes by ≥ 0.5pt must show `offset = -inset.top` (i.e., the snap ran inside the same tick). |
+| **AC4** | Under rapid-send: the log sequence for two consecutive sends must follow the pattern `[anchor] start ... [anchor] end reason=superseded ... [anchor] start ...` — there must NOT be two `[anchor] start` lines without an `[anchor] end` in between. |
 
-### 4.2 Đánh giá UX (manual scenarios)
+### 4.2 UX evaluation (manual scenarios)
 
-Chạy trên **iOS simulator** và **Mac Catalyst**:
+Run on **iOS simulator** and **Mac Catalyst**:
 
 | # | Scenario | Pass criteria | Type |
 |---|---|---|---|
-| S1 | Gõ "hello" → Return, đang ở đáy | Bubble appear ở bottom, KHÔNG visible jump khi server confirm | golden — #104 chính |
-| S2 | Rapid send 10 lần text ngắn (Return liên tục) | Tất cả bubble theo đúng thứ tự, không chaos, không "re-arrange chaotically" | golden — #104 worst case |
-| S3 | Gửi 1 ảnh + caption (chọn từ photo picker) | Bubble pending có thumbnail (từ b1 data parity); khi server confirm KHÔNG resize | golden — b1 data parity |
-| S4 | Reply một message rồi Send | Pending bubble chỉ có text, server confirm thêm quote-preview → SẼ có small reflow (known limitation, ngoài scope b1) | regression — verify không tệ hơn hiện tại |
-| S5 | Đang scroll lên giữa list, có inbound message từ user khác | KHÔNG yank xuống đáy (anchor không hijack vì atBottom == false) | regression — invariant từ #103 test plan |
-| S6 | Send → back out ngay → re-enter | Pending bubble vẫn xuất hiện, sau đó server-confirmed swap mượt | regression — invariant 7 từ optimistic-send-pipeline |
-| S7 | Failed send → tap Retry | Scroll-to-bottom đúng | regression — #103 test plan |
-| S8 | Gửi từ Mac Catalyst bằng Return + bằng click Send arrow | Cả 2 path đều smooth | regression — #101 không hỏng |
+| S1 | Type "hello" → Return while at bottom | Bubble appears at bottom with NO visible jump on server confirm | golden — primary #104 case |
+| S2 | Rapid send 10× short text (Return-Return-…) | All bubbles in tap order, no chaos, no "re-arrange chaotically" | golden — #104 worst case |
+| S3 | Send a photo + caption (from photo picker) | Pending bubble has thumbnail (from b1 data parity); server confirm = NO resize | golden — b1 data parity |
+| S4 | Reply to a message then Send | Pending bubble is text-only; server confirm adds quote-preview → small reflow expected (known limitation, out of scope b1) | regression — verify it's not worse than today |
+| S5 | Scrolled up mid-list, an inbound message arrives from another user | Does NOT yank to bottom (anchor doesn't hijack because atBottom == false) | regression — invariant from #103 test plan |
+| S6 | Send → back out immediately → re-enter | Pending bubble persists, then server-confirmed swap is smooth | regression — invariant 7 from optimistic-send-pipeline |
+| S7 | Failed send → tap Retry | Scrolls to bottom correctly | regression — #103 test plan |
+| S8 | On Mac Catalyst, send via Return AND via Send-arrow click | Both paths smooth | regression — #101 untouched |
 
 ### 4.3 Compile gate
 
-- `xcodebuild` cho `GitchatIOS local` scheme — iOS simulator destination → **BUILD SUCCEEDED**.
-- `xcodebuild` cho `GitchatIOS local` scheme — Mac Catalyst destination → **BUILD SUCCEEDED**.
-- Không introduce warning mới so với baseline `main`.
+- `xcodebuild` for `GitchatIOS local` scheme — iOS Simulator destination → **BUILD SUCCEEDED**.
+- `xcodebuild` for `GitchatIOS local` scheme — Mac Catalyst destination → **BUILD SUCCEEDED**.
+- No new warnings introduced relative to the `main` baseline.
 
 ---
 
 ## 5. Out of Scope
 
-| Item | Lý do | Track ở đâu |
+| Item | Reason | Tracked where |
 |---|---|---|
-| Reply-preview parity (snapshot `ReplyPreview` vào `PendingMessage`) | Đụng Codable schema → cần migration `outbox-pending.json` ở user devices; rủi ro vượt mức cần thiết cho 1 jank fix | Issue v1.1 follow-up (chưa file) |
-| Replace rotated UITableView (direction #4 trong issue) | Multi-week refactor; chạm tất cả gesture/menu/sticky-avatar code | Companion spec [`2026-05-04-chat-list-anchored-collection-design.md`](2026-05-04-chat-list-anchored-collection-design.md) |
-| Bubble lift animation từ composer (iMessage parity) | Polish layer; cần design pass riêng | Level 3 — chưa file |
-| Pre-sized cells với blurhash (loại bỏ self-sizing finalize) | Phụ thuộc Level 2 + attachment pipeline | Level 3 |
-| `idb` automation cho rapid-send | Optional (Layer 3.5 trong test plan) — sẽ thử nhưng nếu env không sẵn sàng thì defer | Plan task |
+| Reply-preview parity (snapshot `ReplyPreview` into `PendingMessage`) | Touches Codable schema → requires `outbox-pending.json` migration on user devices; risk exceeds the value for a single jank fix | v1.1 follow-up issue (not yet filed) |
+| Replace rotated UITableView (issue's direction #4) | Multi-week refactor; touches all gesture/menu/sticky-avatar code | Companion spec [`2026-05-04-chat-list-anchored-collection-design.md`](2026-05-04-chat-list-anchored-collection-design.md) |
+| Bubble lift animation from composer (iMessage parity) | Polish layer; needs its own design pass | Level 3 — not yet filed |
+| Pre-sized cells with blurhash (eliminate self-sizing finalize) | Depends on Level 2 + attachment pipeline | Level 3 |
+| `idb` automation for rapid-send | Optional (Layer 3.5 in the test plan) — will attempt but defer if env isn't ready | Plan task |
 
 ---
 
@@ -284,31 +309,31 @@ Chạy trên **iOS simulator** và **Mac Catalyst**:
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| KVO `contentSize` không fire trong một corner case UIKit nội bộ | Low | Bubble jank vẫn còn cho corner đó | Hard deadline + `cancelAnchor` đảm bảo không leak observer; fallback hành vi = giống hiện tại sau ceiling |
-| `mappedAttachments` với `url == ""` làm UI render rỗng | Medium | Pending bubble không có thumbnail như mong đợi | Implementation plan có 1 task riêng để probe rendering với empty url; fix tại điểm render nếu cần |
-| Anchor hijack legitimate user scroll (S5) | Low | Annoying — yank xuống khi không nên | At-bottom guard (`offset < -inset.top + 120`); test S5 explicit |
-| Removed instrumentation (`kAnchorLog`) bị quên trước merge | Low | Console log noise on production | Reviewer checklist + grep gate trong PR description |
+| KVO `contentSize` doesn't fire for some internal UIKit corner case | Low | Bubble jank remains in that corner | Hard deadline + `cancelAnchor` ensure no observer leak; fallback behavior = same as today after the ceiling |
+| `mappedAttachments` with `url == ""` causes a blank UI render | Medium | Pending bubble missing the expected thumbnail | The implementation plan has a dedicated task to probe rendering with empty url; fix at the renderer if needed |
+| Anchor hijacks legitimate user scroll (S5) | Low | Annoying — yanks down when it shouldn't | At-bottom guard (`offset < -inset.top + 120`); explicit S5 test |
+| Removed instrumentation (`kAnchorLog`) is forgotten before merge | Low | Console log noise in production | Reviewer checklist + grep gate in PR description |
 
 ---
 
-## 7. Files thay đổi
+## 7. Files changed
 
-| File | Thay đổi | Số dòng ước tính |
+| File | Change | Estimated lines |
 |---|---|---|
-| `GitchatIOS/Core/OutboxStore.swift` | Mở rộng `toMessage` | ~15 dòng (thêm mappedAttachments + 2 fields trong Message init) |
-| `GitchatIOS/Features/Conversations/ChatDetail/List/ChatMessagesList.swift` | Thay `scrollIfNeeded` block; thêm `beginAnchoredScrollToBottom` + `cancelAnchor` + 4 stored properties trên Coordinator | -15 / +60 dòng |
-| `docs/superpowers/specs/2026-05-04-chat-send-jank-fix-design.md` | NEW (file này) | ~300 dòng |
-| `docs/superpowers/specs/2026-05-04-chat-list-anchored-collection-design.md` | NEW (companion) | ~250 dòng |
-| `docs/superpowers/plans/2026-05-04-chat-send-jank-fix-implementation.md` | NEW (sẽ tạo qua writing-plans skill) | ~150 dòng |
+| `GitchatIOS/Core/OutboxStore.swift` | Expand `toMessage` | ~15 lines (mappedAttachments + 2 fields in the Message init) |
+| `GitchatIOS/Features/Conversations/ChatDetail/List/ChatMessagesList.swift` | Replace the `scrollIfNeeded` block; add `beginAnchoredScrollToBottom` + `cancelAnchor` + 4 stored properties on the Coordinator | -15 / +60 lines |
+| `docs/superpowers/specs/2026-05-04-chat-send-jank-fix-design.md` | NEW (this file) | ~300 lines |
+| `docs/superpowers/specs/2026-05-04-chat-list-anchored-collection-design.md` | NEW (companion) | ~250 lines |
+| `docs/superpowers/plans/2026-05-04-chat-send-jank-fix-implementation.md` | NEW (will be created via the writing-plans skill) | ~150 lines |
 
-KHÔNG thêm/đổi file Swift mới → KHÔNG cần `xcodegen generate`.
+NO new/renamed Swift files → NO `xcodegen generate` needed.
 
 ---
 
 ## 8. References
 
 - Issue: [#104](https://github.com/GitchatSH/gitchat-ios-native/issues/104)
-- PR vừa merged: [#103](https://github.com/GitchatSH/gitchat-ios-native/pull/103)
-- Issue gốc: [#102](https://github.com/GitchatSH/gitchat-ios-native/issues/102)
-- Architecture (must read trước khi sửa send path): `docs/architecture/optimistic-send-pipeline.md`
+- Just-merged PR: [#103](https://github.com/GitchatSH/gitchat-ios-native/pull/103)
+- Original issue: [#102](https://github.com/GitchatSH/gitchat-ios-native/issues/102)
+- Architecture (must read before touching the send path): `docs/architecture/optimistic-send-pipeline.md`
 - Companion exploration: `2026-05-04-chat-list-anchored-collection-design.md`

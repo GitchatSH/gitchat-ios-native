@@ -8,188 +8,188 @@
 
 ---
 
-## 0. Vì sao có spec này
+## 0. Why this spec exists
 
 Issue [#104](https://github.com/GitchatSH/gitchat-ios-native/issues/104) `Possible directions` #4:
 
 > **Re-evaluate the rotated-table approach.** The rotation trick makes UITableView's natural "keep top stable" behavior fight the chat's "stick to latest" behavior. An inverted layout (e.g., UICollectionView compositional layout with bottom-to-top reading) may eliminate the entire class of issue.
 
-b1 chỉ patch triệu chứng. Class lỗi (#102 → #103 → #104, và nhiều khả năng các bug "scroll fight back" tiếp theo) sinh ra từ rotated UITableView. Spec này khám phá thay thế.
+b1 only patches the symptom. The class of bugs (#102 → #103 → #104, and likely subsequent "scroll fight back" bugs) stems from the rotated UITableView. This spec explores a replacement.
 
-**Mục tiêu của spec:** Đưa ra bằng chứng đủ để EthanMiller0x quyết định:
-- Có nên đầu tư time vào migration không?
-- Nếu có, approach nào (3 approach so sánh ở §2)?
-- Migration theo strategy nào (full rewrite vs incremental — §3)?
-- Risk budget chấp nhận được là gì (§4)?
+**Goal of this spec:** Provide enough evidence for EthanMiller0x to decide:
+- Is migration worth the time investment?
+- If yes, which approach (3 approaches compared in §2)?
+- Which migration strategy (full rewrite vs incremental — §3)?
+- What's the acceptable risk budget (§4)?
 
-Spec này KHÔNG đưa ra answer cuối — đó là quyết định của user sau khi đọc.
+This spec does NOT make the final call — that's the user's decision after reading.
 
 ---
 
-## 1. Hệ quả của rotated-table hiện tại
+## 1. Consequences of the current rotated-table approach
 
-### 1.1 Bugs đã phát sinh trực tiếp từ rotation
+### 1.1 Bugs that originated directly from rotation
 
-- **#102** — bubble landing behind composer. Root cause: setContentOffset race với diffable apply trên rotated table.
-- **#103** — fix #102, race phụ vẫn còn (UIHostingConfiguration multi-pass self-sizing).
-- **#104** — fix #103 vẫn để lại jank giữa các snap ticks.
-- **#97** — topic message loss during rapid send + back-nav. Tangential nhưng có liên quan đến back-nav timing trên rotated stack.
+- **#102** — bubble landing behind composer. Root cause: setContentOffset race against diffable apply on the rotated table.
+- **#103** — fixed #102, but a secondary race remained (UIHostingConfiguration multi-pass self-sizing).
+- **#104** — fixed #103 still left jank between snap ticks.
+- **#97** — topic message loss during rapid send + back-nav. Tangentially related to back-nav timing on the rotated stack.
 
 ### 1.2 Code complexity tax
 
-`ChatMessagesList.swift` (~1300 dòng) chứa nhiều block code phải đặc biệt xử lý vì rotation:
-- Mỗi cell `.rotationEffect(.degrees(180))` để render upright (5 chỗ trong `configure`).
-- "rotation-aware: near bottom = contentOffset near 0" mental model rải rác trong code (`updateUIView:277`, `scrollViewDidScroll:923`, `scrollToBottom:876`).
-- `appendItems` reversed order trong snapshot (`apply:793`).
+`ChatMessagesList.swift` (~1300 lines) contains many code blocks that must specifically deal with the rotation:
+- Each cell needs `.rotationEffect(.degrees(180))` to render upright (5 sites in `configure`).
+- The "rotation-aware: near bottom = contentOffset near 0" mental model is scattered across the code (`updateUIView:277`, `scrollViewDidScroll:923`, `scrollToBottom:876`).
+- `appendItems` reversed order in the snapshot (`apply:793`).
 - Pagination: "last section, last row = oldest message visually = top of screen" (`willDisplay:903`).
-- Sticky avatar: `cell.convert(cell.bounds, to: window)` correctly handles 180° (chú thích trong code).
+- Sticky avatar: `cell.convert(cell.bounds, to: window)` correctly handles the 180° (per the inline comment).
 - contentInset semantics flip: `top == visual bottom`, `bottom == visual top`.
-- `isPrepend` vs `isAppend` check phải làm trong **data space** rồi map sang visual.
+- `isPrepend` vs `isAppend` checks must be done in **data space** then mapped to visual.
 
-Mỗi feature mới cần thêm trên list này phải reason about rotation. Tax tăng theo thời gian.
+Every new feature added on top of this list must reason about rotation. The tax compounds over time.
 
-### 1.3 Edge cases không thể tránh
+### 1.3 Edge cases that can't be avoided
 
-- Offset-stability cố giữ TOP của data ổn định khi insert ở row 0 → fight với "stick to bottom" semantics → cần hack (triple-snap của #103).
-- Self-sizing cell finalize chậm sau diff → contentSize đổi → offset shift visible (root cause #104).
-- UIHostingConfiguration không phải fully-deterministic về timing — late shift có thể xảy ra nhiều frames sau apply.
+- Offset-stability tries to keep the TOP of the data stable when row 0 is inserted → fights the "stick to bottom" semantics → workaround needed (#103's triple-snap).
+- Self-sizing cells finalize late after the diff → contentSize changes → offset shift becomes visible (root cause of #104).
+- UIHostingConfiguration is not fully deterministic about timing — late shifts can land several frames after apply.
 
 ---
 
-## 2. Approaches để thay thế
+## 2. Replacement approaches
 
-### 2.1 Approach A: UICollectionView compositional layout với bottom anchor (recommended)
+### 2.1 Approach A: UICollectionView compositional layout with a bottom anchor (recommended)
 
-**Cấu trúc:**
-- `UICollectionView` với `UICollectionViewCompositionalLayout`.
-- KHÔNG xoay 180°. Data-order = visual-order (oldest at top, newest at bottom).
-- Custom `UICollectionViewLayoutInvalidationContext`-based anchor: khi `contentSize` đổi và view ở "bottom mode", invalidation context chứa `contentOffsetAdjustment` để giữ visual position.
-- Cells dùng `UIHostingConfiguration` (giữ SwiftUI render path hiện có).
+**Structure:**
+- `UICollectionView` with `UICollectionViewCompositionalLayout`.
+- NO 180° rotation. Data-order = visual-order (oldest at top, newest at bottom).
+- Custom `UICollectionViewLayoutInvalidationContext`-based anchor: when `contentSize` changes and the view is in "bottom mode", the invalidation context carries `contentOffsetAdjustment` to maintain visual position.
+- Cells use `UIHostingConfiguration` (preserves the existing SwiftUI render path).
 
-**Ưu:**
-- Eliminates rotation entirely → giảm complexity tax đáng kể.
-- Compositional layout cho phép custom anchoring chuẩn UIKit thay vì hack `setContentOffset`.
-- Apple's reference apps (Notes drawing canvas, Messages-app private internals) đều dùng compositional layout cho list-with-anchor patterns.
+**Pros:**
+- Eliminates rotation entirely → significantly reduces complexity tax.
+- Compositional layout supports custom anchoring as a first-class UIKit concept rather than a `setContentOffset` hack.
+- Apple's reference apps (Notes drawing canvas, Messages-app private internals) all use compositional layout for list-with-anchor patterns.
 
-**Nhược:**
-- API mới — toàn bộ delegate methods, prefetch, gesture path, sticky-avatar logic phải port lại.
-- Section header / day-pill cần revisit — UICollectionView có khái niệm supplementary view khác UITableView section.
-- Estimated 2-3 tuần work nếu ko discover edge case lớn; potentially 4-6 tuần nếu có.
+**Cons:**
+- New API — every delegate method, prefetch, gesture path, sticky-avatar logic has to be ported.
+- Section header / day-pill needs revisiting — UICollectionView's supplementary view concept differs from UITableView's section.
+- Estimated 2-3 weeks of work absent any major edge cases; potentially 4-6 if any surface.
 
 ### 2.2 Approach B: Custom UIScrollView + manual layout (full control)
 
-**Cấu trúc:**
-- `UIScrollView` thuần, layout cells thủ công với `addSubview` + `setNeedsLayout`.
-- Cells = `UIView` wrapping `UIHostingController`.
-- Tự quản recycle pool (đơn giản: tất cả cells trong DOM, no recycle — chat list ít khi >500 messages cùng lúc).
+**Structure:**
+- Plain `UIScrollView`, lay out cells manually with `addSubview` + `setNeedsLayout`.
+- Cells = `UIView` wrapping a `UIHostingController`.
+- Self-managed recycle pool (simplest: keep all cells in the DOM, no recycling — chat lists rarely exceed 500 messages at once).
 
-**Ưu:**
-- Kiểm soát tuyệt đối — zero UIKit auto-behaviors fight back.
-- Easier debug — không có hidden offset-stability magic.
+**Pros:**
+- Total control — zero UIKit auto-behaviors fighting back.
+- Easier to debug — no hidden offset-stability magic.
 
-**Nhược:**
-- Mất tất cả UITableView/CollectionView amenities: cell recycling, prefetch, automatic gesture coordination.
-- Phải tự implement: pagination, prefetch, performance under long lists.
-- Long-press menu cần custom hit-test path.
-- Nhiều rủi ro performance regression — UITableView 10+ năm tuning Apple đã đầu tư.
-- Estimated 4-6+ tuần.
+**Cons:**
+- Lose all UITableView/CollectionView amenities: cell recycling, prefetch, automatic gesture coordination.
+- Must self-implement: pagination, prefetch, performance under long lists.
+- Long-press menu needs a custom hit-test path.
+- High risk of performance regression — UITableView has 10+ years of Apple tuning behind it.
+- Estimated 4-6+ weeks.
 
 ### 2.3 Approach C: SwiftUI `ScrollView` + `defaultScrollAnchor(.bottom)` (iOS 17+) (rejected)
 
-**Cấu trúc:**
+**Structure:**
 - Native SwiftUI `ScrollView` + `LazyVStack` + `defaultScrollAnchor(.bottom)`.
 
-**Tại sao reject:**
-- iOS 16+ là minimum support (`CLAUDE.md`). `defaultScrollAnchor` là iOS 17+ → không đáp ứng deployment target.
-- SwiftUI `ScrollView` có nhiều bug đã được community report về long lists, jank trên rapid update — chính là class issue ta đang muốn loại bỏ.
-- Phải drop UIHostingConfiguration → cell sizing path nhỏ hơn nhưng lại lose performance optimizations đã tune trong cell render code.
+**Why reject:**
+- iOS 16+ is the minimum support (`CLAUDE.md`). `defaultScrollAnchor` is iOS 17+ → fails the deployment target.
+- SwiftUI `ScrollView` has many community-reported bugs around long lists and rapid-update jank — exactly the class we want to eliminate.
+- Forced to drop UIHostingConfiguration → smaller cell sizing path but loses the performance optimizations already tuned in cell render code.
 
-### 2.4 So sánh
+### 2.4 Comparison
 
-| Tiêu chí | A: Compositional | B: Custom Scroll | C: SwiftUI Scroll |
+| Criterion | A: Compositional | B: Custom Scroll | C: SwiftUI Scroll |
 |---|---|---|---|
-| Eliminates rotation class lỗi | ✅ | ✅ | ✅ |
-| Effort estimate | 2-3 tuần | 4-6+ tuần | n/a (deployment target) |
-| Risk profile | Medium — known UIKit terrain | High — re-implement basics | High — SwiftUI bugs |
-| Performance ceiling | Tốt — UIKit-grade | Không chắc | Thấp hơn |
-| Migration path | Behind feature flag khả thi | Behind flag khả thi | n/a |
-| Long-press / swipe-reply / sticky avatar port | Manageable | Manageable nhưng nặng | Phải redesign |
+| Eliminates the rotation bug class | ✅ | ✅ | ✅ |
+| Effort estimate | 2-3 weeks | 4-6+ weeks | n/a (deployment target) |
+| Risk profile | Medium — known UIKit terrain | High — re-implementing fundamentals | High — SwiftUI bugs |
+| Performance ceiling | Good — UIKit-grade | Uncertain | Lower |
+| Migration path | Behind feature flag, feasible | Behind flag, feasible | n/a |
+| Long-press / swipe-reply / sticky avatar port | Manageable | Manageable but heavy | Needs redesign |
 
 **Recommendation:** Approach A.
 
 ---
 
-## 3. Migration strategy (cho Approach A)
+## 3. Migration strategy (for Approach A)
 
 ### 3.1 Strategy 1 — Big-bang replace
 
-Một PR thay nguyên `ChatMessagesList.swift` + tất cả call sites. Branch sống lâu, regression khó test.
+A single PR replacing all of `ChatMessagesList.swift` + every call site. Long-lived branch, regression hard to test.
 
-**Reject:** quá rủi ro với Gitchat shared backend (extension + mobile share BE — bug ở mobile có thể tạo bad data ảnh hưởng extension flows).
+**Reject:** too risky given Gitchat's shared backend (extension + mobile share the BE — a mobile bug can produce bad data that affects extension flows).
 
-### 3.2 Strategy 2 — Behind feature flag (recommended)
+### 3.2 Strategy 2 — Behind a feature flag (recommended)
 
-- Tạo `ChatMessagesList_v2` (compositional) song song với `ChatMessagesList` hiện tại.
-- Feature flag (UserDefaults / env var) chọn implementation tại `ChatView` render time.
-- Soak qua TestFlight với một subset users; kiểm tra metrics (crash rate, scroll FPS, send-to-bubble latency).
-- Sau soak ổn → flip default → remove flag + old code in một follow-up PR.
+- Create `ChatMessagesList_v2` (compositional) alongside the existing `ChatMessagesList`.
+- Feature flag (UserDefaults / env var) selects the implementation at `ChatView` render time.
+- Soak with a TestFlight subset of users; track metrics (crash rate, scroll FPS, send-to-bubble latency).
+- Once soak passes → flip default → remove flag + old code in a follow-up PR.
 
-**Risk vẫn có:**
-- Phải maintain 2 implementations trong vài tuần.
-- Cell builder API phải compatible cho cả 2.
-- Một số state (`StickyAvatarState`, `BubbleFrameCache`) chia sẻ — cần verify không leak giữa v1/v2 toggling.
+**Residual risks:**
+- Maintain two implementations for a few weeks.
+- Cell builder API must be compatible across both.
+- Some state (`StickyAvatarState`, `BubbleFrameCache`) is shared — verify no leakage between v1/v2 toggling.
 
 ### 3.3 Strategy 3 — Incremental cell migration
 
-KHÔNG khả thi: rotation là property ở table-level, không thể migrate per-cell.
+NOT feasible: rotation is a table-level property, can't migrate per cell.
 
 ---
 
-## 4. Risk Assessment cho Approach A
+## 4. Risk Assessment for Approach A
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Compositional layout không hỗ trợ specific anchor pattern ta cần | Medium | Block migration | POC 3-day spike trước khi commit full plan |
-| Long-press menu trên CollectionView không identical với current TableView path | High | UX regression | Test S1-S8 + new automation; có thể cần custom gesture wrapper |
-| Sticky-avatar logic (`StickyAvatarState`) hiện đo theo cell convert(window:) — cần re-verify trên unrotated layout | Medium | Avatar offset wrong | Visual regression test |
-| Pagination edge logic (`willDisplay last row`) phải đảo ngược (last row visually = newest, không phải oldest) | Low | Pagination broken | Straightforward port |
-| BubbleFrameCache hiện có giả định về rotation | Low | Wrong frame trong context menu | Audit cache + adjust |
-| Performance regression trên long lists | Low-Medium | Janky scroll | Benchmark trước-sau |
-| User devices với on-disk cache `MessageCache` không tương thích | Very Low | Stale UI | Cache version bump nếu cần |
+| Compositional layout doesn't support the specific anchor pattern we need | Medium | Blocks migration | 3-day POC spike before committing to a full plan |
+| Long-press menu on CollectionView isn't identical to the current TableView path | High | UX regression | Test S1-S8 + new automation; may need a custom gesture wrapper |
+| Sticky-avatar logic (`StickyAvatarState`) currently measures via `cell.convert(window:)` — needs re-verification on the unrotated layout | Medium | Avatar offset wrong | Visual regression test |
+| Pagination edge logic (`willDisplay last row`) must be inverted (last row visually = newest, not oldest) | Low | Pagination broken | Straightforward port |
+| BubbleFrameCache currently makes rotation-related assumptions | Low | Wrong frame in the context menu | Audit cache + adjust |
+| Performance regression on long lists | Low-Medium | Janky scroll | Before/after benchmark |
+| User devices with an on-disk `MessageCache` no longer compatible | Very Low | Stale UI | Cache version bump if needed |
 
-### 4.1 POC trước khi commit
+### 4.1 POC before committing
 
-Recommend trước khi viết full plan:
-1. **3-day POC**: Standalone branch, build minimal `ChatMessagesList_v2` rendering hard-coded sample messages với compositional layout + bottom anchor. Verify:
-   - Rapid-insert 10 cells → bubble lands at bottom mỗi lần, không jump.
-   - User scroll up → no auto-yank when new cell inserts.
-   - Self-sizing cells với UIHostingConfiguration finalize → anchor giữ visual position.
-2. Nếu POC OK → viết full plan.
-3. Nếu POC vướng → revisit B/C.
-
----
-
-## 5. Open questions cần EthanMiller0x trả lời
-
-1. **Timeline:** Có deadline release nào ràng buộc không? Migration trong sprint hiện tại hay quý sau?
-2. **Risk appetite:** Behind-flag soak (Strategy 2) chấp nhận được, hay cần ship-or-bust?
-3. **Resource:** EthanMiller0x sẽ own migration hay có teammate (vincent? mã ID khác?)?
-4. **iOS deployment target:** Có khả năng bump min target iOS 17 trong tương lai gần không? Nếu có, Approach C có thể quay lại bàn.
-5. **Đo lường:** Trước migration cần baseline metric nào (FPS scroll, send-to-render latency, memory)? Hiện có hệ analytics đo được không?
-6. **Behavior contracts:** Có behavior nào của UITableView hiện tại EthanMiller0x cố ý dựa vào (vd: row animation `.fade` mặc định, automatic scroll-to-row khi keyboard show)? Migration phải replicate hay có thể khác?
-7. **Reply-preview parity (out-of-scope b1):** Khi migration đến Level 2, có nên bundle luôn fix reply-preview parity không (đụng `PendingMessage` schema cùng lúc thay vì sau)?
+Recommended before writing the full plan:
+1. **3-day POC**: Standalone branch, build a minimal `ChatMessagesList_v2` rendering hard-coded sample messages with compositional layout + bottom anchor. Verify:
+   - Rapid-insert 10 cells → the bubble lands at the bottom every time, no jump.
+   - User scrolls up → no auto-yank when a new cell inserts.
+   - Self-sizing cells with UIHostingConfiguration finalize → anchor preserves visual position.
+2. POC clean → write the full plan.
+3. POC blocked → revisit B/C.
 
 ---
 
-## 6. Out of scope của spec này
+## 5. Open questions for EthanMiller0x
 
-- Implementation plan — sẽ viết sau khi user approve approach + strategy.
-- POC code — chưa start.
-- Level 3 (iMessage parity polish: bubble lift, in-bubble upload progress, blurhash pre-sizing) — chỉ bàn sau khi Level 2 ổn định.
+1. **Timeline:** Any release deadlines that constrain this? Migration in the current sprint or next quarter?
+2. **Risk appetite:** Is a behind-flag soak (Strategy 2) acceptable, or do we need ship-or-bust?
+3. **Resource:** Will EthanMiller0x own the migration or is there a teammate (Vincent? someone else)?
+4. **iOS deployment target:** Any chance of bumping the min target to iOS 17 in the near future? If yes, Approach C reopens.
+5. **Measurement:** Pre-migration, what baseline metrics do we need (FPS scroll, send-to-render latency, memory)? Is there an analytics surface to capture them?
+6. **Behavior contracts:** Are there UITableView behaviors EthanMiller0x intentionally relies on (e.g., default `.fade` row animation, automatic scroll-to-row on keyboard show)? Must the migration replicate or can it diverge?
+7. **Reply-preview parity (out-of-scope b1):** When the migration reaches Level 2, should we bundle the reply-preview parity fix (touching the `PendingMessage` schema at the same time, rather than later)?
 
 ---
 
-## 7. Tham chiếu
+## 6. Out of scope for this spec
+
+- Implementation plan — written after the user approves approach + strategy.
+- POC code — not started.
+- Level 3 (iMessage parity polish: bubble lift, in-bubble upload progress, blurhash pre-sizing) — only discussed once Level 2 is stable.
+
+---
+
+## 7. References
 
 - Issue #104 — possible direction #4
 - b1 spec: `2026-05-04-chat-send-jank-fix-design.md`
