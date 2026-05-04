@@ -310,22 +310,20 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         }
         let scrollIfNeeded: () -> Void = { [weak tv] in
             guard needsScroll, let tv = tv else { return }
-            let snap: (String) -> Void = { phase in
+            let snap: () -> Void = {
                 tv.layoutIfNeeded()
                 let target = CGPoint(x: 0, y: -tv.contentInset.top)
-                let beforeOffset = tv.contentOffset.y
                 tv.setContentOffset(target, animated: false)
-                NSLog("[scroll-debug] scrollIfNeeded[\(phase)] before=\(beforeOffset) target=\(target.y) after=\(tv.contentOffset.y) contentSize.h=\(tv.contentSize.height)")
             }
-            snap("apply-completion")
-            // Re-assert on the next two runloop ticks. Cell self-sizing for
-            // UIHostingConfiguration can resolve over multiple layout passes
-            // after the diff completion fires; a single setContentOffset is
-            // not sticky against those late shifts.
+            snap()
+            // Re-assert on the next two runloop ticks. Cell self-sizing
+            // for UIHostingConfiguration can resolve over multiple layout
+            // passes after the diff completion fires; a single
+            // setContentOffset is not sticky against those late shifts.
             DispatchQueue.main.async {
-                snap("runloop+1")
+                snap()
                 DispatchQueue.main.async {
-                    snap("runloop+2")
+                    snap()
                 }
             }
         }
