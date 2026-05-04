@@ -299,15 +299,35 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // expands, UITableView's internal offset-stability adjustment shifts
         // contentOffset partway through, and our scroll target is overridden
         // (lands at e.g. -11 instead of -92 → bubble parked behind composer).
-        // Fix: defer the scroll into dataSource.apply's completion handler so
-        // it runs after the row animation settles and contentSize is final.
+        // Fix: defer the scroll into dataSource.apply's completion handler
+        // so it runs after the diff applies, then force layout and instant-
+        // snap with `animated: false` to win against any post-apply
+        // UIHostingConfiguration cell-sizing passes that would otherwise
+        // continue shifting contentSize and contentOffset for several frames.
         let needsScroll = coord.lastScrollToBottomToken != scrollToBottomToken
         if needsScroll {
             coord.lastScrollToBottomToken = scrollToBottomToken
         }
         let scrollIfNeeded: () -> Void = { [weak tv] in
             guard needsScroll, let tv = tv else { return }
-            coord.scrollToBottom(in: tv, animated: true)
+            let snap: (String) -> Void = { phase in
+                tv.layoutIfNeeded()
+                let target = CGPoint(x: 0, y: -tv.contentInset.top)
+                let beforeOffset = tv.contentOffset.y
+                tv.setContentOffset(target, animated: false)
+                NSLog("[scroll-debug] scrollIfNeeded[\(phase)] before=\(beforeOffset) target=\(target.y) after=\(tv.contentOffset.y) contentSize.h=\(tv.contentSize.height)")
+            }
+            snap("apply-completion")
+            // Re-assert on the next two runloop ticks. Cell self-sizing for
+            // UIHostingConfiguration can resolve over multiple layout passes
+            // after the diff completion fires; a single setContentOffset is
+            // not sticky against those late shifts.
+            DispatchQueue.main.async {
+                snap("runloop+1")
+                DispatchQueue.main.async {
+                    snap("runloop+2")
+                }
+            }
         }
 
         if itemsChanged || typingToggled || seenToggled || unreadChanged {
@@ -861,12 +881,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // is .never, so adjustedContentInset may include unexpected
             // safe-area additions).
             let target = CGPoint(x: 0, y: -tv.contentInset.top)
-            NSLog("[scroll-debug] scrollToBottom called target.y=\(target.y) before offset.y=\(tv.contentOffset.y) inset.top=\(tv.contentInset.top) animated=\(animated)")
             tv.setContentOffset(target, animated: animated)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak tv] in
-                guard let tv else { return }
-                NSLog("[scroll-debug] scrollToBottom 0.6s later offset.y=\(tv.contentOffset.y) inset.top=\(tv.contentInset.top)")
-            }
         }
 
         /// Returns true if the row was found and scrolled to.
