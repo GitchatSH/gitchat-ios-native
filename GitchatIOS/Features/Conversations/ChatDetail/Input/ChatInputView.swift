@@ -5,8 +5,9 @@ import UIKit
 /// Composer bar sitting above the keyboard. Combines:
 /// - Attach button (PhotosPicker → routes through the parent's drop
 ///   preview flow).
-/// - Text field (multi-line on iOS; single-line on Mac Catalyst so
-///   Return triggers `.onSubmit`).
+/// - Text field (multi-line on both platforms — see PasteableTextField
+///   for per-platform line caps; on Mac Catalyst, bare Return submits
+///   via `keyCommands` and Shift+Return inserts a newline).
 /// - Send button (disabled when draft is empty or an upload is in
 ///   flight).
 ///
