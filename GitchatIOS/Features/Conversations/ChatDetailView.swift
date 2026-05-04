@@ -196,8 +196,8 @@ struct ChatDetailView: View {
         .onChange(of: scenePhase) { phase in
             if phase == .active { Task { await vm.load() } }
         }
-        .onChange(of: vm.messages.last?.id) { _ in
-            guard let last = vm.messages.last else { return }
+        .onChange(of: visibleMessages.last?.id) { _ in
+            guard let last = visibleMessages.last else { return }
             // Tail-follow rules:
             // - Always scroll on own sends (the user just hit
             //   Send and wants to see their bubble).
@@ -205,6 +205,14 @@ struct ChatDetailView: View {
             //   parked near the bottom (mirrors iMessage /
             //   Telegram). Otherwise leave the offset alone so
             //   browsing old messages isn't yanked.
+            //
+            // Watching `visibleMessages` (= vm.messages + outbox pending)
+            // rather than `vm.messages` so the optimistic pending bubble
+            // fires the scroll the instant the user hits Send. Watching
+            // vm.messages alone delays the scroll until the HTTP roundtrip
+            // completes, leaving the new bubble parked behind the floating
+            // composer until then (issue #102, visible on Mac Catalyst
+            // where the composer overlay is largest).
             if last.sender == auth.login || isAtBottom {
                 scrollToBottomToken &+= 1
             }
