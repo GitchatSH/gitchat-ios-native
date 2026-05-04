@@ -114,8 +114,12 @@ Không đổi `PendingMessage` Codable → `outbox-pending.json` trên user devi
 ### 2.4 Edge cases
 
 - **Empty attachments** (text-only): `mappedAttachments == nil` — không khác trước → không thay đổi behavior text-only.
-- **Attachment chưa upload xong** (`att.uploaded == nil`): map với `url: ""`. UI render path đã chấp nhận empty url (vẽ thumbnail từ local thông qua một path khác đã tồn tại trước b1 — nếu UI hiện tại không xử lý empty url, sẽ surface trong Layer 3 manual scenario S3 và fix tại đó). Lưu ý điều tra trong implementation plan.
+- **Attachment chưa upload xong** (`att.uploaded == nil`): map với `url: ""`. UI render path đã chấp nhận empty url (xem §2.5 finding). Cell height vẫn đúng vì `ChatAttachmentsGrid` set `.frame(width:height:)` cố định theo attachment count + bubble maxWidth, không phụ thuộc URL được resolve hay chưa.
 - **Attachment đã upload** (`att.uploaded != nil`): dùng `uploaded.url` — bubble pending hiển thị đúng URL, swap sang server-confirmed cùng URL → no reflow.
+
+### 2.5 Empty-URL probe finding (Task 3 result)
+
+Probe ngày 2026-05-04: `ChatAttachmentsGrid` (`GitchatIOS/Features/Conversations/ChatDetail/Message/ChatAttachmentsGrid.swift:69-98`) gọi `URL(string: a.url)` và truyền vào `CachedAsyncImage(url:)`. Empty string → `URL(string: "")` returns `nil` → `CachedAsyncImage` không attempt load, render filled placeholder. `isUploading` flag (set bằng `message.id.hasPrefix("local-")` trong `ChatMessageView.swift:433/455`) overlay ProgressView lên placeholder cho pending state. Frame width/height fixed theo attachment count + bubble maxWidth (không phụ thuộc URL resolve), nên cell intrinsic height giống hệt giữa pending placeholder và server-confirmed real-image. Không cần defensive guard — render path đã robust với empty url.
 
 ---
 

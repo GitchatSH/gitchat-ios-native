@@ -294,38 +294,20 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         let itemsChanged = coord.lastItems.map(\.id) != newIDs
 
         // Capture the scroll-to-bottom intent BEFORE applying the snapshot.
-        // setContentOffset(animated: true) loses to the diffable apply's row
-        // delete+insert animation: contentSize inflates as the new bubble
-        // expands, UITableView's internal offset-stability adjustment shifts
-        // contentOffset partway through, and our scroll target is overridden
-        // (lands at e.g. -11 instead of -92 → bubble parked behind composer).
-        // Fix: defer the scroll into dataSource.apply's completion handler
-        // so it runs after the diff applies, then force layout and instant-
-        // snap with `animated: false` to win against any post-apply
-        // UIHostingConfiguration cell-sizing passes that would otherwise
-        // continue shifting contentSize and contentOffset for several frames.
+        // The actual scroll runs from inside dataSource.apply's completion
+        // (or synchronously in the no-animation branch below) so the diff
+        // has applied before we touch offset. The completion delegates to
+        // `Coordinator.beginAnchoredScrollToBottom` which keeps offset
+        // anchored to `-contentInset.top` while UIHostingConfiguration's
+        // multi-pass self-sizing settles. Replaces #103's triple-snap;
+        // see `beginAnchoredScrollToBottom` doc-comment for details.
         let needsScroll = coord.lastScrollToBottomToken != scrollToBottomToken
         if needsScroll {
             coord.lastScrollToBottomToken = scrollToBottomToken
         }
-        let scrollIfNeeded: () -> Void = { [weak tv] in
-            guard needsScroll, let tv = tv else { return }
-            let snap: () -> Void = {
-                tv.layoutIfNeeded()
-                let target = CGPoint(x: 0, y: -tv.contentInset.top)
-                tv.setContentOffset(target, animated: false)
-            }
-            snap()
-            // Re-assert on the next two runloop ticks. Cell self-sizing
-            // for UIHostingConfiguration can resolve over multiple layout
-            // passes after the diff completion fires; a single
-            // setContentOffset is not sticky against those late shifts.
-            DispatchQueue.main.async {
-                snap()
-                DispatchQueue.main.async {
-                    snap()
-                }
-            }
+        let scrollIfNeeded: () -> Void = { [weak tv, weak coord] in
+            guard needsScroll, let tv = tv, let coord = coord else { return }
+            coord.beginAnchoredScrollToBottom(in: tv)
         }
 
         if itemsChanged || typingToggled || seenToggled || unreadChanged {
@@ -482,6 +464,23 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         var lastBottomInset: CGFloat = 0
         var keyboardWasOpen: Bool = false
         var lastScrollToBottomToken: Int = 0
+
+        // MARK: Anchored scroll-to-bottom (settle-aware, replaces #103 triple-snap)
+
+        /// Toggle for verification logging. Set to `true` locally to capture
+        /// AC1-4 acceptance logs (see spec 2026-05-04-chat-send-jank-fix-design
+        /// §4.1); MUST be `false` before merging to keep production console clean.
+        ///
+        /// Instance-level (not `static let`) because Swift forbids static
+        /// stored properties on classes nested inside a generic type — same
+        /// restriction `cellID` works around below.
+        private let kAnchorLog = false
+
+        private var anchorObservation: NSKeyValueObservation?
+        private var anchorDeadline: Date?
+        private var anchorStableTicks: Int = 0
+        private var anchorStartedAt: Date?
+
         var lastUnreadCount: Int = 0
         var lastMyReadAt: String?
         var didInitialScroll = false
@@ -880,6 +879,75 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // safe-area additions).
             let target = CGPoint(x: 0, y: -tv.contentInset.top)
             tv.setContentOffset(target, animated: animated)
+        }
+
+        /// Replaces the open-loop triple-snap from PR #103. Snaps offset to
+        /// `-contentInset.top` (rotated table's visual bottom), then KVO-observes
+        /// `contentSize` and re-snaps on every change while user is at-bottom.
+        /// Stops on:
+        ///   - 2 consecutive contentSize-stable KVO ticks, or
+        ///   - 300ms hard deadline, or
+        ///   - User scrolled up (offset crossed at-bottom threshold), or
+        ///   - A new send arrives (rapid-send: previous window is "superseded").
+        ///
+        /// See `docs/superpowers/specs/2026-05-04-chat-send-jank-fix-design.md`.
+        func beginAnchoredScrollToBottom(in tv: UITableView) {
+            cancelAnchor(reason: "superseded")
+
+            let snap: () -> Void = { [weak tv] in
+                guard let tv else { return }
+                tv.layoutIfNeeded()
+                tv.setContentOffset(CGPoint(x: 0, y: -tv.contentInset.top), animated: false)
+            }
+            snap()
+
+            let started = Date()
+            anchorStartedAt = started
+            anchorDeadline = started.addingTimeInterval(0.3)
+            anchorStableTicks = 0
+            if self.kAnchorLog {
+                NSLog("[anchor] start offset=%.2f cs.h=%.2f",
+                      tv.contentOffset.y, tv.contentSize.height)
+            }
+            anchorObservation = tv.observe(\.contentSize, options: [.old, .new]) { [weak self, weak tv] _, change in
+                guard let self, let tv else { return }
+                if let dl = self.anchorDeadline, Date() > dl {
+                    self.cancelAnchor(reason: "deadline")
+                    return
+                }
+                let atBottomThreshold = -tv.contentInset.top + 120
+                let atBottom = tv.contentOffset.y < atBottomThreshold
+                guard atBottom else {
+                    self.cancelAnchor(reason: "user-scrolled-up")
+                    return
+                }
+                if let old = change.oldValue, let new = change.newValue,
+                   abs(old.height - new.height) < 0.5 {
+                    self.anchorStableTicks += 1
+                    if self.anchorStableTicks >= 2 {
+                        self.cancelAnchor(reason: "stable")
+                    }
+                    return
+                }
+                self.anchorStableTicks = 0
+                snap()
+                if self.kAnchorLog, let old = change.oldValue, let new = change.newValue {
+                    NSLog("[anchor] kvo cs.h %.2f→%.2f offset=%.2f stable=%d",
+                          old.height, new.height, tv.contentOffset.y, self.anchorStableTicks)
+                }
+            }
+        }
+
+        private func cancelAnchor(reason: String) {
+            if self.kAnchorLog, anchorObservation != nil, let started = anchorStartedAt {
+                let durMs = Date().timeIntervalSince(started) * 1000
+                NSLog("[anchor] end reason=%@ duration=%.0fms", reason, durMs)
+            }
+            anchorObservation?.invalidate()
+            anchorObservation = nil
+            anchorDeadline = nil
+            anchorStableTicks = 0
+            anchorStartedAt = nil
         }
 
         /// Returns true if the row was found and scrolled to.

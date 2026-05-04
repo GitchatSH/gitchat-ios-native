@@ -528,9 +528,29 @@ final class OutboxStore: ObservableObject {
     /// downstream rendering can still detect "this is a pending bubble".
     /// Pending messages are always the current user's outbound sends, so
     /// sender identity is read from AuthStore.
+    ///
+    /// Populates `client_message_id` and maps `PendingAttachment` →
+    /// `MessageAttachment` so the optimistic bubble has the same intrinsic
+    /// height as the server-confirmed bubble for text + image sends. Without
+    /// this, the diffable swap from `local-cmid` → `server-id` resized
+    /// the cell visibly (issue #104). `reply` parity remains out of scope —
+    /// see spec `2026-05-04-chat-send-jank-fix-design.md` §5.
     func toMessage(_ p: PendingMessage) -> Message {
-        Message(
+        let mappedAttachments: [MessageAttachment]? = p.attachments.isEmpty ? nil :
+            p.attachments.map { att in
+                MessageAttachment(
+                    attachment_id: att.clientAttachmentID,
+                    url: att.uploaded?.url ?? "",
+                    type: att.mimeType.hasPrefix("image/") ? "image" : "file",
+                    filename: nil,
+                    mime_type: att.mimeType,
+                    width: att.width,
+                    height: att.height
+                )
+            }
+        return Message(
             id: PendingMessage.optimisticID(for: p.clientMessageID),
+            client_message_id: p.clientMessageID,
             conversation_id: p.conversationID,
             sender: AuthStore.shared.login ?? "me",
             sender_avatar: nil,
@@ -540,7 +560,11 @@ final class OutboxStore: ObservableObject {
             reactions: nil,
             attachment_url: nil,
             type: "user",
-            reply_to_id: p.replyToID
+            reply_to_id: p.replyToID,
+            reply: nil,
+            attachments: mappedAttachments,
+            unsent_at: nil,
+            reactionRows: nil
         )
     }
 
