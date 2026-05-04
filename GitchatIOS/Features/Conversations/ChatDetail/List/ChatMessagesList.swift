@@ -420,6 +420,7 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
         // re-renders that reset contentOffset.
         if coord.lastScrollToBottomToken != scrollToBottomToken {
             coord.lastScrollToBottomToken = scrollToBottomToken
+            NSLog("[scroll-debug] updateUIView token bumped → scrollToBottom inset.top=\(tv.contentInset.top) offset.y=\(tv.contentOffset.y) contentSize.h=\(tv.contentSize.height) bounds.h=\(tv.bounds.height) composerOverlayHeight=\(composerOverlayHeight)")
             coord.scrollToBottom(in: tv, animated: true)
         }
     }
@@ -838,7 +839,12 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             // is .never, so adjustedContentInset may include unexpected
             // safe-area additions).
             let target = CGPoint(x: 0, y: -tv.contentInset.top)
+            NSLog("[scroll-debug] scrollToBottom called target.y=\(target.y) before offset.y=\(tv.contentOffset.y) inset.top=\(tv.contentInset.top) animated=\(animated)")
             tv.setContentOffset(target, animated: animated)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak tv] in
+                guard let tv else { return }
+                NSLog("[scroll-debug] scrollToBottom 0.6s later offset.y=\(tv.contentOffset.y) inset.top=\(tv.contentInset.top)")
+            }
         }
 
         /// Returns true if the row was found and scrolled to.
