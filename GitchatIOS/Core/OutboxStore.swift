@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 // MARK: - RetryClock (Task 2.7)
 
@@ -217,6 +218,51 @@ final class OutboxStore: ObservableObject {
     /// and the next `vm.load()` on re-entry will fetch the message.
     private var deliveryHandlers: [String: (Message) -> Void] = [:]
 
+    // MARK: - Local image previews (transient, in-memory only)
+
+    /// Per-attachment temp file URLs. Set in `enqueue` for image attachments,
+    /// removed in `markDelivered`/`discard`/`cancel`. Used by `toMessage` to
+    /// project the optimistic Message with a `file://` URL so the bubble
+    /// renders the actual local image immediately — eliminating the
+    /// placeholder→image flash that was visible on Mac Catalyst with slow
+    /// upload networks (#104 image-jank follow-up). Not persisted; on app
+    /// restart for a failed-message retry, missing local previews fall back
+    /// to the empty-URL render path.
+    private static let tempImageDir: URL = {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gitchat-outbox-previews", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private var localPreviewPaths: [String: URL] = [:]
+
+    private func registerLocalPreview(for attachmentID: String, data: Data, mimeType: String) {
+        let ext: String = {
+            if mimeType.hasSuffix("/jpeg") || mimeType.hasSuffix("/jpg") { return "jpg" }
+            if mimeType.hasSuffix("/png") { return "png" }
+            if mimeType.hasSuffix("/gif") { return "gif" }
+            if mimeType.hasSuffix("/heic") { return "heic" }
+            return "bin"
+        }()
+        let url = Self.tempImageDir.appendingPathComponent("\(attachmentID).\(ext)")
+        do {
+            try data.write(to: url, options: .atomic)
+            localPreviewPaths[attachmentID] = url
+        } catch {
+            // Best-effort — if write fails, optimistic bubble falls back to
+            // the empty-URL render path (placeholder).
+        }
+    }
+
+    private func cleanupLocalPreviews(for attachments: [PendingAttachment]) {
+        for att in attachments {
+            if let url = localPreviewPaths.removeValue(forKey: att.clientAttachmentID) {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+    }
+
     // MARK: - Mutators
 
     /// Adds a new pending message to the queue and immediately kicks off
@@ -224,13 +270,23 @@ final class OutboxStore: ObservableObject {
     /// after enqueueing — that would fire a duplicate send.
     func enqueue(_ msg: PendingMessage) {
         pending[msg.conversationID, default: []].append(msg)
+        for att in msg.attachments where att.mimeType.hasPrefix("image/") {
+            registerLocalPreview(
+                for: att.clientAttachmentID,
+                data: att.sourceData,
+                mimeType: att.mimeType
+            )
+        }
         runSend(for: msg)
         saveToDisk()
     }
 
     func markDelivered(conversationID: String, clientMessageID: String) {
         guard var list = pending[conversationID] else { return }
-        list.removeAll { $0.clientMessageID == clientMessageID }
+        if let idx = list.firstIndex(where: { $0.clientMessageID == clientMessageID }) {
+            cleanupLocalPreviews(for: list[idx].attachments)
+            list.remove(at: idx)
+        }
         if list.isEmpty {
             pending.removeValue(forKey: conversationID)
         } else {
@@ -252,7 +308,12 @@ final class OutboxStore: ObservableObject {
     /// leaves the store), but the distinct name lets call sites express intent.
     func discard(conversationID: String, optimisticID: String) {
         guard var list = pending[conversationID] else { return }
-        list.removeAll { PendingMessage.optimisticID(for: $0.clientMessageID) == optimisticID }
+        if let idx = list.firstIndex(where: {
+            PendingMessage.optimisticID(for: $0.clientMessageID) == optimisticID
+        }) {
+            cleanupLocalPreviews(for: list[idx].attachments)
+            list.remove(at: idx)
+        }
         if list.isEmpty {
             pending.removeValue(forKey: conversationID)
         } else {
@@ -280,6 +341,7 @@ final class OutboxStore: ObservableObject {
             guard let idx = list.firstIndex(where: { $0.clientMessageID == cmid }) else { continue }
             switch list[idx].state {
             case .enqueued, .failed:
+                cleanupLocalPreviews(for: list[idx].attachments)
                 pending[convId]?.remove(at: idx)
                 if pending[convId]?.isEmpty == true {
                     pending.removeValue(forKey: convId)
@@ -327,6 +389,17 @@ final class OutboxStore: ObservableObject {
                         mimeType: p.attachments[i].mimeType
                     )
                     p.attachments[i].uploaded = ref
+                    // Prime ImageCache so the eventual local→server ID flip
+                    // (when the cell rebuilds with the server's image URL)
+                    // hits cache instantly instead of triggering a fresh
+                    // network fetch — that fetch on slow networks shows a
+                    // placeholder flash. See spec §2.6.
+                    if p.attachments[i].mimeType.hasPrefix("image/"),
+                       let serverURL = URL(string: ref.url),
+                       let img = UIImage(data: p.attachments[i].sourceData) {
+                        ImageCache.shared.store(img, for: serverURL)
+                        ImageCache.shared.storeRawData(p.attachments[i].sourceData, for: serverURL)
+                    }
                     done += 1
                     p.state = .uploading(progress: done / total)
                     updatePending(p)
@@ -528,9 +601,38 @@ final class OutboxStore: ObservableObject {
     /// downstream rendering can still detect "this is a pending bubble".
     /// Pending messages are always the current user's outbound sends, so
     /// sender identity is read from AuthStore.
+    ///
+    /// Populates `client_message_id` and maps `PendingAttachment` →
+    /// `MessageAttachment` so the optimistic bubble has the same intrinsic
+    /// height as the server-confirmed bubble for text + image sends. Without
+    /// this, the diffable swap from `local-cmid` → `server-id` resized
+    /// the cell visibly (issue #104). `reply` parity remains out of scope —
+    /// see spec `2026-05-04-chat-send-jank-fix-design.md` §5.
     func toMessage(_ p: PendingMessage) -> Message {
-        Message(
+        let mappedAttachments: [MessageAttachment]? = p.attachments.isEmpty ? nil :
+            p.attachments.map { att in
+                // URL preference: real uploaded URL → local file preview
+                // → empty. The local file URL keeps the bubble showing the
+                // actual image bytes during the upload phase (no placeholder
+                // flash on slow networks). After upload, server URL takes
+                // over; ImageCache is pre-warmed in executeSend so the
+                // ID-flip cell rebuild hits cache instantly.
+                let url: String = att.uploaded?.url
+                    ?? localPreviewPaths[att.clientAttachmentID]?.absoluteString
+                    ?? ""
+                return MessageAttachment(
+                    attachment_id: att.clientAttachmentID,
+                    url: url,
+                    type: att.mimeType.hasPrefix("image/") ? "image" : "file",
+                    filename: nil,
+                    mime_type: att.mimeType,
+                    width: att.width,
+                    height: att.height
+                )
+            }
+        return Message(
             id: PendingMessage.optimisticID(for: p.clientMessageID),
+            client_message_id: p.clientMessageID,
             conversation_id: p.conversationID,
             sender: AuthStore.shared.login ?? "me",
             sender_avatar: nil,
@@ -540,7 +642,11 @@ final class OutboxStore: ObservableObject {
             reactions: nil,
             attachment_url: nil,
             type: "user",
-            reply_to_id: p.replyToID
+            reply_to_id: p.replyToID,
+            reply: nil,
+            attachments: mappedAttachments,
+            unsent_at: nil,
+            reactionRows: nil
         )
     }
 

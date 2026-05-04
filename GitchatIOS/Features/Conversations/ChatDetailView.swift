@@ -778,12 +778,18 @@ struct ChatDetailView: View {
                 if let (data, _, mime) = await ChatViewModel.encodeForUploadOffMain(
                     image: img, filename: "image-\(i).jpg"
                 ) {
+                    // Pixel dimensions (BE-format). Used by the receiver-side
+                    // bubble layout to pin a stable frame from the moment the
+                    // pending bubble appears, so the cell doesn't resize when
+                    // the real image bytes arrive (#104 image-jank follow-up).
+                    let pxW = Int(img.size.width * img.scale)
+                    let pxH = Int(img.size.height * img.scale)
                     attachments.append(PendingAttachment(
                         clientAttachmentID: UUID().uuidString,
                         sourceData: data,
                         mimeType: mime,
-                        width: nil,
-                        height: nil,
+                        width: pxW > 0 ? pxW : nil,
+                        height: pxH > 0 ? pxH : nil,
                         blurhash: nil
                     ))
                 }
