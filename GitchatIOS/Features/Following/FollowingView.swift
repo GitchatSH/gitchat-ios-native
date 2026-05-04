@@ -147,12 +147,17 @@ struct FollowingView: View {
                     )
                 } else {
                     List(filtered) { u in
+                        let active = isActive(u)
                         rowLink(for: u) {
                             HStack(spacing: 12) {
                                 AvatarView(url: u.avatar_url, size: macRowAvatarSize, login: u.login)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(u.name ?? u.login).font(macRowTitleFont)
-                                    Text("@\(u.login)").font(macRowSubtitleFont).foregroundStyle(.secondary)
+                                    Text(u.name ?? u.login)
+                                        .font(macRowTitleFont)
+                                        .foregroundStyle(active ? .white : .primary)
+                                    Text("@\(u.login)")
+                                        .font(macRowSubtitleFont)
+                                        .foregroundStyle(active ? Color.white.opacity(0.85) : .secondary)
                                 }
                                 Spacer()
                             }
@@ -165,6 +170,7 @@ struct FollowingView: View {
                         .listRowSeparator(.hidden)
                         #if targetEnvironment(macCatalyst)
                         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                        .listRowBackground(macActiveRowBackground(active))
                         #endif
                         .hideMacScrollIndicators()
                     }
@@ -174,6 +180,14 @@ struct FollowingView: View {
                     .refreshable { await vm.load() }
                 }
         }
+    }
+
+    private func isActive(_ user: FriendUser) -> Bool {
+        #if targetEnvironment(macCatalyst)
+        return router.selectedProfile == user.login
+        #else
+        return false
+        #endif
     }
 
     /// Catalyst routes profile taps through `AppRouter.selectedProfile`

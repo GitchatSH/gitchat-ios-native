@@ -18,6 +18,7 @@ struct DiscoverPeopleList: View {
                 emptyState
             } else {
                 List(rows) { user in
+                    let active = isActive(user)
                     rowLink(for: user) {
                         HStack(spacing: 12) {
                             ZStack(alignment: .bottomTrailing) {
@@ -30,8 +31,12 @@ struct DiscoverPeopleList: View {
                                 }
                             }
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(user.name ?? user.login).font(.headline)
-                                Text("@\(user.login)").font(macRowSubtitleFont).foregroundStyle(.secondary)
+                                Text(user.name ?? user.login)
+                                    .font(.headline)
+                                    .foregroundStyle(active ? .white : .primary)
+                                Text("@\(user.login)")
+                                    .font(macRowSubtitleFont)
+                                    .foregroundStyle(active ? Color.white.opacity(0.85) : .secondary)
                             }
                             Spacer()
                         }
@@ -44,6 +49,7 @@ struct DiscoverPeopleList: View {
                     .listRowSeparator(.hidden)
                     #if targetEnvironment(macCatalyst)
                     .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowBackground(macActiveRowBackground(active))
                     #endif
                     .hideMacScrollIndicators()
                 }
@@ -53,6 +59,14 @@ struct DiscoverPeopleList: View {
             }
         }
         .onAppear { presence.ensure(vm.peopleRows().map(\.login)) }
+    }
+
+    private func isActive(_ user: FriendUser) -> Bool {
+        #if targetEnvironment(macCatalyst)
+        return router.selectedProfile == user.login
+        #else
+        return false
+        #endif
     }
 
     /// Catalyst routes profile taps through `AppRouter.selectedProfile`
