@@ -33,9 +33,33 @@ final class SemVerTests: XCTestCase {
         XCTAssertEqual(SemVer("1.2.3+build.42")?.patch, 3)
     }
 
-    func test_returns_nil_on_garbage() {
+    func test_returns_nil_on_non_numeric_major() {
         XCTAssertNil(SemVer("not-a-version"))
+    }
+
+    func test_returns_nil_on_empty_input() {
         XCTAssertNil(SemVer(""))
+    }
+
+    func test_returns_nil_on_non_numeric_minor() {
+        XCTAssertNil(SemVer("1.x.0"))
+    }
+
+    func test_returns_nil_on_non_numeric_patch() {
+        XCTAssertNil(SemVer("1.0.x"))
+    }
+
+    func test_returns_nil_on_empty_inner_component() {
+        // "1..3" must not silently parse as 1.0.0 or 1.3.x — present-but-empty
+        // components are non-numeric and must fail.
+        XCTAssertNil(SemVer("1..3"))
+    }
+
+    func test_strips_v_prefix_and_prerelease() {
+        let v = SemVer("v1.2.3-beta.1")
+        XCTAssertEqual(v?.major, 1)
+        XCTAssertEqual(v?.minor, 2)
+        XCTAssertEqual(v?.patch, 3)
     }
 
     func test_compare_is_numeric_not_lexicographic() {
