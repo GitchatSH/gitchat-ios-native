@@ -83,4 +83,15 @@ final class AppUpdateCheckerStateTests: XCTestCase {
         await checker.check()
         XCTAssertEqual(checker.state, .unknown)  // unchanged
     }
+
+    func test_malformed_latestVersion_emits_unknown() async {
+        let checker = AppUpdateChecker(
+            fetcher: StubFetcher(result: .success(makeManifest(latest: "not-semver"))),
+            defaults: makeDefaults(),
+            currentVersion: { "1.1.0" },
+            now: { Date() }
+        )
+        await checker.check()
+        XCTAssertEqual(checker.state, .unknown)
+    }
 }
