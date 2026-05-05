@@ -5,6 +5,11 @@ import UIKit
 struct AppStoreSheet: UIViewControllerRepresentable {
     let appStoreId: String
     let fallbackURL: URL
+    /// Called when the user dismisses the App Store product view controller.
+    /// Required because UIKit's `vc.dismiss(animated:)` does not flip the
+    /// SwiftUI `.sheet(isPresented:)` binding — without this callback, the
+    /// caller's `@State` stays `true` and the sheet refuses to re-present.
+    let onDismiss: () -> Void
 
     func makeUIViewController(context: Context) -> SKStoreProductViewController {
         let vc = SKStoreProductViewController()
@@ -26,11 +31,18 @@ struct AppStoreSheet: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_: SKStoreProductViewController, context: Context) {}
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator { Coordinator(onDismiss: onDismiss) }
 
     final class Coordinator: NSObject, SKStoreProductViewControllerDelegate {
+        let onDismiss: () -> Void
+
+        init(onDismiss: @escaping () -> Void) {
+            self.onDismiss = onDismiss
+        }
+
         func productViewControllerDidFinish(_ vc: SKStoreProductViewController) {
             vc.dismiss(animated: true)
+            onDismiss()
         }
     }
 }

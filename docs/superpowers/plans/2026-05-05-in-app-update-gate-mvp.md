@@ -1214,7 +1214,11 @@ Below the existing `.sheet(item: ...)` modifiers and **above** the existing `.on
         }
         .sheet(isPresented: $showUpdateStoreSheet) {
             if let info = pendingUpdateInfo {
-                AppStoreSheet(appStoreId: info.appStoreId, fallbackURL: info.storeUrl)
+                AppStoreSheet(
+                    appStoreId: info.appStoreId,
+                    fallbackURL: info.storeUrl,
+                    onDismiss: { showUpdateStoreSheet = false }
+                )
             }
         }
         .task { await updater.check(force: true) }   // cold launch — always run; throttle is persisted across launches
