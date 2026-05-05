@@ -105,6 +105,7 @@
 		7C549C1AEAC820616D9E5BEE /* TopicEmojiPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6311B0C0CFDB81C367C16FF8 /* TopicEmojiPresets.swift */; };
 		7CF62DD78AB08C4384CDF42A /* GroupManagementSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2B26B063AB6FD5899CF40E0 /* GroupManagementSheets.swift */; };
 		7E0C8192B9A0E77104D32979 /* APIClient+Discover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B339A4FABDFD26D236D1E5CF /* APIClient+Discover.swift */; };
+		7F7D8E0949ED075731AAC8D0 /* AppUpdateCheckerSnoozeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC7141658C29B146E549271E /* AppUpdateCheckerSnoozeTests.swift */; };
 		80C07FFED87C334C9E6943FF /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500978A5175704DEC944236B /* NotificationService.swift */; };
 		84444B1C46F03AC10E764DAC /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36F06688A6AEFA05D9DA56B8 /* CachedAsyncImage.swift */; };
 		85D7EE81B5791E46FB9D5E00 /* GroupInviteLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 169765DCCC813091D7683903 /* GroupInviteLinkSheet.swift */; };
@@ -393,6 +394,7 @@
 		A5A9958A302F6492FA46D0F1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		A5D27D2F5A412D74F579504B /* ChannelsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelsView.swift; sourceTree = "<group>"; };
 		AA0DC891F548EEBA0A31C07C /* TopicListStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicListStore.swift; sourceTree = "<group>"; };
+		AC7141658C29B146E549271E /* AppUpdateCheckerSnoozeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateCheckerSnoozeTests.swift; sourceTree = "<group>"; };
 		AD3E0E8748D50D70E74D6B35 /* PasteImageFromClipboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteImageFromClipboardTests.swift; sourceTree = "<group>"; };
 		AE324D6FCF99BB23CA4F6E62 /* SmokeUnitTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeUnitTest.swift; sourceTree = "<group>"; };
 		B07857501623E25CD298B606 /* StoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreManager.swift; sourceTree = "<group>"; };
@@ -927,6 +929,7 @@
 			children = (
 				294872CC140263087BEA0958 /* .gitkeep */,
 				56386612F8F58C9EF6AB50FC /* APIClientTopicURLTests.swift */,
+				AC7141658C29B146E549271E /* AppUpdateCheckerSnoozeTests.swift */,
 				0BA0FC5005970F513AE851EF /* AppUpdateCheckerStateTests.swift */,
 				4F7C7245F0F596B659D06385 /* AppUpdateCheckerThrottleTests.swift */,
 				16ADE549DF4541C77D4497E2 /* AppVersionManifestDecodingTests.swift */,
@@ -1411,6 +1414,7 @@
 			files = (
 				4240FA4443B3392E16B50287 /* APIClientSendMessageTests.swift in Sources */,
 				168E24E907D170804357F661 /* APIClientTopicURLTests.swift in Sources */,
+				7F7D8E0949ED075731AAC8D0 /* AppUpdateCheckerSnoozeTests.swift in Sources */,
 				8648E400DDFF6B4EB3F3CCF8 /* AppUpdateCheckerStateTests.swift in Sources */,
 				133E90F02B304A35199D50FE /* AppUpdateCheckerThrottleTests.swift in Sources */,
 				A03AB0D433C6FC28C60E8B4F /* AppVersionManifestDecodingTests.swift in Sources */,
