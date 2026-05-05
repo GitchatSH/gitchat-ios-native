@@ -440,24 +440,15 @@ struct ConversationsListView: View {
 
     @ViewBuilder
     private func rowBackground(for convo: Conversation) -> some View {
-        let fill: Color? = {
-            if isActiveRow(convo) { return Color("AccentColor") }
-            // Pinned rows use no special background — pin icon in right column is sufficient
-            return nil
-        }()
-
-        if let fill {
-            #if targetEnvironment(macCatalyst)
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(fill)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-            #else
-            fill
-            #endif
-        } else {
-            Color.clear
-        }
+        let active = isActiveRow(convo)
+        #if targetEnvironment(macCatalyst)
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(active ? Color("AccentColor") : Color.clear)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+        #else
+        active ? Color("AccentColor") : Color.clear
+        #endif
     }
 
     @ViewBuilder
@@ -468,6 +459,7 @@ struct ConversationsListView: View {
             isMuted: vm.isLocallyMuted(convo),
             isActive: isActiveRow(convo)
         )
+        .transaction { $0.animation = nil }
         .contentShape(Rectangle())
         .background(tappedConvoId == convo.id ? Color(.tertiarySystemBackground) : Color.clear)
         .scaleEffect(squeezedConvoId == convo.id ? rowSqueezeFactor(for: convo) : 1)
@@ -494,11 +486,7 @@ struct ConversationsListView: View {
             }
         }
         .macHover()
-        .listRowSeparator(.hidden, edges: .top)
-        .listRowSeparator(.visible, edges: .bottom)
-        .listRowSeparatorTint(Color(.separator))
-        .alignmentGuide(.listRowSeparatorLeading) { _ in 76 }
-        .alignmentGuide(.listRowSeparatorTrailing) { d in d.width }
+        .listRowSeparator(.hidden)
         #if targetEnvironment(macCatalyst)
         .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
         #else
@@ -956,10 +944,10 @@ struct ConversationRow: View {
     @ViewBuilder
     private var previewContent: some View {
         if isLastMessageSystem {
-            // System / deleted message — italic gray
+            // System / deleted message — italic gray (white when row is active)
             Text(systemPreviewText)
                 .font(.subheadline)
-                .foregroundStyle(Color(.systemGray2))
+                .foregroundStyle(isActive ? secondaryTextColor : Color(.systemGray2))
                 .lineLimit(1)
         } else if conversation.isGroup && isOutgoing {
             // Group outgoing — preview only, "You" shown on sender line above
@@ -1132,20 +1120,20 @@ struct ConversationRow: View {
                         if conversation.isGroup && isOutgoing {
                             Text("You")
                                 .font(.subheadline)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(primaryTextColor)
                                 .lineLimit(1)
                         } else if let sender = lastSenderLogin, !isOutgoing {
                             HStack(spacing: 4) {
                                 senderAvatarView(for: sender)
                                 Text(sender)
                                     .font(.subheadline)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(primaryTextColor)
                                     .lineLimit(1)
                             }
                         }
                         HStack(alignment: .top, spacing: 4) {
                             if let draft = draftStore.draft(for: conversation.id) {
-                                (Text("Draft: ").foregroundColor(Color(.systemRed)).font(.subheadline)
+                                (Text("Draft: ").foregroundColor(isActive ? .white : Color(.systemRed)).font(.subheadline)
                                 + Text(draft).foregroundColor(secondaryTextColor).font(.subheadline))
                                 .lineLimit(1)
                                 .transition(.opacity.animation(.easeInOut(duration: 0.2)))

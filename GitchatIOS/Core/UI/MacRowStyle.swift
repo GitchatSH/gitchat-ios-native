@@ -61,6 +61,21 @@ var macRowSeparatorLeadingInset: CGFloat {
     macRowHorizontalPadding + macRowAvatarSize + 12
 }
 
+/// Pill-shaped accent background used on Catalyst sidebar rows when
+/// they are the currently-selected row. Matches the conversation list
+/// active row treatment so all sidebar lists feel consistent.
+@ViewBuilder
+func macActiveRowBackground(_ active: Bool) -> some View {
+    #if targetEnvironment(macCatalyst)
+    RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .fill(active ? Color("AccentColor") : Color.clear)
+        .padding(.horizontal, 4)
+        .padding(.vertical, 2)
+    #else
+    Color.clear
+    #endif
+}
+
 extension View {
     /// Container modifier for sidebar Lists on Catalyst:
     /// 1. Hide top/bottom section separators (collide with search bar / pill nav)
