@@ -4,12 +4,22 @@ import SwiftUI
 @MainActor
 final class AppUpdateChecker: ObservableObject {
 
-    static let shared = AppUpdateChecker(
+    static var shared: AppUpdateChecker {
+        _testOverride ?? _shared
+    }
+
+    private static let _shared = AppUpdateChecker(
         fetcher: APIClientVersionFetcher(),
         defaults: .standard,
         currentVersion: { Config.appVersion },
         now: { Date() }
     )
+
+    #if DEBUG
+    nonisolated(unsafe) static var _testOverride: AppUpdateChecker?
+    #else
+    static var _testOverride: AppUpdateChecker? { nil }
+    #endif
 
     @Published private(set) var state: UpdateState = .unknown
 
@@ -17,6 +27,7 @@ final class AppUpdateChecker: ObservableObject {
         case unknown
         case upToDate
         case updateAvailable(VersionInfo)
+        case forceUpdateRequired(VersionInfo)
     }
 
     struct VersionInfo: Equatable {
@@ -35,9 +46,15 @@ final class AppUpdateChecker: ObservableObject {
     private static let kLastChecked = "appUpdate.lastCheckedAt"
     private static let throttleInterval: TimeInterval = 60 * 60   // 1 hour
 
-    private static let kSnoozedUntil = "appUpdate.snoozedUntil"
-    private static let kSnoozedVersion = "appUpdate.snoozedVersion"
+    static let kSnoozedUntil = "appUpdate.snoozedUntil"
+    static let kSnoozedVersion = "appUpdate.snoozedVersion"
     private static let snoozeInterval: TimeInterval = 24 * 60 * 60   // 24 hours
+
+    #if DEBUG
+    private static var debugBypassEnabled: Bool {
+        ProcessInfo.processInfo.environment["BYPASS_FORCE_UPDATE"] == "1"
+    }
+    #endif
 
     init(
         fetcher: VersionFetcher,
@@ -78,19 +95,76 @@ final class AppUpdateChecker: ObservableObject {
         state = .upToDate
     }
 
+    /// Called by the APIClient 426 interceptor. Bare HTTP-status signal —
+    /// flip to `.forceUpdateRequired` using whatever `VersionInfo` is
+    /// cached (or `VersionInfo.fallback()` if none). Idempotent: if
+    /// state is already `.forceUpdateRequired`, returns without doing
+    /// work.
+    ///
+    /// We deliberately do NOT trigger a background `check(force: true)`
+    /// here. Reasons: (1) the minimal `ForceUpdateView` does not display
+    /// version data, so stale `VersionInfo` is invisible; (2) the
+    /// hardcoded `Config.appStoreFallback` keeps the Update button
+    /// working without a fresh manifest; (3) auto-refetching introduces
+    /// a race where `apply(manifest:)` could downgrade state back to
+    /// `.updateAvailable` if the BE is in an inconsistent state (426
+    /// firing while the manifest still says no force). The next normal
+    /// foreground `check()` will reconcile manifest state in due course.
+    func handle426() async {
+        if case .forceUpdateRequired = state { return }
+
+        let cached: VersionInfo? = {
+            switch state {
+            case .updateAvailable(let info), .forceUpdateRequired(let info):
+                return info
+            default:
+                return nil
+            }
+        }()
+
+        state = .forceUpdateRequired(cached ?? .fallback())
+    }
+
     private func apply(manifest: AppVersionManifest) {
         guard
             let latest = SemVer(manifest.latestVersion),
-            let current = SemVer(currentVersion())
+            let current = SemVer(currentVersion()),
+            let minSupported = SemVer(manifest.minimumSupportedVersion)
         else {
             state = .unknown
             return
         }
+
+        let info = VersionInfo(
+            latest: latest,
+            latestRaw: manifest.latestVersion,
+            releaseNotes: manifest.releaseNotes,
+            storeUrl: manifest.storeUrl,
+            appStoreId: manifest.appStoreId
+        )
+
+        // Force triggers — bypass snooze entirely. Either the BE flipped
+        // `isForceUpdate=true` (emergency override) or the user is below
+        // the floor `minimumSupportedVersion`.
+        if manifest.isForceUpdate || current < minSupported {
+            #if DEBUG
+            if Self.debugBypassEnabled {
+                NSLog("[AppUpdateChecker] DEBUG bypass — would have forced update")
+            } else {
+                state = .forceUpdateRequired(info)
+                return
+            }
+            #else
+            state = .forceUpdateRequired(info)
+            return
+            #endif
+        }
+
+        // Soft path (PR #1 logic — unchanged)
         if !(current < latest) {
             state = .upToDate
             return
         }
-        // latest > current — consult snooze before surfacing banner
         if let until = defaults.object(forKey: Self.kSnoozedUntil) as? Date,
            let snoozedVer = defaults.string(forKey: Self.kSnoozedVersion),
            until > now(),
@@ -98,12 +172,22 @@ final class AppUpdateChecker: ObservableObject {
             state = .upToDate
             return
         }
-        state = .updateAvailable(VersionInfo(
-            latest: latest,
-            latestRaw: manifest.latestVersion,
-            releaseNotes: manifest.releaseNotes,
-            storeUrl: manifest.storeUrl,
-            appStoreId: manifest.appStoreId
-        ))
+        state = .updateAvailable(info)
+    }
+}
+
+extension AppUpdateChecker.VersionInfo {
+    /// Placeholder used by `handle426()` when an HTTP 426 fires before
+    /// any successful manifest fetch — provides a working Update button
+    /// via `Config.appStoreFallback`. The wall does not display the
+    /// `latestRaw` value, so its placeholder is harmless.
+    static func fallback() -> Self {
+        .init(
+            latest: SemVer("0.0.0")!,
+            latestRaw: "—",
+            releaseNotes: nil,
+            storeUrl: Config.appStoreFallback.storeUrl,
+            appStoreId: Config.appStoreFallback.appStoreId
+        )
     }
 }

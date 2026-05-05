@@ -19,6 +19,15 @@ struct RootView: View {
     @State private var pendingUpdateInfo: AppUpdateChecker.VersionInfo?
 
     var body: some View {
+        if case .forceUpdateRequired(let info) = updater.state {
+            ForceUpdateView(info: info)
+        } else {
+            existingBody
+        }
+    }
+
+    @ViewBuilder
+    private var existingBody: some View {
         Group {
             if auth.isAuthenticated {
                 authedShell

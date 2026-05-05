@@ -71,6 +71,14 @@ enum Config {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     }()
     static let userAgent = "gitchat-ios/\(appVersion)"
+    /// Hardcoded App Store identity for the in-app update gate. Used as a
+    /// fallback in `ForceUpdateView` when an HTTP 426 fires before any
+    /// `/app/version` manifest fetch has succeeded — the wall still needs a
+    /// working Update button.
+    static let appStoreFallback: (appStoreId: String, storeUrl: URL) = (
+        appStoreId: "6762181976",
+        storeUrl: URL(string: "https://apps.apple.com/us/app/gitchat/id6762181976")!
+    )
 
     // Legal documents (hosted at gitchat-legal.vercel.app)
     static let legalBase = URL(string: "https://gitchat-legal.vercel.app")!
