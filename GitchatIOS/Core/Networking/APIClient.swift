@@ -96,6 +96,7 @@ struct APIClient {
             throw APIError.transport(error)
         }
         guard let http = resp as? HTTPURLResponse else { throw APIError.http(-1, nil) }
+        intercept426IfNeeded(http, request: req)
         guard (200..<300).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8)
             throw APIError.http(http.statusCode, text)
@@ -307,11 +308,26 @@ struct APIClient {
     /// persistent failures to the user so they can pick a smaller image
     /// or wait for better connectivity.
     private func performUpload(_ req: URLRequest) async throws -> (Data, URLResponse) {
+        let result: (Data, URLResponse)
         do {
-            return try await uploadSession.data(for: req)
+            result = try await uploadSession.data(for: req)
         } catch let error as URLError where Self.isRetriableUploadError(error) {
             try await Task.sleep(nanoseconds: 2_000_000_000)
-            return try await uploadSession.data(for: req)
+            result = try await uploadSession.data(for: req)
+        }
+        if let http = result.1 as? HTTPURLResponse {
+            intercept426IfNeeded(http, request: req)
+        }
+        return result
+    }
+
+    /// Fires `AppUpdateChecker.handle426()` when the response status is 426.
+    /// Skipped for the `/app/version` endpoint to avoid a re-check loop.
+    private func intercept426IfNeeded(_ http: HTTPURLResponse, request: URLRequest) {
+        guard http.statusCode == 426 else { return }
+        if request.url?.path.hasSuffix("/app/version") == true { return }
+        Task { @MainActor in
+            await AppUpdateChecker.shared.handle426()
         }
     }
 
