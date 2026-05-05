@@ -69,9 +69,19 @@ final class AppUpdateChecker: ObservableObject {
     }
 
     /// Cold-launch and foreground entry point. `force == true` bypasses the
-    /// 1-hour throttle (used by the push-tap re-check handler).
+    /// 1-hour throttle (used by the push-tap re-check handler). The throttle
+    /// is also bypassed automatically while `state == .forceUpdateRequired`
+    /// so the user can recover from a BE flag-back without a cold launch —
+    /// while walled, polling BE on every foreground is acceptable because
+    /// the user is fully blocked from doing anything else.
     func check(force: Bool = false) async {
-        if !force,
+        let walled: Bool
+        if case .forceUpdateRequired = state {
+            walled = true
+        } else {
+            walled = false
+        }
+        if !force, !walled,
            let last = defaults.object(forKey: Self.kLastChecked) as? Date,
            now().timeIntervalSince(last) < Self.throttleInterval {
             return
