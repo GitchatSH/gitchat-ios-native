@@ -32,6 +32,9 @@ final class AppUpdateChecker: ObservableObject {
     private let currentVersion: () -> String
     private let now: () -> Date
 
+    private static let kLastChecked = "appUpdate.lastCheckedAt"
+    private static let throttleInterval: TimeInterval = 60 * 60   // 1 hour
+
     init(
         fetcher: VersionFetcher,
         defaults: UserDefaults,
@@ -44,15 +47,20 @@ final class AppUpdateChecker: ObservableObject {
         self.now = now
     }
 
-    /// Cold-launch and foreground entry point. `force == true` is reserved
-    /// for push-tap re-checks (Task 5 wires the throttle bypass).
+    /// Cold-launch and foreground entry point. `force == true` bypasses the
+    /// 1-hour throttle (used by the push-tap re-check handler).
     func check(force: Bool = false) async {
+        if !force,
+           let last = defaults.object(forKey: Self.kLastChecked) as? Date,
+           now().timeIntervalSince(last) < Self.throttleInterval {
+            return
+        }
+        defaults.set(now(), forKey: Self.kLastChecked)
         do {
             let manifest = try await fetcher.fetch()
             apply(manifest: manifest)
         } catch {
             NSLog("[AppUpdateChecker] fetch failed: \(error)")
-            // leave state unchanged on transient failure
         }
     }
 
