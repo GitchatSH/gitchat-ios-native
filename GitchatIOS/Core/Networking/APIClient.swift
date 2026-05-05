@@ -665,7 +665,6 @@ struct APIClient {
     func fetchAppVersionManifest() async throws -> AppVersionManifest {
         return try await request(
             "app/version",
-            method: "GET",
             query: [URLQueryItem(name: "platform", value: "ios")],
             requireAuth: false
         )
