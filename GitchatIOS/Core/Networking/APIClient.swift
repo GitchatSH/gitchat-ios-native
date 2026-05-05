@@ -658,6 +658,17 @@ struct APIClient {
         let resp: Resp = try await request("presence?logins=\(encoded)")
         return resp.data
     }
+
+    // MARK: - App version
+
+    /// `GET /app/version?platform=ios`. No auth. Used by `AppUpdateChecker`.
+    func fetchAppVersionManifest() async throws -> AppVersionManifest {
+        return try await request(
+            "app/version",
+            query: [URLQueryItem(name: "platform", value: "ios")],
+            requireAuth: false
+        )
+    }
 }
 
 // MARK: - Helpers

@@ -14,6 +14,9 @@ struct RootView: View {
     @Environment(\.requestReview) private var requestReview
     @Environment(\.scenePhase) private var scenePhase
     @State private var heartbeatTask: Task<Void, Never>?
+    @StateObject private var updater = AppUpdateChecker.shared
+    @State private var showUpdateStoreSheet = false
+    @State private var pendingUpdateInfo: AppUpdateChecker.VersionInfo?
 
     var body: some View {
         Group {
@@ -41,6 +44,31 @@ struct RootView: View {
         )) { route in
             InvitePreviewSheet(code: route.code)
         }
+        .overlay(alignment: .top) {
+            if case let .updateAvailable(info) = updater.state {
+                UpdateBanner(
+                    versionRaw: info.latestRaw,
+                    notes: info.releaseNotes,
+                    onUpdate: {
+                        pendingUpdateInfo = info
+                        showUpdateStoreSheet = true
+                    },
+                    onDismiss: { updater.snooze() }
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: updater.state)
+        .sheet(isPresented: $showUpdateStoreSheet) {
+            if let info = pendingUpdateInfo {
+                AppStoreSheet(
+                    appStoreId: info.appStoreId,
+                    fallbackURL: info.storeUrl,
+                    onDismiss: { showUpdateStoreSheet = false }
+                )
+            }
+        }
+        .task { await updater.check(force: true) }   // cold launch — always run
         .onReceive(NotificationCenter.default.publisher(for: .gitchatWaveResponded)) { note in
             guard let cid = note.object as? String, !cid.isEmpty else { return }
             ToastCenter.shared.show(.success, "Waved back — opening chat")
@@ -60,6 +88,9 @@ struct RootView: View {
                 // an app update didn't fire the change event), this
                 // bumps last_seen_at and papers over any missed POST.
                 Task { await PushSubscriptionSync.shared.syncCurrent() }
+            }
+            if phase == .active {
+                Task { await updater.check() }
             }
         }
         .onChange(of: auth.isAuthenticated) { isAuth in
