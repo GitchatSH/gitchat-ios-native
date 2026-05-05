@@ -81,4 +81,39 @@ final class AppUpdateCheckerThrottleTests: XCTestCase {
         await checker.check(force: true)
         XCTAssertEqual(fetcher.calls, 2, "force=true must ignore throttle")
     }
+
+    func test_throttle_persists_across_checker_instances() async {
+        // Models cold-launch / app-restart behavior: a fresh AppUpdateChecker
+        // sees the prior instance's timestamp via the shared UserDefaults.
+        // RootView's `.task` cold-launch call MUST pass `force: true` to
+        // bypass this — verified separately by Task 10 wiring.
+        let defaults = makeDefaults()
+        let fetcherA = CountingFetcher()
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        let checkerA = AppUpdateChecker(
+            fetcher: fetcherA,
+            defaults: defaults,
+            currentVersion: { "1.0.0" },
+            now: { clock }
+        )
+        await checkerA.check()
+        XCTAssertEqual(fetcherA.calls, 1)
+
+        // 30 minutes pass — user kills the app; new launch creates a new
+        // checker with the same UserDefaults suite.
+        clock = clock.addingTimeInterval(30 * 60)
+        let fetcherB = CountingFetcher()
+        let checkerB = AppUpdateChecker(
+            fetcher: fetcherB,
+            defaults: defaults,
+            currentVersion: { "1.0.0" },
+            now: { clock }
+        )
+        await checkerB.check()
+        XCTAssertEqual(fetcherB.calls, 0, "fresh instance must respect persisted throttle on default check()")
+
+        // force=true bypasses regardless of persistence.
+        await checkerB.check(force: true)
+        XCTAssertEqual(fetcherB.calls, 1, "force=true must override persisted throttle on fresh instance")
+    }
 }

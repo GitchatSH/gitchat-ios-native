@@ -598,6 +598,12 @@ git commit -m "feat(ios): AppUpdateChecker — state machine skeleton + tests (r
 
 ## Task 5: Throttle (1×/hr foreground, force bypass)
 
+**Throttle policy:**
+- Cold launch (`.task` on `RootView`): always run, regardless of last-checked timestamp.
+  Implementation note: passed via `force: true` from `RootView.task` because the throttle timestamp persists across app restarts via `UserDefaults`.
+- Foreground resume (`.onChange(of: scenePhase)`): throttled to 1×/hr.
+- Push-triggered (`app_update` push case in `PushManager`): always run via `force: true`.
+
 **Files:**
 - Modify: `GitchatIOS/Core/AppUpdate/AppUpdateChecker.swift` (add throttle to `check()`)
 - Create: `GitchatIOSTests/AppUpdateCheckerThrottleTests.swift`
@@ -1211,7 +1217,7 @@ Below the existing `.sheet(item: ...)` modifiers and **above** the existing `.on
                 AppStoreSheet(appStoreId: info.appStoreId, fallbackURL: info.storeUrl)
             }
         }
-        .task { await updater.check() }
+        .task { await updater.check(force: true) }   // cold launch — always run; throttle is persisted across launches
 ```
 
 - [ ] **Step 10.3: Trigger throttled re-check on foreground resume**
