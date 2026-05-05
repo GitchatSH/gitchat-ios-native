@@ -144,6 +144,62 @@ final class AppUpdateCheckerForceUpdateTests: XCTestCase {
         XCTAssertEqual(checker.state, .upToDate)
     }
 
+    func test_inForceState_check_bypassesThrottle() async {
+        // Hotfix regression test: while state is .forceUpdateRequired,
+        // a non-force check() must still fetch (bypass the 1h throttle)
+        // so the user can recover from a BE flag-back without a cold
+        // launch. Before the fix, throttle would skip and the wall
+        // would stay stuck.
+        let defaults = makeDefaults()
+        // Pre-populate kLastChecked to "5 minutes ago" — well within
+        // the 60-minute throttle window.
+        defaults.set(Date().addingTimeInterval(-5 * 60), forKey: "appUpdate.lastCheckedAt")
+
+        // Mutable fetcher: first fetch returns force=true, second returns force=false.
+        final class MutableFetcher: VersionFetcher {
+            var manifest: AppVersionManifest
+            var fetchCount = 0
+            init(_ m: AppVersionManifest) { self.manifest = m }
+            func fetch() async throws -> AppVersionManifest {
+                fetchCount += 1
+                return manifest
+            }
+        }
+        let mutable = MutableFetcher(AppVersionManifest(
+            latestVersion: "1.0.0", releaseNotes: nil, releasedAt: nil,
+            storeUrl: URL(string: "https://apps.apple.com/app/id1")!,
+            appStoreId: "1", minimumSupportedVersion: "1.0.0", isForceUpdate: true
+        ))
+        let checker = AppUpdateChecker(
+            fetcher: mutable,
+            defaults: defaults,
+            currentVersion: { "1.0.0" },
+            now: { Date() }
+        )
+
+        // First check (no force, throttle pre-populated) — would normally
+        // be throttled, but the freshly-set policy needs a fetch. We
+        // force this one to set up the precondition deterministically.
+        await checker.check(force: true)
+        guard case .forceUpdateRequired = checker.state else {
+            return XCTFail("precondition: expected force state, got \(checker.state)")
+        }
+        XCTAssertEqual(mutable.fetchCount, 1)
+
+        // BE flips flag back.
+        mutable.manifest = AppVersionManifest(
+            latestVersion: "1.0.0", releaseNotes: nil, releasedAt: nil,
+            storeUrl: URL(string: "https://apps.apple.com/app/id1")!,
+            appStoreId: "1", minimumSupportedVersion: "1.0.0", isForceUpdate: false
+        )
+
+        // Non-force check while walled — must NOT be throttled despite
+        // kLastChecked being recent.
+        await checker.check(force: false)
+        XCTAssertEqual(mutable.fetchCount, 2, "force-state check must bypass throttle")
+        XCTAssertEqual(checker.state, .upToDate)
+    }
+
     // MARK: - handle426()
 
     func test_handle426_noCachedInfo_usesFallback() async {

@@ -19,10 +19,25 @@ struct RootView: View {
     @State private var pendingUpdateInfo: AppUpdateChecker.VersionInfo?
 
     var body: some View {
-        if case .forceUpdateRequired(let info) = updater.state {
-            ForceUpdateView(info: info)
-        } else {
-            existingBody
+        // Wrap the conditional in an outer Group so the manifest-fetching
+        // modifiers below stay mounted regardless of which branch renders.
+        // Otherwise SwiftUI tears down `existingBody` (and any modifiers
+        // attached to it) the moment the wall mounts — which would orphan
+        // the scenePhase listener and leave the user stuck on the wall
+        // even after BE flips force=false. The wall must be exit-able
+        // without a cold launch.
+        Group {
+            if case .forceUpdateRequired(let info) = updater.state {
+                ForceUpdateView(info: info)
+            } else {
+                existingBody
+            }
+        }
+        .task { await updater.check(force: true) }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active {
+                Task { await updater.check() }
+            }
         }
     }
 
@@ -77,7 +92,10 @@ struct RootView: View {
                 )
             }
         }
-        .task { await updater.check(force: true) }   // cold launch — always run
+        // Cold-launch + foreground manifest re-check are now handled at
+        // the outer body level so they fire regardless of force-state.
+        // Only side effects that depend on a mounted authed shell stay
+        // here.
         .onReceive(NotificationCenter.default.publisher(for: .gitchatWaveResponded)) { note in
             guard let cid = note.object as? String, !cid.isEmpty else { return }
             ToastCenter.shared.show(.success, "Waved back — opening chat")
@@ -97,9 +115,6 @@ struct RootView: View {
                 // an app update didn't fire the change event), this
                 // bumps last_seen_at and papers over any missed POST.
                 Task { await PushSubscriptionSync.shared.syncCurrent() }
-            }
-            if phase == .active {
-                Task { await updater.check() }
             }
         }
         .onChange(of: auth.isAuthenticated) { isAuth in
