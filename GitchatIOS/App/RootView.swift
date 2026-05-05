@@ -56,9 +56,9 @@ struct RootView: View {
                     onDismiss: { updater.snooze() }
                 )
                 .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.easeInOut(duration: 0.25), value: updater.state)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: updater.state)
         .sheet(isPresented: $showUpdateStoreSheet) {
             if let info = pendingUpdateInfo {
                 AppStoreSheet(
