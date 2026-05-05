@@ -28,6 +28,7 @@ final class AppVersionManifestDecodingTests: XCTestCase {
         let manifest = try XCTUnwrap(envelope.data)
         XCTAssertEqual(manifest.latestVersion, "1.0.4")
         XCTAssertEqual(manifest.releaseNotes, "Minor bugs fixed")
+        XCTAssertEqual(manifest.releasedAt, "2026-04-23T21:15:52Z")
         XCTAssertEqual(manifest.appStoreId, "6762181976")
         XCTAssertEqual(manifest.storeUrl.absoluteString, "https://apps.apple.com/us/app/gitchat/id6762181976?uo=4")
         XCTAssertEqual(manifest.minimumSupportedVersion, "1.0.0")
@@ -41,5 +42,6 @@ final class AppVersionManifestDecodingTests: XCTestCase {
         let envelope = try JSONDecoder().decode(APIEnvelope<AppVersionManifest>.self, from: json)
         let manifest = try XCTUnwrap(envelope.data)
         XCTAssertNil(manifest.releaseNotes)
+        XCTAssertNil(manifest.releasedAt)
     }
 }
