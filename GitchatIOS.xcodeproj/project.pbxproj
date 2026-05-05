@@ -117,6 +117,7 @@
 		87F1CB4EFE6D24FE348C379A /* ConversationsCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CB898980AE4010FDBE8070 /* ConversationsCache.swift */; };
 		8A61197009C99436303D2621 /* ChatViewModelEndpointTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA38153D9BA7997CFFBC7799 /* ChatViewModelEndpointTests.swift */; };
 		8AD5EE1720D14E153C09F5BA /* StoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07857501623E25CD298B606 /* StoreManager.swift */; };
+		8C93BF4FA9420F14F6C1DA0C /* UpdateBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04BE6ECA1C483B783A66EC5A /* UpdateBanner.swift */; };
 		8DE798DC205BF80EAB219FDB /* TopicColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B89D1EF061B1D1C9295F639A /* TopicColor.swift */; };
 		8EC49E171B11904ED31ED2C4 /* ChatSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DA6355A70C27DBE9EA3F912 /* ChatSkeleton.swift */; };
 		8FB3557FB1721854174B2237 /* DiscoverTeamsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76DD186A17655C846B988019 /* DiscoverTeamsList.swift */; };
@@ -263,6 +264,7 @@
 		02C140A3AB7A1B01F7BEDFC3 /* ChatReplyEditBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReplyEditBar.swift; sourceTree = "<group>"; };
 		0353F5CC89228A1154CCFB7D /* TopicDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicDecodingTests.swift; sourceTree = "<group>"; };
 		043204DC26642044739AFFED /* OneSignalNotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OneSignalNotificationServiceExtension.entitlements; sourceTree = "<group>"; };
+		04BE6ECA1C483B783A66EC5A /* UpdateBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateBanner.swift; sourceTree = "<group>"; };
 		0581BC792D393D25DB425CB4 /* KeyboardHeight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHeight.swift; sourceTree = "<group>"; };
 		06414EF268FC059C7E6D2183 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		06D9FF2224123D14E9F3B352 /* ChatTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTheme.swift; sourceTree = "<group>"; };
@@ -830,6 +832,7 @@
 				B266BD490F29140D52F81729 /* AppUpdateChecker.swift */,
 				F2593E46223AEDD7D5B1D945 /* AppVersionManifest.swift */,
 				CDE0B29585E80A0A76EB40C1 /* SemVer.swift */,
+				04BE6ECA1C483B783A66EC5A /* UpdateBanner.swift */,
 				F64682FB162F2BD20C0F1BE5 /* VersionFetcher.swift */,
 			);
 			path = AppUpdate;
@@ -1405,6 +1408,7 @@
 				D4330533AA0D2636297E366E /* TopicSocketEvent.swift in Sources */,
 				35CE628923F58DFA1F4E22C6 /* TopicTabsStrip.swift in Sources */,
 				AB9FCA5C4BD98C40D7E5CC9C /* TypingIndicatorRow.swift in Sources */,
+				8C93BF4FA9420F14F6C1DA0C /* UpdateBanner.swift in Sources */,
 				FD17AE5E8C8F0262357875CD /* UpgradeView.swift in Sources */,
 				17361D53922346238189CD90 /* VersionFetcher.swift in Sources */,
 				589F007C9FC3C65B41E24DF1 /* WaveButton.swift in Sources */,
