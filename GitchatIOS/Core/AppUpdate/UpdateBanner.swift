@@ -11,6 +11,7 @@ struct UpdateBanner: View {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.title3)
                 .foregroundStyle(.tint)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("New version \(versionRaw) available")
@@ -22,6 +23,7 @@ struct UpdateBanner: View {
                         .lineLimit(1)
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer(minLength: 0)
 
@@ -36,7 +38,7 @@ struct UpdateBanner: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Dismiss update banner")
+            .accessibilityLabel("Remind me later")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
