@@ -102,4 +102,24 @@ final class AppUpdateCheckerSnoozeTests: XCTestCase {
             XCTFail("snooze should have expired")
         }
     }
+
+    func test_snooze_is_noop_when_state_is_upToDate() async {
+        let defaults = makeDefaults()
+        let checker = AppUpdateChecker(
+            fetcher: MutableFetcher(latest: "1.0.0"),
+            defaults: defaults,
+            currentVersion: { "1.0.0" },
+            now: { Date() }
+        )
+        await checker.check()
+        XCTAssertEqual(checker.state, .upToDate, "setup: latest == current, expect upToDate")
+
+        checker.snooze()
+
+        XCTAssertEqual(checker.state, .upToDate, "snooze must not change state when already upToDate")
+        XCTAssertNil(defaults.object(forKey: "appUpdate.snoozedUntil"),
+                     "snooze must not persist a timestamp when state is not updateAvailable")
+        XCTAssertNil(defaults.string(forKey: "appUpdate.snoozedVersion"),
+                     "snooze must not persist a version when state is not updateAvailable")
+    }
 }
