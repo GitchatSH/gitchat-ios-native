@@ -106,6 +106,13 @@ final class PushManager: ObservableObject {
             } else if let actor, !actor.isEmpty {
                 AppRouter.shared.openProfile(login: actor)
             }
+        case "app_update":
+            // BE broadcasts this when a new release is published.
+            // Force-bypass the 1h throttle so the user sees the prompt
+            // the moment they open the app from the push.
+            Task { @MainActor in
+                await AppUpdateChecker.shared.check(force: true)
+            }
         default:
             AppRouter.shared.selectedTab = 2 // Activity tab
         }
