@@ -27,7 +27,7 @@ Gitchat
 
 ### 🔴 Subtitle (30 chars max)
 ```
-Chat with GitHub developers
+GitHub Developer Messaging
 ```
 
 ### 🔴 Category
