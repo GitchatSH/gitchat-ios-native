@@ -46,21 +46,130 @@ struct ChatAttachmentsGrid: View {
     /// bubble's clipShape handles corners instead.
     var applyClip: Bool = true
 
+    @State private var videoToPlay: URLItem? = nil
+
     private var spacing: CGFloat { applyClip ? 3 : 2 }
     private var corner: CGFloat { applyClip ? 14 : 0 }
 
     var body: some View {
-        switch attachments.count {
-        case 0: EmptyView()
-        case 1: one(attachments[0])
-        case 2: two(attachments)
-        case 3: three(attachments)
-        default: fourPlus(attachments)
+        Group {
+            switch attachments.count {
+            case 0: EmptyView()
+            case 1: one(attachments[0])
+            case 2: two(attachments)
+            case 3: three(attachments)
+            default: fourPlus(attachments)
+            }
+        }
+        .sheet(item: $videoToPlay) { item in
+            VideoPlayerView(url: item.url)
+        }
+    }
+
+    // MARK: - Duration badge helper
+
+    private func formatDuration(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        let mins = total / 60
+        let secs = total % 60
+        return String(format: "%d:%02d", mins, secs)
+    }
+
+    // MARK: - Video tile
+
+    @ViewBuilder
+    private func videoTile(
+        _ a: MessageAttachment,
+        width: CGFloat,
+        height: CGFloat,
+        overlay: String? = nil
+    ) -> some View {
+        let posterURL: URL? = {
+            if let thumbStr = a.thumbnail_url { return URL(string: thumbStr) }
+            // Fall back to the attachment url itself if it looks like an image
+            if a.mime_type?.hasPrefix("image/") == true { return URL(string: a.url) }
+            return nil
+        }()
+        ZStack {
+            if let posterURL {
+                CachedAsyncImage(
+                    url: posterURL,
+                    contentMode: .fill,
+                    placeholder: .filled,
+                    fitMaxWidth: nil,
+                    fitMaxHeight: nil,
+                    maxPixelSize: max(width, height)
+                )
+                .frame(width: width, height: height)
+                .clipped()
+            } else {
+                Color.black
+                    .frame(width: width, height: height)
+            }
+            // Overlay dimming
+            Rectangle().fill(Color.black.opacity(0.15))
+            // Play button
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 44))
+                .foregroundStyle(.white.opacity(0.9))
+                .shadow(radius: 4)
+            // "+N" overlay for 4+ grid
+            if let overlay {
+                Rectangle().fill(Color.black.opacity(0.4))
+                Text(overlay)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            // Duration badge
+            if let dur = a.duration_seconds {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Text(formatDuration(dur))
+                            .font(.caption2.bold())
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.black.opacity(0.6))
+                            .clipShape(Capsule())
+                            .padding(6)
+                    }
+                }
+            }
+            if isUploading {
+                Rectangle().fill(Color.black.opacity(0.25))
+                ProgressView().tint(.white).controlSize(.large)
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !isUploading, let url = URL(string: a.url), !a.url.isEmpty else { return }
+            videoToPlay = URLItem(url: url)
+        }
+    }
+
+    // MARK: - Image tile
+
+    @ViewBuilder
+    private func tile(
+        _ a: MessageAttachment,
+        width: CGFloat,
+        height: CGFloat,
+        overlay: String? = nil
+    ) -> some View {
+        let isVideo = a.type == "video" || a.mime_type?.hasPrefix("video/") == true
+        if isVideo {
+            videoTile(a, width: width, height: height, overlay: overlay)
+        } else {
+            imageTile(a, width: width, height: height, overlay: overlay)
         }
     }
 
     @ViewBuilder
-    private func tile(
+    private func imageTile(
         _ a: MessageAttachment,
         width: CGFloat,
         height: CGFloat,
@@ -99,68 +208,75 @@ struct ChatAttachmentsGrid: View {
 
     @ViewBuilder
     private func one(_ a: MessageAttachment) -> some View {
-        let url = URL(string: a.url)
-        if applyClip {
-            // Stable frame from intrinsic dimensions so cell height doesn't
-            // shift during the brief `.task` initial-frame placeholder
-            // window before CachedAsyncImage's load() resolves. Without this,
-            // the standalone path's placeholder is a min(maxW,maxH) square
-            // and the loaded image is fitted-aspect — cell visibly resizes.
-            // See spec 2026-05-04-chat-send-jank-fix-design §2.6.
-            let fittedSize: CGSize? = {
-                guard let w = a.width, let h = a.height, w > 0, h > 0 else { return nil }
-                let aspect = CGFloat(w) / CGFloat(h)
-                let maxH: CGFloat = 320
-                if aspect >= 1 {
-                    let fw = min(maxWidth, CGFloat(w))
-                    return CGSize(width: fw, height: fw / aspect)
-                } else {
-                    let fh = min(maxH, CGFloat(h))
-                    return CGSize(width: fh * aspect, height: fh)
-                }
-            }()
-            // Standalone: fit with own clip
-            ZStack {
-                CachedAsyncImage(
-                    url: url,
-                    contentMode: .fit,
-                    placeholder: .filled,
-                    fitMaxWidth: maxWidth,
-                    fitMaxHeight: 320
-                )
-                if isUploading {
-                    Color.black.opacity(0.25)
-                    ProgressView().tint(.white).controlSize(.large)
-                }
-            }
-            .frame(width: fittedSize?.width, height: fittedSize?.height)
-            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
-            .contentShape(Rectangle())
-            .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
-            .onTapGesture { onTap(a.url) }
+        let isVideo = a.type == "video" || a.mime_type?.hasPrefix("video/") == true
+        if isVideo {
+            // Video: use a fixed 16:9 tile with poster frame + play button
+            let videoHeight = min(maxWidth * 9 / 16, 240)
+            videoTile(a, width: maxWidth, height: videoHeight)
         } else {
-            // Inside bubble: fill width, parent clips corners
-            let imgHeight = min(maxWidth * 0.75, 320)
-            ZStack {
-                CachedAsyncImage(
-                    url: url,
-                    contentMode: .fill,
-                    placeholder: .filled,
-                    fitMaxWidth: nil,
-                    fitMaxHeight: nil,
-                    maxPixelSize: maxWidth
-                )
-                .frame(width: maxWidth, height: imgHeight)
-                .clipped()
-                if isUploading {
-                    Color.black.opacity(0.25)
-                    ProgressView().tint(.white).controlSize(.large)
+            let url = URL(string: a.url)
+            if applyClip {
+                // Stable frame from intrinsic dimensions so cell height doesn't
+                // shift during the brief `.task` initial-frame placeholder
+                // window before CachedAsyncImage's load() resolves. Without this,
+                // the standalone path's placeholder is a min(maxW,maxH) square
+                // and the loaded image is fitted-aspect — cell visibly resizes.
+                // See spec 2026-05-04-chat-send-jank-fix-design §2.6.
+                let fittedSize: CGSize? = {
+                    guard let w = a.width, let h = a.height, w > 0, h > 0 else { return nil }
+                    let aspect = CGFloat(w) / CGFloat(h)
+                    let maxH: CGFloat = 320
+                    if aspect >= 1 {
+                        let fw = min(maxWidth, CGFloat(w))
+                        return CGSize(width: fw, height: fw / aspect)
+                    } else {
+                        let fh = min(maxH, CGFloat(h))
+                        return CGSize(width: fh * aspect, height: fh)
+                    }
+                }()
+                // Standalone: fit with own clip
+                ZStack {
+                    CachedAsyncImage(
+                        url: url,
+                        contentMode: .fit,
+                        placeholder: .filled,
+                        fitMaxWidth: maxWidth,
+                        fitMaxHeight: 320
+                    )
+                    if isUploading {
+                        Color.black.opacity(0.25)
+                        ProgressView().tint(.white).controlSize(.large)
+                    }
                 }
+                .frame(width: fittedSize?.width, height: fittedSize?.height)
+                .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+                .contentShape(Rectangle())
+                .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
+                .onTapGesture { onTap(a.url) }
+            } else {
+                // Inside bubble: fill width, parent clips corners
+                let imgHeight = min(maxWidth * 0.75, 320)
+                ZStack {
+                    CachedAsyncImage(
+                        url: url,
+                        contentMode: .fill,
+                        placeholder: .filled,
+                        fitMaxWidth: nil,
+                        fitMaxHeight: nil,
+                        maxPixelSize: maxWidth
+                    )
+                    .frame(width: maxWidth, height: imgHeight)
+                    .clipped()
+                    if isUploading {
+                        Color.black.opacity(0.25)
+                        ProgressView().tint(.white).controlSize(.large)
+                    }
+                }
+                .frame(width: maxWidth, height: imgHeight)
+                .contentShape(Rectangle())
+                .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
+                .onTapGesture { onTap(a.url) }
             }
-            .frame(width: maxWidth, height: imgHeight)
-            .contentShape(Rectangle())
-            .matchedIfActive(url: a.url, in: matchedNamespace, active: activePreviewURL)
-            .onTapGesture { onTap(a.url) }
         }
     }
 

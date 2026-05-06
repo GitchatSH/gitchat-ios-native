@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import UIKit
 import UniformTypeIdentifiers
+import AVFoundation
 
 /// Host view for a single conversation. Owns navigation, sheets,
 /// alerts, drag-drop, and view-model wiring. The scrollable area +
@@ -63,6 +64,8 @@ struct ChatDetailView: View {
     @State private var dropCaption = ""
     @State private var cropTarget: Int?
     @State private var isDragOver = false
+    /// Video attachments staged by the PhotosPicker; sent when the user confirms via the preview sheet.
+    @State private var pendingVideoAttachments: [PendingAttachment] = []
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
@@ -677,6 +680,7 @@ struct ChatDetailView: View {
                 cropTarget = nil
                 pendingDropImages = []
                 dropCaption = ""
+                pendingVideoAttachments = []
                 showDropConfirm = false
             },
             onSend: {
@@ -757,8 +761,17 @@ struct ChatDetailView: View {
     private func sendDroppedImages() {
         let images = pendingDropImages
         let caption = dropCaption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stagedVideos = pendingVideoAttachments
         pendingDropImages = []
         dropCaption = ""
+        pendingVideoAttachments = []
+
+        // If we have staged video attachments (from PhotosPicker video pick),
+        // send them as a separate video message.
+        if !stagedVideos.isEmpty {
+            vm.send(content: caption, attachments: stagedVideos)
+            return
+        }
 
         // No images — send caption as plain text via the legacy outbox.
         guard !images.isEmpty else {
@@ -885,21 +898,113 @@ struct ChatDetailView: View {
 
     @MainActor
     private func routePickedPhotos(_ newItems: [PhotosPickerItem]) async {
-        var collected: [UIImage] = []
+        var collectedImages: [UIImage] = []
+        var collectedVideos: [PendingAttachment] = []
+
         for item in newItems {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let img = UIImage(data: data) {
-                collected.append(img)
+            let isVideo = item.supportedContentTypes.contains(where: {
+                $0.conforms(to: .movie) || $0.conforms(to: .video)
+            })
+
+            if isVideo {
+                if let videoAttachment = await loadVideoItem(item) {
+                    collectedVideos.append(videoAttachment)
+                }
+            } else {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let img = UIImage(data: data) {
+                    collectedImages.append(img)
+                }
             }
         }
         photoItems = []
-        guard !collected.isEmpty else { return }
+
+        // Send videos directly (no ImageSendPreview for video — use thumbnail as preview)
+        if !collectedVideos.isEmpty {
+            let thumbImages: [UIImage] = collectedVideos.compactMap {
+                guard let td = $0.thumbnailData else { return nil }
+                return UIImage(data: td)
+            }
+            // If there are also images, merge thumbnails into the drop preview
+            if !collectedImages.isEmpty {
+                collectedImages.append(contentsOf: thumbImages)
+                if showDropConfirm {
+                    pendingDropImages.append(contentsOf: collectedImages)
+                } else {
+                    pendingDropImages = collectedImages
+                    showDropConfirm = true
+                }
+            } else if !thumbImages.isEmpty {
+                // Pure-video pick: show thumbnail in preview sheet, but
+                // remember the actual video attachments to send
+                pendingVideoAttachments = collectedVideos
+                if showDropConfirm {
+                    pendingDropImages.append(contentsOf: thumbImages)
+                } else {
+                    pendingDropImages = thumbImages
+                    showDropConfirm = true
+                }
+            } else {
+                // No thumbnail available: send videos immediately
+                vm.send(content: "", attachments: collectedVideos)
+            }
+            return
+        }
+
+        guard !collectedImages.isEmpty else { return }
         if showDropConfirm {
-            pendingDropImages.append(contentsOf: collected)
+            pendingDropImages.append(contentsOf: collectedImages)
         } else {
-            pendingDropImages = collected
+            pendingDropImages = collectedImages
             showDropConfirm = true
         }
+    }
+
+    /// Load a video PhotosPickerItem into a PendingAttachment with thumbnail.
+    private func loadVideoItem(_ item: PhotosPickerItem) async -> PendingAttachment? {
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return nil }
+
+        // Write to a temp file so AVAsset can read it
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".mp4")
+        do {
+            try data.write(to: tmpURL, options: .atomic)
+        } catch {
+            return nil
+        }
+        defer { try? FileManager.default.removeItem(at: tmpURL) }
+
+        let asset = AVAsset(url: tmpURL)
+
+        // Duration
+        var durationSeconds: Double? = nil
+        if let cmDuration = try? await asset.load(.duration) {
+            let secs = CMTimeGetSeconds(cmDuration)
+            if secs.isFinite && secs > 0 { durationSeconds = secs }
+        }
+
+        // Thumbnail at 1 second (or 0 if shorter)
+        var thumbnailData: Data? = nil
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 640, height: 640)
+        let thumbTime = CMTime(seconds: min(1.0, durationSeconds ?? 0), preferredTimescale: 600)
+        if let cgImage = try? generator.copyCGImage(at: thumbTime, actualTime: nil) {
+            thumbnailData = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.75)
+        }
+
+        return PendingAttachment(
+            clientAttachmentID: UUID().uuidString,
+            sourceData: data,
+            mimeType: "video/mp4",
+            width: nil,
+            height: nil,
+            blurhash: nil,
+            uploaded: nil,
+            durationSeconds: durationSeconds,
+            thumbnailData: thumbnailData,
+            thumbnailUploaded: nil
+        )
     }
 
     // MARK: - Lifecycle

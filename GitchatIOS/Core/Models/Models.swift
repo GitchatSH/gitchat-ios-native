@@ -313,12 +313,15 @@ struct MessageAttachment: Codable, Hashable, Identifiable {
     let mime_type: String?
     let width: Int?
     let height: Int?
+    let duration_seconds: Double?
+    let thumbnail_url: String?
 
     var id: String { attachment_id ?? url }
 
     enum CodingKeys: String, CodingKey {
         case attachment_id = "id"
         case url, type, filename, mime_type, width, height
+        case duration_seconds, thumbnail_url
     }
 }
 
@@ -722,7 +725,9 @@ extension Message {
                     filename: nil,
                     mime_type: att.mimeType,
                     width: att.width,
-                    height: att.height
+                    height: att.height,
+                    duration_seconds: nil,
+                    thumbnail_url: nil
                 )
             }
         return Message(
