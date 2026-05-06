@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Cross-platform body for the topic list. Wrapped by `TopicListSheet`
-/// (iOS bottom sheet) and `TopicListPopover` (Mac Catalyst popover).
+/// Cross-platform body for the topic list. Wrapped by
+/// `TopicListSidebarView` (Mac Catalyst sidebar) and
+/// `TopicListPushView` (iOS pushed view). Renders the section'd list
+/// of topics with empty/loading/error variants.
 struct TopicListContent: View {
     let parent: Conversation
     let activeTopicId: String?
@@ -53,6 +55,7 @@ struct TopicListContent: View {
             }
         }
         .listStyle(.plain)
+        .modifier(TopicListSectionSpacing())
         .listRowSeparator(.hidden)
     }
 
@@ -89,11 +92,25 @@ struct TopicListContent: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Text("💬").font(.system(size: 48))
-            Text("No topics yet").font(.title3).foregroundStyle(.primary)
-            Text("Create one to organize discussions")
-                .font(.subheadline).foregroundStyle(.secondary)
-            Button("+ New Topic") { showCreate = true }.buttonStyle(.borderedProminent)
+            Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                .font(.system(size: 48))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color("AccentColor"))
+            Text("Start a topic")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text("Topics keep group conversations organized by subject.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+            Button {
+                showCreate = true
+            } label: {
+                Label("New Topic", systemImage: "plus")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
@@ -146,7 +163,9 @@ struct TopicListContent: View {
     }
 
     private func togglePin(_ t: Topic) {
-        store.togglePin(topicId: t.id, parentId: parent.id)
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            store.togglePin(topicId: t.id, parentId: parent.id)
+        }
     }
 
     private func archive(_ t: Topic) async {
@@ -164,6 +183,16 @@ struct TopicListContent: View {
         } catch {
             NSLog("[Topic.archive] error=%@", String(describing: error))
             ToastCenter.shared.show(.error, "Could not archive", "Try again")
+        }
+    }
+}
+
+private struct TopicListSectionSpacing: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17, *) {
+            content.listSectionSpacing(4)
+        } else {
+            content
         }
     }
 }
