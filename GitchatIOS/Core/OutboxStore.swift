@@ -665,9 +665,10 @@ final class OutboxStore: ObservableObject {
                     if att.mimeType.hasPrefix("image/") { return "image" }
                     return "file"
                 }()
-                // For video, use the uploaded thumbnail URL as the display URL
-                // so the poster frame renders during upload.
+                // Prefer CDN URL once uploaded; fall back to local JPEG written
+                // by enqueue() so the poster frame renders immediately.
                 let thumbUrl: String? = att.thumbnailUploaded?.url
+                    ?? (att.mimeType.hasPrefix("video/") ? localPreviewPaths[att.clientAttachmentID]?.absoluteString : nil)
                 return MessageAttachment(
                     attachment_id: att.clientAttachmentID,
                     url: url,
