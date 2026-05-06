@@ -30,6 +30,9 @@ struct PendingAttachment: Codable, Equatable {
     let height: Int?
     let blurhash: String?
     var uploaded: UploadedRef?
+    var durationSeconds: Double? = nil
+    var thumbnailData: Data? = nil       // JPEG thumbnail for preview before upload
+    var thumbnailUploaded: UploadedRef? = nil  // URL after thumbnail is uploaded
 }
 
 struct UploadedRef: Codable, Equatable {
@@ -270,12 +273,22 @@ final class OutboxStore: ObservableObject {
     /// after enqueueing — that would fire a duplicate send.
     func enqueue(_ msg: PendingMessage) {
         pending[msg.conversationID, default: []].append(msg)
-        for att in msg.attachments where att.mimeType.hasPrefix("image/") {
-            registerLocalPreview(
-                for: att.clientAttachmentID,
-                data: att.sourceData,
-                mimeType: att.mimeType
-            )
+        for att in msg.attachments {
+            if att.mimeType.hasPrefix("image/") {
+                registerLocalPreview(
+                    for: att.clientAttachmentID,
+                    data: att.sourceData,
+                    mimeType: att.mimeType
+                )
+            } else if att.mimeType.hasPrefix("video/"), let thumbData = att.thumbnailData {
+                // Register the thumbnail as a local preview so the video bubble
+                // poster frame renders immediately while the upload is in flight.
+                registerLocalPreview(
+                    for: att.clientAttachmentID,
+                    data: thumbData,
+                    mimeType: "image/jpeg"
+                )
+            }
         }
         runSend(for: msg)
         saveToDisk()
@@ -383,6 +396,26 @@ final class OutboxStore: ObservableObject {
             var done = 0.0
             for i in p.attachments.indices where p.attachments[i].uploaded == nil {
                 do {
+                    // For video attachments, upload the thumbnail first (as image/jpeg)
+                    if p.attachments[i].mimeType.hasPrefix("video/"),
+                       let thumbData = p.attachments[i].thumbnailData,
+                       p.attachments[i].thumbnailUploaded == nil {
+                        let thumbRef = try await api.uploadAttachment(
+                            conversationID: p.conversationID,
+                            data: thumbData,
+                            mimeType: "image/jpeg"
+                        )
+                        p.attachments[i].thumbnailUploaded = thumbRef
+                        // Prime ImageCache for the thumbnail so the video bubble
+                        // poster frame renders instantly after the server confirms.
+                        if let serverURL = URL(string: thumbRef.url),
+                           let img = UIImage(data: thumbData) {
+                            ImageCache.shared.store(img, for: serverURL)
+                            ImageCache.shared.storeRawData(thumbData, for: serverURL)
+                        }
+                        updatePending(p)
+                    }
+
                     let ref = try await api.uploadAttachment(
                         conversationID: p.conversationID,
                         data: p.attachments[i].sourceData,
@@ -424,8 +457,13 @@ final class OutboxStore: ObservableObject {
         do {
             let attachmentDicts: [[String: Any]] = p.attachments.compactMap { att in
                 guard let u = att.uploaded else { return nil }
+                let attType: String = {
+                    if att.mimeType.hasPrefix("video/") { return "video" }
+                    if att.mimeType.hasPrefix("image/") { return "image" }
+                    return "file"
+                }()
                 var dict: [String: Any] = [
-                    "type": att.mimeType.hasPrefix("image/") ? "image" : "file",
+                    "type": attType,
                     "url": u.url,
                     "storage_path": u.storagePath,
                     "mime_type": att.mimeType,
@@ -434,6 +472,8 @@ final class OutboxStore: ObservableObject {
                 if let w = att.width  { dict["width"]  = w }
                 if let h = att.height { dict["height"] = h }
                 if let bh = att.blurhash { dict["blurhash"] = bh }
+                if let dur = att.durationSeconds { dict["duration_seconds"] = dur }
+                if let thumbUrl = att.thumbnailUploaded?.url { dict["thumbnail_url"] = thumbUrl }
                 return dict
             }
             let serverMsg: Message
@@ -620,14 +660,25 @@ final class OutboxStore: ObservableObject {
                 let url: String = att.uploaded?.url
                     ?? localPreviewPaths[att.clientAttachmentID]?.absoluteString
                     ?? ""
+                let attType: String = {
+                    if att.mimeType.hasPrefix("video/") { return "video" }
+                    if att.mimeType.hasPrefix("image/") { return "image" }
+                    return "file"
+                }()
+                // Prefer CDN URL once uploaded; fall back to local JPEG written
+                // by enqueue() so the poster frame renders immediately.
+                let thumbUrl: String? = att.thumbnailUploaded?.url
+                    ?? (att.mimeType.hasPrefix("video/") ? localPreviewPaths[att.clientAttachmentID]?.absoluteString : nil)
                 return MessageAttachment(
                     attachment_id: att.clientAttachmentID,
                     url: url,
-                    type: att.mimeType.hasPrefix("image/") ? "image" : "file",
+                    type: attType,
                     filename: nil,
                     mime_type: att.mimeType,
                     width: att.width,
-                    height: att.height
+                    height: att.height,
+                    duration_seconds: att.durationSeconds,
+                    thumbnail_url: thumbUrl
                 )
             }
         return Message(

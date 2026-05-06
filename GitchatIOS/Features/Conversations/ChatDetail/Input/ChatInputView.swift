@@ -79,7 +79,7 @@ struct ChatInputView: View {
 
     @ViewBuilder
     private var attachButton: some View {
-        PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .images) {
+        PhotosPicker(selection: $photoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos])) {
             Image(systemName: "paperclip")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.primary)
