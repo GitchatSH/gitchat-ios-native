@@ -400,11 +400,13 @@ final class OutboxStore: ObservableObject {
                     if p.attachments[i].mimeType.hasPrefix("video/"),
                        let thumbData = p.attachments[i].thumbnailData,
                        p.attachments[i].thumbnailUploaded == nil {
+                        NSLog("[Outbox] uploading thumbnail jpeg %d bytes for conv %@", thumbData.count, p.conversationID)
                         let thumbRef = try await api.uploadAttachment(
                             conversationID: p.conversationID,
                             data: thumbData,
                             mimeType: "image/jpeg"
                         )
+                        NSLog("[Outbox] thumbnail uploaded → %@", thumbRef.url)
                         p.attachments[i].thumbnailUploaded = thumbRef
                         // Prime ImageCache for the thumbnail so the video bubble
                         // poster frame renders instantly after the server confirms.
@@ -416,11 +418,13 @@ final class OutboxStore: ObservableObject {
                         updatePending(p)
                     }
 
+                    NSLog("[Outbox] uploading attachment mime=%@ size=%d conv=%@", p.attachments[i].mimeType, p.attachments[i].sourceData.count, p.conversationID)
                     let ref = try await api.uploadAttachment(
                         conversationID: p.conversationID,
                         data: p.attachments[i].sourceData,
                         mimeType: p.attachments[i].mimeType
                     )
+                    NSLog("[Outbox] attachment uploaded → %@", ref.url)
                     p.attachments[i].uploaded = ref
                     // Prime ImageCache so the eventual local→server ID flip
                     // (when the cell rebuilds with the server's image URL)
@@ -437,6 +441,7 @@ final class OutboxStore: ObservableObject {
                     p.state = .uploading(progress: done / total)
                     updatePending(p)
                 } catch {
+                    NSLog("[Outbox] upload FAILED: %@", String(describing: error))
                     p.attempts += 1
                     let retriable = isRetriableError(error) && p.attempts < 5
                     p.state = .failed(reason: "Upload failed: \(error)", retriable: retriable)
@@ -452,6 +457,7 @@ final class OutboxStore: ObservableObject {
         }
 
         // Phase 2 — send
+        NSLog("[Outbox] sending message conv=%@ attachments=%d", p.conversationID, p.attachments.count)
         p.state = .sending
         updatePending(p)
         do {
@@ -472,7 +478,7 @@ final class OutboxStore: ObservableObject {
                 if let w = att.width  { dict["width"]  = w }
                 if let h = att.height { dict["height"] = h }
                 if let bh = att.blurhash { dict["blurhash"] = bh }
-                if let dur = att.durationSeconds { dict["duration_seconds"] = dur }
+                if let dur = att.durationSeconds { dict["duration_seconds"] = Int(dur) }
                 if let thumbUrl = att.thumbnailUploaded?.url { dict["thumbnail_url"] = thumbUrl }
                 return dict
             }
@@ -535,6 +541,7 @@ final class OutboxStore: ObservableObject {
             // socket arrival of the same id.
             deliveryHandlers[p.conversationID]?(stamped)
         } catch {
+            NSLog("[Outbox] sendMessage FAILED: %@", String(describing: error))
             Haptics.error()
             ToastCenter.shared.show(.error, "Send failed", error.localizedDescription)
             p.attempts += 1
