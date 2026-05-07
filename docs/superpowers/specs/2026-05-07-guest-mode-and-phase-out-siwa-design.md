@@ -136,6 +136,13 @@ if AuthStore.shared.isAuthenticated {
 }
 ```
 
+Additionally, `loadFollowStatus()` short-circuits for guests and synthesizes
+a non-mutual `FollowStatus(following: false, followed_by: false)`, so the
+view enters its non-mutual branch and renders the Wave CTA. Without this,
+the unauthenticated `/users/:login/follow-status` call throws
+`.notAuthenticated`, `followState` stays nil, and the view falls into the
+mutual-following branch (Follow + Chat) — Wave never renders for guests.
+
 ### Phase 2: SIWA removal
 
 Single-file change:

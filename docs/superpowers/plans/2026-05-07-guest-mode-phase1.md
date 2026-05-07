@@ -1080,6 +1080,18 @@ git commit -m "feat(root): route unauth users to GuestTabView; add -uiTestUnauth
 
 **Files:**
 - Modify: `GitchatIOS/Features/Profile/ProfileView.swift`
+- Modify: `GitchatIOS/Core/Models/Models.swift` (add memberwise init to `FollowStatus`)
+
+**Prereq (folded into this task):** `loadFollowStatus(login:)` calls
+`APIClient.shared.followStatus(login:)` which defaults to `requireAuth: true`.
+For guests it throws `.notAuthenticated`, the catch swallows it, `followState`
+stays nil, and the Wave CTA never renders (the view falls into the
+mutual-following branch and shows Follow + Chat). Add a guest short-circuit
+at the top of `loadFollowStatus(login:)` that sets
+`followState = FollowStatus(following: false, followed_by: false)` and
+returns. Because `FollowStatus` is `Decodable`-only with custom CodingKeys,
+also add an explicit memberwise `init(following:followed_by:)` plus a manual
+`init(from:)` in `Models.swift` so the synthesized literal compiles.
 
 - [ ] **Step 1: Add prompt-sheet state**
 

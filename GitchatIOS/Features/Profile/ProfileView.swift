@@ -322,6 +322,13 @@ struct ProfileView: View {
     }
 
     private func loadFollowStatus(login: String) async {
+        // Guests have no GitHub account → no mutuals possible. Synthesize the
+        // non-mutual state so the Wave CTA renders. Tapping Wave or Follow
+        // routes through SignInPromptSheet (gated in this view).
+        guard AuthStore.shared.isAuthenticated else {
+            followState = FollowStatus(following: false, followed_by: false)
+            return
+        }
         do { followState = try await APIClient.shared.followStatus(login: login) }
         catch { }
     }
