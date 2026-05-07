@@ -71,22 +71,20 @@ struct MacShellView: View {
     private var currentTabSidebar: some View {
         switch router.selectedTab {
         case 0:
-            NavigationStack(path: Binding(
-                get: { router.topicSidebarPath },
-                set: { router.topicSidebarPath = $0 }
-            )) {
-                ConversationsListView()
-                    .navigationDestination(for: TopicSidebarRoute.self) { route in
-                        HStack(spacing: 0) {
-                            ConversationsListView(
-                                compact: true,
-                                navTitle: route.parent.displayTitle
-                            )
-                            .frame(width: 60)
-                            Divider()
-                            TopicListSidebarView(parent: route.parent)
-                        }
+            let inTopicMode = router.selectedTopic != nil
+            NavigationStack {
+                HStack(spacing: 0) {
+                    ConversationsListView(
+                        compact: inTopicMode,
+                        navTitle: router.selectedTopic?.parent.displayTitle
+                    )
+                    .frame(width: inTopicMode ? 60 : nil)
+
+                    if let target = router.selectedTopic {
+                        Divider()
+                        TopicListSidebarView(parent: target.parent)
                     }
+                }
             }
         case 1: DiscoverView()
         case 2: NotificationsView()

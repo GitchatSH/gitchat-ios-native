@@ -311,6 +311,8 @@ struct ConversationsListView: View {
     }
 
     private func openConversation(_ convo: Conversation) {
+        NSLog("[Topic] openConversation id=%@ hasTopics=%@ compact=%@",
+              convo.id, String(convo.hasTopicsEnabled), String(compact))
         tappedConvoId = convo.id
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeOut(duration: 0.2)) { tappedConvoId = nil }
@@ -318,15 +320,13 @@ struct ConversationsListView: View {
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
         if compact {
-            // Already in topic mode (this view is the compact list rendered
-            // inside the pushed sidebar destination). Route through the
-            // smart switcher so forum-to-forum replaces (not stacks),
+            // Already in topic mode — this is the same ConversationsListView
+            // rendered in compact form alongside the topic list. Route through
+            // the smart switcher so forum-to-forum replaces (not stacks),
             // and forum-to-DM exits topic mode and opens the DM.
             router.switchToConversation(convo)
         } else if convo.hasTopicsEnabled {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                router.enterTopicMode(parent: convo)
-            }
+            router.enterTopicMode(parent: convo)
         } else {
             // If user was in topic mode for another group, exit it first
             // so the detail panel actually switches to the picked chat.
