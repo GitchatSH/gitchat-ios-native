@@ -35,6 +35,7 @@ final class AppRouter: ObservableObject {
             // Topic mode is bound to the Chats tab. Leaving Chats resets
             // the topic sidebar stack so returning lands on chats list.
             if oldValue != selectedTab && oldValue == 0 {
+                activeForumParent = nil
                 topicSidebarPath = NavigationPath()
                 selectedTopic = nil
             }
@@ -78,6 +79,13 @@ final class AppRouter: ObservableObject {
     /// Catalyst sidebar `NavigationStack` path. Empty = chats list shown.
     /// One element = topic list pushed for that parent.
     @Published var topicSidebarPath: NavigationPath = NavigationPath()
+
+    /// The forum group the Catalyst sidebar has collapsed into.
+    /// Independent of `selectedTopic` so the UI can transition to topic
+    /// mode immediately, even before topics finish loading. `nil` = chats
+    /// list at full width; non-nil = sidebar collapsed to 60pt + topic
+    /// list rendered alongside.
+    @Published var activeForumParent: Conversation? = nil
 
     /// What the Catalyst detail panel renders while the user is in topic
     /// mode. `nil` = fall back to placeholder / `selectedConversation`.
@@ -163,15 +171,20 @@ final class AppRouter: ObservableObject {
         pendingProfileLogin = login
     }
 
-    /// Pushes the topic list onto the Catalyst sidebar stack and resolves
-    /// a default active topic. Call from row tap on a topic-enabled group.
+    /// Collapses the Catalyst sidebar into topic mode for `parent`. Sets
+    /// `activeForumParent` immediately so the UI transitions even before
+    /// topics finish loading; `selectedTopic` is then resolved (best-effort)
+    /// from whatever is in `TopicListStore` right now. The sidebar's
+    /// `TopicListContent.task` will fetch fresh topics on appearance and
+    /// callers can pick a topic to update `selectedTopic` afterwards.
     func enterTopicMode(parent: Conversation) {
+        activeForumParent = parent
         topicSidebarPath.append(TopicSidebarRoute(parent: parent))
         if let resolved = resolveActiveTopic(parent: parent) {
             selectedTopic = TopicTarget(topic: resolved, parent: parent)
-        } else {
-            selectedTopic = nil   // empty list — detail panel shows placeholder
         }
+        // If store is empty for this parent, leave selectedTopic alone —
+        // the topic-list view will fetch and `pickTopic` will fire.
     }
 
     /// Records and renders the user's pick. Idempotent.
@@ -183,6 +196,7 @@ final class AppRouter: ObservableObject {
     /// Pops the sidebar back to the chats list and clears the active
     /// topic. Detail panel snaps to the placeholder.
     func exitTopicMode() {
+        activeForumParent = nil
         topicSidebarPath = NavigationPath()
         selectedTopic = nil
     }

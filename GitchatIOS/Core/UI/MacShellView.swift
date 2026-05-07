@@ -71,14 +71,14 @@ struct MacShellView: View {
     private var currentTabSidebar: some View {
         switch router.selectedTab {
         case 0:
-            let inTopicMode = router.selectedTopic != nil
+            let inTopicMode = router.activeForumParent != nil
             HStack(spacing: 0) {
                 ConversationsListView(compact: inTopicMode)
                     .frame(width: inTopicMode ? 60 : nil)
 
-                if let target = router.selectedTopic {
+                if let parent = router.activeForumParent {
                     Divider()
-                    TopicListSidebarView(parent: target.parent)
+                    TopicListSidebarView(parent: parent)
                 }
             }
         case 1: DiscoverView()
