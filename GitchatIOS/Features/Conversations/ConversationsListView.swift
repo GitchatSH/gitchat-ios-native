@@ -321,16 +321,22 @@ struct ConversationsListView: View {
         #if targetEnvironment(macCatalyst)
         let _ = NSLog("[Topic] catalystSidebar render activeForumParent=%@",
                       router.activeForumParent?.id ?? "nil")
-        if let parent = router.activeForumParent {
-            HStack(spacing: 0) {
-                sidebar
-                    .frame(width: 60)
-                    .clipped()
-                Divider()
-                TopicListSidebarView(parent: parent)
-            }
-        } else {
+        // Use GeometryReader to determine sidebar column width so the
+        // topic list inset reserves "everything past the leading 60pt".
+        // Chrome (`.searchable`, `.navigationTitle`, `.toolbar`) stays
+        // attached to `sidebar` at full column width — only the row
+        // content area is split via `safeAreaInset`.
+        GeometryReader { geo in
             sidebar
+                .safeAreaInset(edge: .trailing, spacing: 0) {
+                    if let parent = router.activeForumParent {
+                        HStack(spacing: 0) {
+                            Divider()
+                            TopicListSidebarView(parent: parent)
+                        }
+                        .frame(width: max(geo.size.width - 60, 0))
+                    }
+                }
         }
         #else
         sidebar
