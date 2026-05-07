@@ -178,44 +178,12 @@ git commit -m "feat(api): add /trending/repos + /trending/people unauth clients"
 
 **Files:**
 - Modify: `GitchatIOS/Core/Networking/APIClient+Invite.swift:96-98`
-- Test: `GitchatIOSTests/APIClientTrendingTests.swift` (extend, since it sets up StubURLProtocol)
 
-- [ ] **Step 1: Add the failing test**
+> **No new test.** A `signOut()`-driven regression guard would re-introduce the same global-state leak we removed from Task 1. The fix is a single-arg change; visual review and the integration test in Task 10 (where guest taps an invite link) cover the behaviour end-to-end.
 
-Append to `APIClientTrendingTests.swift` (re-uses the `makeStubClient()` helper from Task 1):
+- [ ] **Step 1: Edit `previewInvite`**
 
-```swift
-    /// Same regression pattern as the trending tests — guarantees
-    /// `previewInvite` does not require a token. With `requireAuth: true`
-    /// (the current bug), `signOut()` followed by the call throws
-    /// `APIError.notAuthenticated` before the request goes out.
-    func test_previewInvite_does_not_require_token() async throws {
-        await AuthStore.shared.signOut()
-        StubURLProtocol.responseBody = Data(#"""
-        {"code":"abc","group_name":"g","conversation_id":"c","creator_login":"x","creator_avatar_url":null,"recipient_count":1}
-        """#.utf8)
-        do {
-            _ = try await makeStubClient().previewInvite(code: "abc")
-        } catch APIError.notAuthenticated {
-            XCTFail("Invite preview is documented public — requireAuth must be false")
-        } catch {
-            // Decoding/transport errors are fine — we only guard `.notAuthenticated`.
-        }
-    }
-```
-
-> The exact `InvitePreview` decoding shape may not match the stub literally. The test only asserts on the auth gate, not on the decoded value, so a partial JSON is sufficient. If decoding throws, the catch swallows it; the test still validates the regression we care about.
-
-- [ ] **Step 2: Run, confirm failure**
-
-```bash
-xcodebuild test ... -only-testing:GitchatIOSTests/APIClientTrendingTests/test_previewInvite_does_not_require_token
-```
-Expected: FAIL with `XCTFail("Invite preview is documented public — requireAuth must be false")` because current code defaults `requireAuth` to true and `signOut()` left no token.
-
-- [ ] **Step 3: Edit `previewInvite`**
-
-In `APIClient+Invite.swift`, change:
+In `GitchatIOS/Core/Networking/APIClient+Invite.swift`, change:
 
 ```swift
     func previewInvite(code: String) async throws -> InvitePreview {
@@ -224,24 +192,36 @@ In `APIClient+Invite.swift`, change:
 ```
 to:
 ```swift
+    /// `GET /messages/conversations/join/:code` — public preview of a group invite.
+    /// Used both by signed-in flows (`InvitePreviewSheet`) and by the guest
+    /// path on a `gitchat://invite/...` deep link, so we must NOT require a
+    /// bearer token.
     func previewInvite(code: String) async throws -> InvitePreview {
         try await request("messages/conversations/join/\(code)", requireAuth: false)
     }
 ```
 
-Update the doc comment to drop the "may still require auth" hedging — BE confirms public.
+If there is a doc-comment above the original `previewInvite` mentioning "Backend may still require auth", drop that hedging too — BE confirms public (verified 2026-05-07: `messages.controller.ts:128` "Preview invite link (public, no auth)").
 
-- [ ] **Step 4: Run, confirm pass**
+- [ ] **Step 2: Build**
 
 ```bash
-xcodebuild test ... -only-testing:GitchatIOSTests/APIClientTrendingTests
+xcodebuild -project GitchatIOS.xcodeproj -scheme GitchatIOS \
+  -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
-Expected: PASS.
+Expected: BUILD SUCCEEDED. No new files, no `xcodegen` regen needed.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Verify the existing test suite still passes**
 
 ```bash
-git add GitchatIOS/Core/Networking/APIClient+Invite.swift GitchatIOSTests/APIClientTrendingTests.swift
+xcodebuild test ... -only-testing:GitchatIOSTests
+```
+The pre-existing TopicListStoreTests failures are unrelated tech debt — flag them in your report but do not fix.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add GitchatIOS/Core/Networking/APIClient+Invite.swift
 git commit -m "fix(invite): preview is public — drop bearer for guest callers"
 ```
 
