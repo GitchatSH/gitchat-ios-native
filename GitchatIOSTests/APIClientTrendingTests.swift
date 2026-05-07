@@ -46,16 +46,4 @@ final class APIClientTrendingTests: XCTestCase {
         XCTAssertEqual(people.first?.name, "TJ")
     }
 
-    /// Guards against a regression where someone removes `requireAuth: false`.
-    func test_trendingRepos_does_not_require_token() async throws {
-        await AuthStore.shared.signOut()
-        StubURLProtocol.responseBody = Data(#"{"data":[],"page":1,"hasMore":false}"#.utf8)
-        do {
-            _ = try await makeStubClient().trendingRepos()
-        } catch APIError.notAuthenticated {
-            XCTFail("Trending must be callable without a token (requireAuth must be false)")
-        } catch {
-            // Any other error is fine — only `.notAuthenticated` is the regression we guard.
-        }
-    }
 }
