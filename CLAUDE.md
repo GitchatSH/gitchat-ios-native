@@ -45,10 +45,22 @@ grep -c "<NewFile>.swift" GitchatIOS.xcodeproj/project.pbxproj
 - **No `print()` for app logging** — use `NSLog` (so it shows in
   `xcrun simctl spawn <udid> log stream --process Gitchat`) or
   file-based logs to `/tmp/...` for debugging.
-- **No XCTest target yet** — verification is `xcodebuild` compile +
-  manual scenarios on a booted simulator. UI automation works via
-  `idb` (Facebook's iOS bridge: `brew install facebook/fb/idb-companion`
-  + `pip3 install --user fb-idb`).
+- **Test targets:** `GitchatIOSTests` (unit, `bundle.unit-test`) and
+  `GitchatIOSUITests` (UI, `bundle.ui-testing`). Both use
+  `@testable import Gitchat` (the product is named `Gitchat`, not
+  `GitchatIOS`). Helpers live in each target's `Helpers/` directory:
+  `StubURLProtocol`, `MockAPIClient`, `UITestHelpers`. Run via:
+
+  ```bash
+  xcodebuild test -project GitchatIOS.xcodeproj -scheme GitchatIOS \
+    -destination 'platform=iOS Simulator,name=iPhone 17' \
+    -only-testing:GitchatIOSTests
+  ```
+
+  Use `-only-testing:GitchatIOSUITests` for the UI suite. iPhone 15 sim
+  is not installed locally — iPhone 17 is the canonical destination.
+  `idb` (Facebook's iOS bridge) is also available for ad-hoc UI driving:
+  `brew install facebook/fb/idb-companion` + `pip3 install --user fb-idb`.
 - **Local API testing** uses the `GitchatIOS local` Xcode scheme which
   sets `API_BASE_URL=http://localhost:3000/api/v1`. Launch from CLI with
   `SIMCTL_CHILD_API_BASE_URL=...` to mimic.
