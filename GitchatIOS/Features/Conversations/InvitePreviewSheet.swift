@@ -12,6 +12,7 @@ struct InvitePreviewSheet: View {
     @State private var loading = true
     @State private var joining = false
     @State private var errorMessage: String?
+    @State private var promptReason: SignInReason?
 
     var body: some View {
         NavigationStack {
@@ -32,6 +33,9 @@ struct InvitePreviewSheet: View {
                 }
             }
             .task { await load() }
+        }
+        .sheet(item: $promptReason) { reason in
+            SignInPromptSheet(reason: reason) {}
         }
     }
 
@@ -68,7 +72,11 @@ struct InvitePreviewSheet: View {
                 .buttonStyle(.borderedProminent)
             } else {
                 Button {
-                    Task { await join() }
+                    if AuthStore.shared.isAuthenticated {
+                        Task { await join() }
+                    } else {
+                        promptReason = .invite
+                    }
                 } label: {
                     if joining {
                         ProgressView().frame(maxWidth: .infinity)
