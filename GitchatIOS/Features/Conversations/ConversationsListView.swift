@@ -317,7 +317,13 @@ struct ConversationsListView: View {
         }
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
-        if convo.hasTopicsEnabled {
+        if compact {
+            // Already in topic mode (this view is the compact list rendered
+            // inside the pushed sidebar destination). Route through the
+            // smart switcher so forum-to-forum replaces (not stacks),
+            // and forum-to-DM exits topic mode and opens the DM.
+            router.switchToConversation(convo)
+        } else if convo.hasTopicsEnabled {
             withAnimation(.easeInOut(duration: 0.2)) {
                 router.enterTopicMode(parent: convo)
             }
