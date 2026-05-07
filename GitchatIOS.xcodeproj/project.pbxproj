@@ -42,6 +42,7 @@
 		2A9935280A2FA6DB2275A27D /* RelativeTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3255839AE4B52EEE916274AF /* RelativeTime.swift */; };
 		2BAF9EB98C155D3F8D3532A8 /* APIClient+Topic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6213BEBF4437AE0A10FC31B3 /* APIClient+Topic.swift */; };
 		2C8169E0DC4D00EE13E46120 /* Intents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA91A2CC0ACF49DD840C13FF /* Intents.framework */; };
+		2FD7296C14C80879E044EB58 /* TopicListPushView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 047E5D6B0756CA197E12BE07 /* TopicListPushView.swift */; };
 		301A8A5BBE220BDAD5E67750 /* Geist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8A624F25A8589989F02FE384 /* Geist-Regular.ttf */; };
 		30B5B529C093F9BC6611C3B4 /* MacReadableWidth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DBC8FEE623A8B5FB4BDFFBC /* MacReadableWidth.swift */; };
 		3447209A70D5284522CAA6A1 /* PushSubscriptionSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52C4210527E4A63652D48DEC /* PushSubscriptionSync.swift */; };
@@ -254,6 +255,7 @@
 		02C140A3AB7A1B01F7BEDFC3 /* ChatReplyEditBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatReplyEditBar.swift; sourceTree = "<group>"; };
 		0353F5CC89228A1154CCFB7D /* TopicDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicDecodingTests.swift; sourceTree = "<group>"; };
 		043204DC26642044739AFFED /* OneSignalNotificationServiceExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OneSignalNotificationServiceExtension.entitlements; sourceTree = "<group>"; };
+		047E5D6B0756CA197E12BE07 /* TopicListPushView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicListPushView.swift; sourceTree = "<group>"; };
 		0581BC792D393D25DB425CB4 /* KeyboardHeight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHeight.swift; sourceTree = "<group>"; };
 		06414EF268FC059C7E6D2183 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		06D9FF2224123D14E9F3B352 /* ChatTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTheme.swift; sourceTree = "<group>"; };
@@ -741,6 +743,7 @@
 				89D44C363FDE6442F09E7C13 /* TopicCreateSheet.swift */,
 				6311B0C0CFDB81C367C16FF8 /* TopicEmojiPresets.swift */,
 				896795B9C8F75F43A68DC187 /* TopicListContent.swift */,
+				047E5D6B0756CA197E12BE07 /* TopicListPushView.swift */,
 				3381F45EB5AC1A25D178B698 /* TopicListSheet.swift */,
 				C5A2C6DB1A8303E3F1E9F66E /* TopicListSidebarView.swift */,
 				AA0DC891F548EEBA0A31C07C /* TopicListStore.swift */,
@@ -1360,6 +1363,7 @@
 				4E058E4A54C6BF60D5327982 /* TopicCreateSheet.swift in Sources */,
 				7C549C1AEAC820616D9E5BEE /* TopicEmojiPresets.swift in Sources */,
 				B9BF1CA0133329B39B916250 /* TopicListContent.swift in Sources */,
+				2FD7296C14C80879E044EB58 /* TopicListPushView.swift in Sources */,
 				A2233FEBA35EAEA1A0E4FAE1 /* TopicListSheet.swift in Sources */,
 				991326174B84B993CAD6740E /* TopicListSidebarView.swift in Sources */,
 				D81934AFE5A73A2F1DA0C725 /* TopicListStore.swift in Sources */,
