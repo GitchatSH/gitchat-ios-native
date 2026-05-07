@@ -319,10 +319,13 @@ struct ConversationsListView: View {
     @ViewBuilder
     private var catalystSidebar: some View {
         #if targetEnvironment(macCatalyst)
+        let _ = NSLog("[Topic] catalystSidebar render activeForumParent=%@",
+                      router.activeForumParent?.id ?? "nil")
         if let parent = router.activeForumParent {
             HStack(spacing: 0) {
                 sidebar
                     .frame(width: 60)
+                    .clipped()
                 Divider()
                 TopicListSidebarView(parent: parent)
             }
