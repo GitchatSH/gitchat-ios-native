@@ -40,19 +40,26 @@ struct IconChatsColumn: View {
         let unread = vm.locallyRead.contains(convo.id) ? 0 : convo.unreadCount
 
         VStack(spacing: 2) {
-            if convo.isGroup {
-                GroupAvatarView(
-                    name: convo.group_name ?? convo.displayTitle,
-                    avatarURL: convo.group_avatar_url,
-                    groupId: convo.id,
-                    size: 44
-                )
-            } else {
-                AvatarView(
-                    url: convo.displayAvatarURL,
-                    size: 44,
-                    login: convo.other_user?.login
-                )
+            ZStack {
+                if isActive {
+                    Circle()
+                        .fill(Color("AccentColor").opacity(0.25))
+                        .frame(width: 52, height: 52)
+                }
+                if convo.isGroup {
+                    GroupAvatarView(
+                        name: convo.group_name ?? convo.displayTitle,
+                        avatarURL: convo.group_avatar_url,
+                        groupId: convo.id,
+                        size: 44
+                    )
+                } else {
+                    AvatarView(
+                        url: convo.displayAvatarURL,
+                        size: 44,
+                        login: convo.other_user?.login
+                    )
+                }
             }
             if unread > 0 {
                 Text(unread > 99 ? "99+" : "\(unread)")
@@ -65,11 +72,6 @@ struct IconChatsColumn: View {
         }
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
-        .background(
-            Capsule()
-                .fill(isActive ? Color("AccentColor").opacity(0.2) : Color.clear)
-                .padding(.horizontal, 4)
-        )
         .animation(.easeInOut(duration: 0.18), value: isActive)
         .contentShape(Rectangle())
         .onTapGesture {
