@@ -20,10 +20,4 @@ enum DiscoverSubTab: String, CaseIterable, Identifiable {
         case .communities: return "Search communities..."
         }
     }
-
-    /// Communities pulls personalised starred repos and is meaningless
-    /// for unauthenticated browsing. Guests see only People/Teams.
-    static func cases(forGuest: Bool) -> [DiscoverSubTab] {
-        forGuest ? [.people, .teams] : DiscoverSubTab.allCases
-    }
 }
