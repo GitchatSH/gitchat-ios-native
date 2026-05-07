@@ -675,6 +675,46 @@ struct APIClient {
         return resp.data
     }
 
+    // MARK: - Trending (public, no auth)
+
+    struct TrendingRepo: Decodable, Identifiable, Hashable {
+        let owner: String
+        let name: String
+        let description: String?
+        let language: String?
+        let stars: Int?
+        let avatar_url: String?
+        var id: String { "\(owner)/\(name)" }
+        var fullName: String { "\(owner)/\(name)" }
+    }
+
+    struct TrendingUser: Decodable, Identifiable, Hashable {
+        let login: String
+        let name: String?
+        let avatar_url: String?
+        var id: String { login }
+    }
+
+    /// `GET /trending/repos`. Public — no Authorization header.
+    func trendingRepos() async throws -> [TrendingRepo] {
+        struct Resp: Decodable { let repos: [TrendingRepo] }
+        let r: Resp = try await request(
+            "trending/repos",
+            requireAuth: false
+        )
+        return r.repos
+    }
+
+    /// `GET /trending/people`. Public — no Authorization header.
+    func trendingPeople() async throws -> [TrendingUser] {
+        struct Resp: Decodable { let users: [TrendingUser] }
+        let r: Resp = try await request(
+            "trending/people",
+            requireAuth: false
+        )
+        return r.users
+    }
+
     // MARK: - App version
 
     /// `GET /app/version?platform=ios`. No auth. Used by `AppUpdateChecker`.
