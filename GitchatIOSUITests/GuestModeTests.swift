@@ -25,7 +25,10 @@ final class GuestModeTests: XCTestCase {
 
     func test_tap_wave_on_profile_shows_signin_prompt_sheet() {
         let app = XCUIApplication()
-        app.launchArguments += ["-uiTest", "-uiTestUnauthed"]
+        app.launchArguments += [
+            "-uiTest", "-uiTestUnauthed",
+            "-debug.apiBaseURL", "http://localhost:3000/api/v1"
+        ]
         app.launch()
 
         app.tabBars.buttons["Search"].tap()
@@ -35,6 +38,9 @@ final class GuestModeTests: XCTestCase {
         field.typeText("tj")
         app.buttons["Open profile"].tap()
 
+        // ProfileView fetches /user/tj from local BE. Wave CTA renders
+        // because loadFollowStatus synthesises non-mutual for guests
+        // (commit ec78644).
         let waveButton = app.buttons["Wave"]
         XCTAssertTrue(waveButton.waitForExistence(timeout: 8),
                       "Profile load must surface Wave button")
