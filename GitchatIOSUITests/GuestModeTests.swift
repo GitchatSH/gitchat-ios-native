@@ -53,6 +53,43 @@ final class GuestModeTests: XCTestCase {
         XCTAssertTrue(app.buttons["Not now"].exists)
     }
 
+    func test_cancel_prompt_stays_on_profile() {
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-uiTest", "-uiTestUnauthed",
+            "-debug.apiBaseURL", "http://localhost:3000/api/v1"
+        ]
+        app.launch()
+
+        app.tabBars.buttons["Search"].tap()
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("tj")
+        app.buttons["Open profile"].tap()
+
+        let waveButton = app.buttons["Wave"]
+        XCTAssertTrue(waveButton.waitForExistence(timeout: 8))
+        waveButton.tap()
+
+        // Sheet appears; tap Not now instead of GitHub.
+        let notNow = app.buttons["Not now"]
+        XCTAssertTrue(notNow.waitForExistence(timeout: 3),
+                      "Sheet must show Not now button")
+        notNow.tap()
+
+        // Sheet dismisses. We should still be on the guest profile —
+        // Wave button reappears (same view, sheet closed), and the
+        // guest tab bar (Discover/Search only) is still present.
+        XCTAssertTrue(waveButton.waitForExistence(timeout: 3),
+                      "After dismissing prompt, Wave button must still be visible (still on profile)")
+        XCTAssertTrue(app.tabBars.buttons["Discover"].exists,
+                      "Guest tab bar must still be in place — no shell swap")
+        XCTAssertTrue(app.tabBars.buttons["Search"].exists)
+        XCTAssertFalse(app.tabBars.buttons["Chats"].exists,
+                       "MainTabView must NOT have replaced GuestTabView")
+    }
+
     func test_guest_discover_does_not_show_subtab_picker_or_search_bar() {
         let app = XCUIApplication()
         app.launchArguments += ["-uiTest", "-uiTestUnauthed"]
