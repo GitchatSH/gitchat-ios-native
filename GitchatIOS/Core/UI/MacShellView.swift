@@ -20,6 +20,15 @@ struct MacShellView: View {
                 detailPanel
             }
             .id(detailIdentity)
+            .onReceive(TopicListStore.shared.objectWillChange) { _ in
+                guard let active = router.selectedTopic else { return }
+                let topics = TopicListStore.shared.topics(forParent: active.parent.id)
+                if !topics.contains(where: { $0.id == active.topic.id }) {
+                    ToastCenter.shared.show(.info, "Topic archived",
+                                            "It was archived by another member")
+                    router.exitTopicMode()
+                }
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .background(macTabShortcuts)
