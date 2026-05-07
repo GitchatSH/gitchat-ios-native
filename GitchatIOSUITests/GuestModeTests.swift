@@ -164,6 +164,63 @@ final class GuestModeTests: XCTestCase {
                        "After sign-out, Chats tab must be gone (we're guest now)")
     }
 
+    func test_invite_deeplink_join_shows_signin_prompt() throws {
+        // The local BE must recognise this invite code. If it doesn't
+        // exist, skip — this is intentionally a fragile fixture-bound
+        // test; the value comes from the dev / local seed data.
+        // Override via UITEST_INVITE_CODE env var (e.g.
+        // `UITEST_INVITE_CODE=abc123 xcodebuild test ...`).
+        let envCode = ProcessInfo.processInfo.environment["UITEST_INVITE_CODE"]
+        let code = envCode ?? "uitest-invite-dev"
+
+        // Precheck: hit the local BE to verify the code is valid before
+        // bothering with the UI.
+        let url = URL(string: "http://localhost:3000/api/v1/messages/conversations/join/\(code)")!
+        let (_, response) = try awaitData(from: url)
+        let http = response as? HTTPURLResponse
+        try XCTSkipUnless(http?.statusCode == 200,
+                          "Skipping invite UI test — local BE doesn't recognise code '\(code)'. Seed an invite or pass UITEST_INVITE_CODE=<code>.")
+
+        let app = XCUIApplication()
+        app.launchArguments += [
+            "-uiTest", "-uiTestUnauthed",
+            "-debug.apiBaseURL", "http://localhost:3000/api/v1",
+            "-uiTestInviteCode", code
+        ]
+        app.launch()
+
+        // Sheet should appear automatically because AppRouter primed
+        // pendingInviteCode at init.
+        let joinButton = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Join'")).firstMatch
+        XCTAssertTrue(joinButton.waitForExistence(timeout: 6),
+                      "Join button must render after invite preview loads")
+        joinButton.tap()
+
+        XCTAssertTrue(app.staticTexts["Sign in to join the group"]
+                        .waitForExistence(timeout: 3),
+                      "Tapping Join while guest must show SignInPromptSheet for .invite")
+        XCTAssertTrue(app.buttons["Sign in with GitHub"].exists)
+    }
+
+    /// Synchronous wrapper around URLSession.dataTask — used in setUp
+    /// only for cheap precheck.
+    private func awaitData(from url: URL) throws -> (Data, URLResponse) {
+        let semaphore = DispatchSemaphore(value: 0)
+        var data = Data()
+        var response: URLResponse?
+        var error: Error?
+        URLSession.shared.dataTask(with: url) { d, r, e in
+            if let d { data = d }
+            response = r
+            error = e
+            semaphore.signal()
+        }.resume()
+        _ = semaphore.wait(timeout: .now() + 5)
+        if let error { throw error }
+        guard let response else { throw URLError(.badServerResponse) }
+        return (data, response)
+    }
+
     // NOTE: A `test_guest_tap_trending_person_pushes_profile_with_wave_button`
     // test was drafted alongside this fix to verify that trending-people rows
     // are tappable for guests, but it was dropped before commit because
