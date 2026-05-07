@@ -277,6 +277,8 @@ final class ConversationsViewModel: ObservableObject {
 }
 
 struct ConversationsListView: View {
+    var compact: Bool = false
+
     @StateObject private var vm = ConversationsViewModel()
     @StateObject private var router = AppRouter.shared
     @EnvironmentObject var socket: SocketClient
@@ -316,11 +318,14 @@ struct ConversationsListView: View {
         }
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
-        if convo.hasTopicsEnabled {
+        if compact {
+            // Already in topic mode — this is the same ConversationsListView
+            // rendered narrow alongside the topic list. Smart-switch:
+            // forum-to-forum replaces (no stack), forum-to-DM exits.
+            router.switchToConversation(convo)
+        } else if convo.hasTopicsEnabled {
             router.enterTopicMode(parent: convo)
         } else {
-            // If user was in topic mode for another group, exit it first
-            // so the detail panel actually switches to the picked chat.
             if router.selectedTopic != nil {
                 router.exitTopicMode()
             }
@@ -488,9 +493,12 @@ struct ConversationsListView: View {
             conversation: convo,
             isLocallyRead: vm.locallyRead.contains(convo.id),
             isMuted: vm.isLocallyMuted(convo),
-            isActive: isActiveRow(convo)
+            isActive: isActiveRow(convo),
+            compact: compact
         )
         .transaction { $0.animation = nil }
+        .frame(maxWidth: compact ? 60 : .infinity, alignment: .leading)
+        .clipped()
         .contentShape(Rectangle())
         .background(tappedConvoId == convo.id ? Color(.tertiarySystemBackground) : Color.clear)
         .scaleEffect(squeezedConvoId == convo.id ? rowSqueezeFactor(for: convo) : 1)
@@ -861,6 +869,7 @@ struct ConversationRow: View {
     /// in the sticky detail panel. Flips text/icon colors to white
     /// for contrast against the accent-color background.
     var isActive: Bool = false
+    var compact: Bool = false
     @ObservedObject private var draftStore = DraftStore.shared
     @ScaledMetric(relativeTo: .footnote) private var badgeMinSize: CGFloat = 24
     @ScaledMetric(relativeTo: .caption) private var mentionBadgeSize: CGFloat = 20
