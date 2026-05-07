@@ -71,6 +71,7 @@ final class DiscoverViewModel: ObservableObject {
 
     private func loadAllGuest() async {
         trendingLoading = true; defer { trendingLoading = false }
+        trendingError = nil
         async let repos = safeTrendingRepos()
         async let people = safeTrendingPeople()
         let (r, p) = await (repos, people)
@@ -81,10 +82,11 @@ final class DiscoverViewModel: ObservableObject {
     private func safeTrendingRepos() async -> [APIClient.TrendingRepo] {
         do {
             let r = try await api.trendingRepos()
-            trendingError = nil
             return r
         } catch {
-            trendingError = error.localizedDescription
+            if trendingError == nil {
+                trendingError = error.localizedDescription
+            }
             return []
         }
     }
@@ -94,7 +96,9 @@ final class DiscoverViewModel: ObservableObject {
             let r = try await api.trendingPeople()
             return r
         } catch {
-            trendingError = error.localizedDescription
+            if trendingError == nil {
+                trendingError = error.localizedDescription
+            }
             return []
         }
     }
