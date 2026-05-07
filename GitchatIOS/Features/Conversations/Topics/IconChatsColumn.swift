@@ -66,8 +66,8 @@ struct IconChatsColumn: View {
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isActive ? Color("AccentColor").opacity(0.15) : Color.clear)
+            Capsule()
+                .fill(isActive ? Color("AccentColor").opacity(0.2) : Color.clear)
                 .padding(.horizontal, 4)
         )
         .animation(.easeInOut(duration: 0.18), value: isActive)
