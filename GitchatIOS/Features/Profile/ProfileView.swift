@@ -50,6 +50,7 @@ struct ProfileView: View {
     @State private var reportReason = "Spam"
     @State private var reportDetail = ""
     @State private var showBlockConfirm = false
+    @State private var promptReason: SignInReason?
     @StateObject private var blocks = BlockStore.shared
 
     /// True when viewing your own profile (no login passed).
@@ -104,7 +105,11 @@ struct ProfileView: View {
                     if !isSelf {
                         HStack(spacing: 6) {
                             Button {
-                                Task { await toggleFollow(login: p.login) }
+                                if AuthStore.shared.isAuthenticated {
+                                    Task { await toggleFollow(login: p.login) }
+                                } else {
+                                    promptReason = .follow(login: p.login)
+                                }
                             } label: {
                                 followButtonLabel
                             }
@@ -137,7 +142,11 @@ struct ProfileView: View {
                                 }
                                 if followState?.following == true {
                                     Button {
-                                        Task { await toggleFollow(login: p.login) }
+                                        if AuthStore.shared.isAuthenticated {
+                                            Task { await toggleFollow(login: p.login) }
+                                        } else {
+                                            promptReason = .follow(login: p.login)
+                                        }
                                     } label: {
                                         Label("Unfollow", systemImage: "person.badge.minus")
                                     }
@@ -289,6 +298,13 @@ struct ProfileView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(item: $promptReason) { reason in
+            SignInPromptSheet(reason: reason) {
+                // After sign-in success, AuthStore flips and RootView
+                // re-renders into MainTabView. Nothing else to do here —
+                // context loss is documented v1 behaviour.
+            }
+        }
         .macReadableWidth()
     }
 
@@ -351,7 +367,11 @@ struct ProfileView: View {
         let waved = waveHistory.alreadyWaved(login)
         let pending = waveHistory.isPending(login)
         Button {
-            Task { await sendWave(to: login) }
+            if AuthStore.shared.isAuthenticated {
+                Task { await sendWave(to: login) }
+            } else {
+                promptReason = .wave(login: login)
+            }
         } label: {
             HStack(spacing: 6) {
                 if pending {
