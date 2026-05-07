@@ -121,8 +121,12 @@ verified 2026-05-07). The iOS client needs new methods on `APIClient`.
 ### Modified: `ProfileView`
 
 `load()` already calls `userProfile(login:)` which hits `GET /user/:username`.
-Backend confirmed unguarded. No changes needed for guest read flow. Locked
-actions (wave / follow buttons) gain a guest branch:
+Backend confirmed unguarded. iOS `APIClient.userProfile(login:)` must pass
+`requireAuth: false` (same caveat as `previewInvite` below — without it the
+client throws `APIError.notAuthenticated` synchronously for guest callers
+before the request leaves the device). With that one-line fix in place no
+further changes are needed for the guest read flow. Locked actions (wave /
+follow buttons) gain a guest branch:
 
 ```swift
 if AuthStore.shared.isAuthenticated {

@@ -502,6 +502,10 @@ struct APIClient {
         try await request("user/profile")
     }
 
+    /// `GET /user/:username` — public on the BE (`UserController.getUserByUsername`,
+    /// no auth guard). The viewer-token branch in the BE only personalises the
+    /// collaborator subset; the basic profile read works without it. Pass
+    /// `requireAuth: false` so guest mode (no token) can call this.
     func userProfile(login: String) async throws -> UserProfile {
         struct NestedRepo: Decodable {
             let owner: String
@@ -527,7 +531,7 @@ struct APIClient {
             let profile: NestedProfile
             let repos: [NestedRepo]?
         }
-        let resp: NestedResponse = try await request("user/\(login)")
+        let resp: NestedResponse = try await request("user/\(login)", requireAuth: false)
         let tops = (resp.repos ?? []).prefix(10).map {
             RepoSummary(
                 full_name: "\($0.owner)/\($0.name)",

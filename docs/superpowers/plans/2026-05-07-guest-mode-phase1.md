@@ -857,6 +857,12 @@ git commit -m "feat(discover): hide Communities sub-tab + render trending list f
 **Files:**
 - Create: `GitchatIOS/Features/Search/UserSearchView.swift`
 
+> **Prereq:** This task assumes `APIClient.userProfile(login:)` passes
+> `requireAuth: false` so guests can hit `GET /user/:username` (public on
+> the BE). Without that the client throws `APIError.notAuthenticated`
+> before the request leaves the device and `ProfileView` never loads for
+> guests. Landed in a separate prereq commit — see prereq commit.
+
 - [ ] **Step 1: Create the file**
 
 ```swift
