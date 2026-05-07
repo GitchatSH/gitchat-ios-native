@@ -72,7 +72,7 @@ struct TopicRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
-        .background(isActive ? Color("AccentColor") : .clear)
+        .background(activeBackground)
         .scaleEffect(isPressed ? 0.98 : 1.0)
         .animation(.easeInOut(duration: 0.18), value: isActive)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isPressed)
@@ -96,6 +96,18 @@ struct TopicRow: View {
             .font(.system(size: iconSize * 0.5))
             .frame(width: iconSize, height: iconSize)
             .background(color.opacity(0.18), in: RoundedRectangle(cornerRadius: iconCornerRadius))
+    }
+
+    /// Mirrors the chats list's `rowBackground(for:)` pattern in
+    /// `ConversationsListView` — a continuous-rounded inset pill rather
+    /// than a flat full-width fill, so the active state visually matches
+    /// the outer chats list.
+    @ViewBuilder
+    private var activeBackground: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(isActive ? Color("AccentColor") : Color.clear)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
     }
 
     @ViewBuilder
