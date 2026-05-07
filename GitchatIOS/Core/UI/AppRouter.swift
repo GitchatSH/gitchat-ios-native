@@ -6,6 +6,12 @@ struct TopicSidebarRoute: Hashable {
     let parent: Conversation
 }
 
+/// Route used on iOS to push a topic chat from the topic list view.
+struct TopicChatRoute: Hashable {
+    let topic: Topic
+    let parent: Conversation
+}
+
 /// Active topic target. Wraps the (topic, parent) pair so SwiftUI can
 /// diff the detail panel cleanly.
 struct TopicTarget: Equatable {

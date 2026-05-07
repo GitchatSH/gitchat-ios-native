@@ -314,9 +314,19 @@ struct ConversationsListView: View {
         }
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
-        router.selectedConversation = convo
+        if convo.hasTopicsEnabled {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                router.enterTopicMode(parent: convo)
+            }
+        } else {
+            router.selectedConversation = convo
+        }
         #else
-        path.append(convo)
+        if convo.hasTopicsEnabled {
+            path.append(TopicSidebarRoute(parent: convo))
+        } else {
+            path.append(convo)
+        }
         #endif
     }
 
@@ -422,6 +432,17 @@ struct ConversationsListView: View {
             sidebar
                 .navigationDestination(for: Conversation.self) { convo in
                     ChatDetailView(conversation: convo)
+                }
+                .navigationDestination(for: TopicSidebarRoute.self) { route in
+                    TopicListPushView(parent: route.parent) { picked in
+                        path.append(TopicChatRoute(topic: picked, parent: route.parent))
+                    }
+                }
+                .navigationDestination(for: TopicChatRoute.self) { route in
+                    ChatDetailView(conversation: route.parent)
+                        .onAppear {
+                            AppRouter.shared.pickTopic(route.topic, in: route.parent)
+                        }
                 }
         }
         #endif
