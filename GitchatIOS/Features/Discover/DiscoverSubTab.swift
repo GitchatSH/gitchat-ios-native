@@ -1,8 +1,5 @@
 import Foundation
 
-/// The three discover surfaces. Order matches the on-screen segmented
-/// control. `searchPlaceholder` swaps the `.searchable` prompt so the
-/// field hint tracks the active list's data source.
 enum DiscoverSubTab: String, CaseIterable, Identifiable {
     case people, teams, communities
 
@@ -22,5 +19,11 @@ enum DiscoverSubTab: String, CaseIterable, Identifiable {
         case .teams:       return "Search teams..."
         case .communities: return "Search communities..."
         }
+    }
+
+    /// Communities pulls personalised starred repos and is meaningless
+    /// for unauthenticated browsing. Guests see only People/Teams.
+    static func cases(forGuest: Bool) -> [DiscoverSubTab] {
+        forGuest ? [.people, .teams] : DiscoverSubTab.allCases
     }
 }
