@@ -45,7 +45,6 @@ struct ChatDetailView: View {
     @State private var reportDetail: String = ""
     @State private var showReportConfirm = false
     @State private var resolvedTarget: ChatTarget? = nil
-    @State private var showTopicSheet = false
     @State private var composerVisible = true
     @State private var isAtBottom: Bool = true
     @State private var scrollToBottomToken: Int = 0
@@ -160,23 +159,6 @@ struct ChatDetailView: View {
             }
         }
         .task(id: vm.conversation.id) { await resolveTarget() }
-        #if !targetEnvironment(macCatalyst)
-        .sheet(isPresented: $showTopicSheet) {
-            if case .topic(_, let parent) = resolvedTarget {
-                TopicListSheet(
-                    parent: parent,
-                    activeTopicId: resolvedTarget?.conversationId,
-                    onPickTopic: { picked in
-                        vm.setTarget(.topic(picked, parent: parent))
-                        resolvedTarget = .topic(picked, parent: parent)
-                        showTopicSheet = false
-                    }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
-        }
-        #endif
         .task { await onAppearTask() }
         .onAppear {
             if let mid = router.pendingMessageId {
@@ -306,7 +288,9 @@ struct ChatDetailView: View {
                     vm: vm,
                     onTap: {
                         if case .topic = vm.target {
-                            showTopicSheet = true
+                            #if !targetEnvironment(macCatalyst)
+                            dismiss()
+                            #endif
                         } else if vm.conversation.isGroup {
                             showMembers = true
                         }
@@ -498,7 +482,7 @@ struct ChatDetailView: View {
         a.onBack = { dismiss() }
         a.onHeaderTap = {
             if case .topic = vm.target {
-                showTopicSheet = true
+                // No-op on Catalyst — topic switching is via the sidebar.
             } else if vm.conversation.isGroup {
                 showMembers = true
             }

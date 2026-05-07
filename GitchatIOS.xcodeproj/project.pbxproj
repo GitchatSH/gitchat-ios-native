@@ -127,7 +127,6 @@
 		9DA10C8E16781CD5DA07629B /* ChatReplyEditBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C140A3AB7A1B01F7BEDFC3 /* ChatReplyEditBar.swift */; };
 		9DF1DFF3C3FA05419A2BE511 /* MembersSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A933BC6AF41FEDCF2FCEB5F /* MembersSheet.swift */; };
 		9FF34A6AA21F0417CEF2D2D5 /* ChannelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5D27D2F5A412D74F579504B /* ChannelsView.swift */; };
-		A2233FEBA35EAEA1A0E4FAE1 /* TopicListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3381F45EB5AC1A25D178B698 /* TopicListSheet.swift */; };
 		A2D3098E13F245C94422D832 /* Fixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF78AC0BCE3E266BE846503 /* Fixtures.swift */; };
 		A7396B793DDA8316A187E165 /* PresenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1257724417C399DFA806F4A /* PresenceStore.swift */; };
 		A834FFACC2EFD9215F4C6A3A /* ShareConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46DAB3DF885FFD1C9FC46733 /* ShareConfig.swift */; };
@@ -300,7 +299,6 @@
 		3255839AE4B52EEE916274AF /* RelativeTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelativeTime.swift; sourceTree = "<group>"; };
 		329C9B0EF873958D6A6CA198 /* ImageSendPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSendPreview.swift; sourceTree = "<group>"; };
 		32AABF1DF43F13F3974E0644 /* APIClient+Protocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Protocol.swift"; sourceTree = "<group>"; };
-		3381F45EB5AC1A25D178B698 /* TopicListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicListSheet.swift; sourceTree = "<group>"; };
 		345FE4973CA4634A831FE621 /* TopicColorTokenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicColorTokenTests.swift; sourceTree = "<group>"; };
 		36F06688A6AEFA05D9DA56B8 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
 		3927534896166F03595089C7 /* PinnedIndicatorBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedIndicatorBar.swift; sourceTree = "<group>"; };
@@ -742,7 +740,6 @@
 				6311B0C0CFDB81C367C16FF8 /* TopicEmojiPresets.swift */,
 				896795B9C8F75F43A68DC187 /* TopicListContent.swift */,
 				047E5D6B0756CA197E12BE07 /* TopicListPushView.swift */,
-				3381F45EB5AC1A25D178B698 /* TopicListSheet.swift */,
 				C5A2C6DB1A8303E3F1E9F66E /* TopicListSidebarView.swift */,
 				AA0DC891F548EEBA0A31C07C /* TopicListStore.swift */,
 				A247648DCA945BE9E7934388 /* TopicRow.swift */,
@@ -1361,7 +1358,6 @@
 				7C549C1AEAC820616D9E5BEE /* TopicEmojiPresets.swift in Sources */,
 				B9BF1CA0133329B39B916250 /* TopicListContent.swift in Sources */,
 				2FD7296C14C80879E044EB58 /* TopicListPushView.swift in Sources */,
-				A2233FEBA35EAEA1A0E4FAE1 /* TopicListSheet.swift in Sources */,
 				991326174B84B993CAD6740E /* TopicListSidebarView.swift in Sources */,
 				D81934AFE5A73A2F1DA0C725 /* TopicListStore.swift in Sources */,
 				64FF054486B8A85A02E845AB /* TopicRow.swift in Sources */,
