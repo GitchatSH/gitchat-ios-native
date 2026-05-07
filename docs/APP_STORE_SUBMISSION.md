@@ -77,47 +77,49 @@ Welcome to Gitchat — the developer chat app that lives on top of GitHub.
 
 ### 🔴 Promotional Text (170 chars, editable without review)
 ```
-Sign in with GitHub, DM developers you follow, join repo channels, and keep up with contributors — right from your phone. No new friends list to build.
+Browse trending repos and developers without an account. Sign in with GitHub to send waves, follow people, and chat with the open-source community.
 ```
 
 ### 🔴 Description (4000 chars)
 ```
-Gitchat is the chat app for developers, built on top of GitHub.
+Gitchat is the GitHub client for the developer community — built on top of the platform you already use to ship code.
 
-Sign in with your GitHub account and instantly see the people you already follow, the repos you contribute to, and the communities around them. No phone book to rebuild. No new handle to remember. Your GitHub username is your Gitchat identity.
+Open the app and browse trending GitHub repositories, look up developers, and view public profiles right away. No account required to explore. When you're ready to participate, sign in with your GitHub account to chat with the developers behind the code.
 
 WHAT YOU CAN DO
 
-• Direct messages with anyone you follow (or anyone who follows you)
-• Group chats with friends you share on GitHub
+• Browse trending GitHub repos and developers without signing in
+• Search any developer by GitHub username, view their profile and top repos
+• Direct messages with anyone you follow on GitHub (or anyone who follows you)
+• Group chats with friends you share via GitHub
 • Repo channels — dedicated spaces tied to owner/repo, where contributors and fans hang out
+• Send a wave to say hi to any developer
 • Real-time messaging with typing indicators, reactions, replies, pins, and edits
 • Share screenshots and files directly in chat
 • Long-press any message to reply, react, copy, edit, pin, or delete
-• Social feeds inside each repo channel — X posts, YouTube updates, GitHub activity
-• Your friends list is automatically synced from the people you follow on GitHub
 • Activity center for mentions, new messages, and repo events
 • Light and dark themes, with Geist — the same font used by Vercel
 
 BUILT FOR DEVELOPERS
 
 • Sign in with GitHub — one tap, no passwords
-• Sign in with Apple also supported
+• Sign in with Apple also supported (legacy)
 • Profile shows your top repositories, stars, followers, and contributed projects
 • Works alongside the Gitchat extension for VS Code and Cursor — your chats stay in sync whether you're on your phone or in your editor
 
 PRIVACY BY DESIGN
 
 • We never store your GitHub password — authentication goes through GitHub directly
+• Browse anonymously — we don't track guests across sessions
 • Messages are private and visible only to the recipients you choose
 • You can delete your account at any time
 
-Gitchat is made for the developer community. It's fast, minimal, and built for the way you already work.
+Gitchat is made for the developer community. Browse openly, chat when you're ready.
 ```
 
 ### 🔴 Keywords (100 chars, comma-separated)
 ```
-github,developer,chat,code,repo,pull request,messaging,dm,friends,git,open source,vscode,cursor
+github,client,browse,trending,developer,chat,messaging,repo,opensource,community,vscode,cursor
 ```
 
 ### 🔴 Support URL
@@ -176,7 +178,15 @@ Up to 30 seconds. MP4 or MOV. 886 × 1920 or 1080 × 1920. Skip for v1.
 ## 6. App Review Information (🔴 REQUIRED)
 
 ### Sign-In Required
-☑ **Yes**
+☐ **No** — the app can be used to browse trending repositories and developer profiles
+without an account. Sign-in (via GitHub or Apple) is required only for interactive
+actions: messaging, posting, waving, following, joining repo channels. Per App Store
+Guideline 4.8 ("Sign in with Apple"), this app falls under the exception for clients
+of a specific third-party service (GitHub) — users sign in with their GitHub identity
+to access their own GitHub-keyed content.
+
+A demo account is still provided below for reviewers who want to exercise the
+authenticated flows.
 
 ### 🔴 Demo Account
 You must provide a test account Apple's reviewers can use. Two options:
@@ -200,15 +210,36 @@ Apple reviewers have an internal test Apple ID; you just need to ensure Sign in 
 
 ### 🔴 Notes for Review
 ```
-Gitchat uses GitHub OAuth for primary sign-in. Please use the demo account credentials above.
+Gitchat is a GitHub-content client. The app opens directly into a browse experience
+(Discover trending repositories and developers, plus a Search-by-username surface)
+that requires no sign-in. Reviewers can launch the app and explore the public
+content without entering credentials.
 
-Flow:
-1. Tap "Sign in with GitHub"
-2. Safari sheet opens to github.com — sign in with the provided demo credentials
-3. Tap Authorize
-4. App automatically loads the main tab view
+Sign-in is required only for interactive actions (waving, messaging, following,
+joining repo channels). Tapping any locked action surfaces a sign-in prompt sheet
+with a single GitHub OAuth button. Sign in with Apple is also available on the main
+sign-in screen for legacy users.
 
-Sign in with Apple is also available. Apple-signed users are shown a "Link GitHub" screen because the app is built on top of GitHub identity — this is intentional and noted in our Privacy Policy.
+To exercise the authenticated flows, please use the demo credentials above.
+
+Authenticated flow:
+1. Tap any tab's "Sign in" toolbar item, or tap a locked action like "Wave".
+2. Tap "Sign in with GitHub".
+3. Safari sheet opens to github.com — sign in with the provided demo credentials.
+4. Tap Authorize.
+5. App reloads into the full Chats / Discover / Activity / Friends / Me tab bar.
+
+Sign in with Apple flow (legacy):
+1. From the main sign-in screen, tap "Sign in with Apple".
+2. Apple's standard SIWA prompt appears.
+3. After authorisation, the app is fully usable.
+   (Note: existing Apple-only users continue to work; new accounts are encouraged
+    to sign in with GitHub for full feature access.)
+
+Per Guideline 4.8, Gitchat qualifies for the "client for a specific third-party
+service" exception — every interactive feature (DMs, waves, follows, repo channels)
+maps to GitHub-identity-keyed content. Sign in with Apple is offered as an equivalent
+option for users who prefer not to provide their GitHub credentials.
 
 Backend API: https://api-dev.gitchat.sh
 Realtime: https://ws-dev.gitchat.sh
