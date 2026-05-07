@@ -294,21 +294,6 @@ struct ChatDetailView: View {
         )
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
-        #if targetEnvironment(macCatalyst)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if vm.conversation.hasTopicsEnabled,
-               case .topic(_, let parent) = resolvedTarget {
-                TopicTabsStrip(
-                    parent: parent,
-                    activeTopicId: resolvedTarget?.conversationId,
-                    onPickTopic: { picked in
-                        vm.setTarget(.topic(picked, parent: parent))
-                        resolvedTarget = .topic(picked, parent: parent)
-                    }
-                )
-            }
-        }
-        #endif
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
