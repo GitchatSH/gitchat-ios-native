@@ -121,6 +121,7 @@
 		8716CF3706368E2C0176298D /* Message+TestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DD414F5B2B14C55D98A953D /* Message+TestFixture.swift */; };
 		875CBDD4A2B05627C889CFF4 /* OneSignalNotificationServiceExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 814371E84F8A6EAD61136BE2 /* OneSignalNotificationServiceExtension.appex */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		87F1CB4EFE6D24FE348C379A /* ConversationsCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CB898980AE4010FDBE8070 /* ConversationsCache.swift */; };
+		8A50852E43ACE3D28D8AD7D5 /* GuestTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7627C637F41BB8084DA6458 /* GuestTabView.swift */; };
 		8A61197009C99436303D2621 /* ChatViewModelEndpointTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA38153D9BA7997CFFBC7799 /* ChatViewModelEndpointTests.swift */; };
 		8AD5EE1720D14E153C09F5BA /* StoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B07857501623E25CD298B606 /* StoreManager.swift */; };
 		8C93BF4FA9420F14F6C1DA0C /* UpdateBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04BE6ECA1C483B783A66EC5A /* UpdateBanner.swift */; };
@@ -467,6 +468,7 @@
 		DE841F1B53AE0E4DAA4F004E /* WaveButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveButton.swift; sourceTree = "<group>"; };
 		DE8E6059D989F62927E22A1A /* MacBottomNav.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacBottomNav.swift; sourceTree = "<group>"; };
 		E53A491227A1B50663F174A3 /* APIClient+Invite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Invite.swift"; sourceTree = "<group>"; };
+		E7627C637F41BB8084DA6458 /* GuestTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestTabView.swift; sourceTree = "<group>"; };
 		EA38153D9BA7997CFFBC7799 /* ChatViewModelEndpointTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModelEndpointTests.swift; sourceTree = "<group>"; };
 		ED882894AD818DBFB0421E96 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		F0D8FDDB6F6CDBB4122B7CFE /* ComposerRegressionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRegressionTests.swift; sourceTree = "<group>"; };
@@ -516,6 +518,7 @@
 			isa = PBXGroup;
 			children = (
 				DE08A0DE3086C45434C3F914 /* GitchatApp.swift */,
+				E7627C637F41BB8084DA6458 /* GuestTabView.swift */,
 				0A64D83F5578E057CF2F6A03 /* RootView.swift */,
 			);
 			path = App;
@@ -1375,6 +1378,7 @@
 				85D7EE81B5791E46FB9D5E00 /* GroupInviteLinkSheet.swift in Sources */,
 				7CF62DD78AB08C4384CDF42A /* GroupManagementSheets.swift in Sources */,
 				B497FE7DE58DA3A11465F566 /* GroupSettingsSheet.swift in Sources */,
+				8A50852E43ACE3D28D8AD7D5 /* GuestTabView.swift in Sources */,
 				38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */,
 				128B2F995B3C428FA137E15E /* HideScrollIndicators.swift in Sources */,
 				3BB278E3A94069839823436D /* ImageCropSheet.swift in Sources */,
