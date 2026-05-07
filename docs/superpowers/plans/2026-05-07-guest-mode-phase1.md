@@ -55,11 +55,10 @@ import XCTest
 final class APIClientTrendingTests: XCTestCase {
 
     /// Build an APIClient that routes through StubURLProtocol — same
-    /// pattern as `APIClientSendMessageTests`. Using an injected client
-    /// means the test does not depend on `AuthStore.shared`'s state, so
-    /// `requireAuth: false` (the behaviour we want to verify) is exercised
-    /// regardless of whatever token a prior test or simulator state left
-    /// in the keychain.
+    /// pattern as `APIClientSendMessageTests`. The injected `URLSession`
+    /// only intercepts the network layer; `requireAuth: true` paths still
+    /// read `AuthStore.shared.accessToken`. The regression test below
+    /// signs out explicitly to make that read return nil.
     private func makeStubClient() -> APIClient {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.protocolClasses = [StubURLProtocol.self]
@@ -78,7 +77,7 @@ final class APIClientTrendingTests: XCTestCase {
 
     func test_trendingRepos_decodes_response() async throws {
         StubURLProtocol.responseBody = Data(#"""
-        {"repos":[{"owner":"vercel","name":"next.js","description":"The React Framework","language":"TypeScript","stars":100000,"avatar_url":"https://x/a.png"}]}
+        {"data":[{"owner":"vercel","name":"next.js","description":"The React Framework","language":"TypeScript","stars":100000,"avatar_url":"https://x/a.png"}],"page":1,"hasMore":false}
         """#.utf8)
 
         let repos = try await makeStubClient().trendingRepos()
@@ -90,7 +89,7 @@ final class APIClientTrendingTests: XCTestCase {
 
     func test_trendingPeople_decodes_response() async throws {
         StubURLProtocol.responseBody = Data(#"""
-        {"users":[{"login":"tj","name":"TJ","avatar_url":"https://x/a.png"}]}
+        {"data":[{"login":"tj","name":"TJ","avatar_url":"https://x/a.png"}],"page":1,"hasMore":false}
         """#.utf8)
 
         let people = try await makeStubClient().trendingPeople()
@@ -105,7 +104,7 @@ final class APIClientTrendingTests: XCTestCase {
     /// present, then assert the call does NOT throw `.notAuthenticated`.
     func test_trendingRepos_does_not_require_token() async throws {
         await AuthStore.shared.signOut()
-        StubURLProtocol.responseBody = Data(#"{"repos":[]}"#.utf8)
+        StubURLProtocol.responseBody = Data(#"{"data":[],"page":1,"hasMore":false}"#.utf8)
         do {
             _ = try await makeStubClient().trendingRepos()
         } catch APIError.notAuthenticated {
@@ -152,24 +151,18 @@ Append to `APIClient.swift` just above `// MARK: - App version`:
         var id: String { login }
     }
 
-    /// `GET /trending/repos`. Public — no Authorization header.
+    /// `GET /trending/repos`. Public — no Authorization header. The BE
+    /// returns `{ data: [...repos...], page, hasMore }`; we let the shared
+    /// `APIEnvelope` decode unwrap `data`. Pagination fields are ignored
+    /// for v1 — the guest browse surface shows the first page only.
     func trendingRepos() async throws -> [TrendingRepo] {
-        struct Resp: Decodable { let repos: [TrendingRepo] }
-        let r: Resp = try await request(
-            "trending/repos",
-            requireAuth: false
-        )
-        return r.repos
+        try await request("trending/repos", requireAuth: false)
     }
 
-    /// `GET /trending/people`. Public — no Authorization header.
+    /// `GET /trending/people`. Public — no Authorization header. Same
+    /// envelope shape as `trendingRepos()`.
     func trendingPeople() async throws -> [TrendingUser] {
-        struct Resp: Decodable { let users: [TrendingUser] }
-        let r: Resp = try await request(
-            "trending/people",
-            requireAuth: false
-        )
-        return r.users
+        try await request("trending/people", requireAuth: false)
     }
 ```
 

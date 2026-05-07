@@ -695,24 +695,18 @@ struct APIClient {
         var id: String { login }
     }
 
-    /// `GET /trending/repos`. Public — no Authorization header.
+    /// `GET /trending/repos`. Public — no Authorization header. The BE
+    /// returns `{ data: [...repos...], page, hasMore }`; we let the shared
+    /// `APIEnvelope` decode unwrap `data`. Pagination fields are ignored
+    /// for v1 — the guest browse surface shows the first page only.
     func trendingRepos() async throws -> [TrendingRepo] {
-        struct Resp: Decodable { let repos: [TrendingRepo] }
-        let r: Resp = try await request(
-            "trending/repos",
-            requireAuth: false
-        )
-        return r.repos
+        try await request("trending/repos", requireAuth: false)
     }
 
-    /// `GET /trending/people`. Public — no Authorization header.
+    /// `GET /trending/people`. Public — no Authorization header. Same
+    /// envelope shape as `trendingRepos()`.
     func trendingPeople() async throws -> [TrendingUser] {
-        struct Resp: Decodable { let users: [TrendingUser] }
-        let r: Resp = try await request(
-            "trending/people",
-            requireAuth: false
-        )
-        return r.users
+        try await request("trending/people", requireAuth: false)
     }
 
     // MARK: - App version
