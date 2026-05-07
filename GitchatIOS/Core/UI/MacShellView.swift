@@ -77,7 +77,12 @@ struct MacShellView: View {
             )) {
                 ConversationsListView()
                     .navigationDestination(for: TopicSidebarRoute.self) { route in
-                        TopicListSidebarView(parent: route.parent)
+                        HStack(spacing: 0) {
+                            IconChatsColumn(activeParentId: route.parent.id)
+                                .frame(width: 56)
+                            Divider()
+                            TopicListSidebarView(parent: route.parent)
+                        }
                     }
             }
         case 1: DiscoverView()

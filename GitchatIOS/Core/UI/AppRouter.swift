@@ -200,4 +200,26 @@ final class AppRouter: ObservableObject {
         }
         return topics.first
     }
+
+    /// Picks a chats-list conversation while the user is in topic mode.
+    /// Forum groups swap topic list; non-forum chats exit topic mode.
+    func switchToConversation(_ convo: Conversation) {
+        // Same-target tap: no-op to avoid flicker.
+        if convo.hasTopicsEnabled, selectedTopic?.parent.id == convo.id {
+            return
+        }
+        if !convo.hasTopicsEnabled, selectedConversation?.id == convo.id, selectedTopic == nil {
+            return
+        }
+
+        if convo.hasTopicsEnabled {
+            // Reset path then re-enter topic mode for the new parent.
+            // Single-element invariant per topicSidebarPath doc-comment.
+            topicSidebarPath = NavigationPath()
+            enterTopicMode(parent: convo)
+        } else {
+            exitTopicMode()
+            selectedConversation = convo
+        }
+    }
 }
