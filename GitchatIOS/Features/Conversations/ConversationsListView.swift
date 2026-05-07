@@ -309,6 +309,31 @@ struct ConversationsListView: View {
         #endif
     }
 
+    /// Catalyst sidebar wrapper. When in topic mode, renders `sidebar`
+    /// (the full chats list with chrome — `.searchable`, `.navigationTitle`,
+    /// `.toolbar` — attached) constrained to a 60pt column on the left,
+    /// with `TopicListSidebarView` filling the remaining width on the right.
+    /// The chrome modifiers stay attached to `sidebar` so they propagate up
+    /// to the `NavigationSplitView` column's chrome area at full sidebar
+    /// width — only the row list itself is narrowed.
+    @ViewBuilder
+    private var catalystSidebar: some View {
+        #if targetEnvironment(macCatalyst)
+        if let parent = router.activeForumParent {
+            HStack(spacing: 0) {
+                sidebar
+                    .frame(width: 60)
+                Divider()
+                TopicListSidebarView(parent: parent)
+            }
+        } else {
+            sidebar
+        }
+        #else
+        sidebar
+        #endif
+    }
+
     private func openConversation(_ convo: Conversation) {
         NSLog("[Topic] openConversation id=%@ hasTopics=%@",
               convo.id, String(convo.hasTopicsEnabled))
@@ -436,7 +461,7 @@ struct ConversationsListView: View {
     @ViewBuilder
     private var coreBody: some View {
         #if targetEnvironment(macCatalyst)
-        sidebar
+        catalystSidebar
         #else
         NavigationStack(path: $path) {
             sidebar

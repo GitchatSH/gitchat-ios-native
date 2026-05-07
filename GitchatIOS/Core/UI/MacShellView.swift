@@ -71,16 +71,11 @@ struct MacShellView: View {
     private var currentTabSidebar: some View {
         switch router.selectedTab {
         case 0:
-            let inTopicMode = router.activeForumParent != nil
-            HStack(spacing: 0) {
-                ConversationsListView(compact: inTopicMode)
-                    .frame(width: inTopicMode ? 60 : nil)
-
-                if let parent = router.activeForumParent {
-                    Divider()
-                    TopicListSidebarView(parent: parent)
-                }
-            }
+            // ConversationsListView itself splits the body into compact
+            // chats column + topic list when `activeForumParent` is set,
+            // so chrome (`.searchable`, `.navigationTitle`, `.toolbar`)
+            // remains attached at full sidebar width.
+            ConversationsListView(compact: router.activeForumParent != nil)
         case 1: DiscoverView()
         case 2: NotificationsView()
         case 3: FollowingView()
