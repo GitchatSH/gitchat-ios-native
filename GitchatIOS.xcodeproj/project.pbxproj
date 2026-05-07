@@ -120,6 +120,7 @@
 		97BEFA46F74B25582C9B5E6A /* ExploreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1171C3E5B7CAEFCD3F9C388C /* ExploreSheet.swift */; };
 		98BE48E15464DA64FAA0F96B /* SocketHandlerMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510F87602FF09899A6C3C285 /* SocketHandlerMatchingTests.swift */; };
 		9911E286944B2E5A0B5817D6 /* ChatBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC444597FF8A45EB8294EC /* ChatBackground.swift */; };
+		991326174B84B993CAD6740E /* TopicListSidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A2C6DB1A8303E3F1E9F66E /* TopicListSidebarView.swift */; };
 		999E1B7961171663AD703952 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD6CCF4AEE7A8295F6F1D9FD /* SignInView.swift */; };
 		9B132E5A31654D56BB07CBCD /* MessageMenuAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA0DB03557EDE0854293B66 /* MessageMenuAction.swift */; };
 		9B276023540441658292426D /* TopicSocketEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98119352725E1061522027BD /* TopicSocketEventTests.swift */; };
@@ -403,6 +404,7 @@
 		C3B4E0D7FC5BEBE8BD771C03 /* DesktopReturnToSend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopReturnToSend.swift; sourceTree = "<group>"; };
 		C52A3C804970611E07FF79D0 /* SystemMessageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMessageRow.swift; sourceTree = "<group>"; };
 		C572C41B826EC03433688B86 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		C5A2C6DB1A8303E3F1E9F66E /* TopicListSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicListSidebarView.swift; sourceTree = "<group>"; };
 		C604A613990DF65BB8BC063D /* MacRowStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacRowStyle.swift; sourceTree = "<group>"; };
 		C8CAB4116A44600924A5B1A4 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		CA25F2BA4BC86A0256C4C1DD /* SocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClient.swift; sourceTree = "<group>"; };
@@ -740,6 +742,7 @@
 				6311B0C0CFDB81C367C16FF8 /* TopicEmojiPresets.swift */,
 				896795B9C8F75F43A68DC187 /* TopicListContent.swift */,
 				3381F45EB5AC1A25D178B698 /* TopicListSheet.swift */,
+				C5A2C6DB1A8303E3F1E9F66E /* TopicListSidebarView.swift */,
 				AA0DC891F548EEBA0A31C07C /* TopicListStore.swift */,
 				A247648DCA945BE9E7934388 /* TopicRow.swift */,
 				3F0E95AC9678848B0DBE0F91 /* TopicTabsStrip.swift */,
@@ -1358,6 +1361,7 @@
 				7C549C1AEAC820616D9E5BEE /* TopicEmojiPresets.swift in Sources */,
 				B9BF1CA0133329B39B916250 /* TopicListContent.swift in Sources */,
 				A2233FEBA35EAEA1A0E4FAE1 /* TopicListSheet.swift in Sources */,
+				991326174B84B993CAD6740E /* TopicListSidebarView.swift in Sources */,
 				D81934AFE5A73A2F1DA0C725 /* TopicListStore.swift in Sources */,
 				64FF054486B8A85A02E845AB /* TopicRow.swift in Sources */,
 				D4330533AA0D2636297E366E /* TopicSocketEvent.swift in Sources */,
