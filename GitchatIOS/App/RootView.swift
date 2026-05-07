@@ -53,7 +53,7 @@ struct RootView: View {
                         startHeartbeat()
                     }
             } else {
-                SignInView()
+                GuestTabView()
             }
         }
         .sheet(item: Binding(

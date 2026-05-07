@@ -22,10 +22,18 @@ final class AuthStore: ObservableObject {
     private let sharedLoginKey = "shared_login"
 
     private init() {
-        self.accessToken = read(tokenKey)
-        self.login = read(loginKey)
-        self.isAuthenticated = accessToken != nil
-        self.needsGithubLink = read(needsGithubKey) == "1"
+        let forceUnauthed = ProcessInfo.processInfo.arguments.contains("-uiTestUnauthed")
+        if forceUnauthed {
+            self.accessToken = nil
+            self.login = nil
+            self.isAuthenticated = false
+            self.needsGithubLink = false
+        } else {
+            self.accessToken = read(tokenKey)
+            self.login = read(loginKey)
+            self.isAuthenticated = accessToken != nil
+            self.needsGithubLink = read(needsGithubKey) == "1"
+        }
         mirrorToSharedGroup()
     }
 
