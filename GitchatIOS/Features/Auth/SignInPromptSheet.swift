@@ -41,6 +41,7 @@ struct SignInPromptSheet: View {
     let onDismiss: () -> Void
     @StateObject private var vm = SignInViewModel()
     @Environment(\.dismiss) private var dismiss
+    @State private var didTapSignIn = false
 
     var body: some View {
         VStack(spacing: 20) {
@@ -61,6 +62,8 @@ struct SignInPromptSheet: View {
                 .padding(.horizontal, 32)
 
             Button {
+                didTapSignIn = true
+                AnalyticsTracker.trackGuestSignInPromptTapped(reason: reason.id)
                 Task {
                     await vm.startGithub()
                     if AuthStore.shared.isAuthenticated {
@@ -106,5 +109,17 @@ struct SignInPromptSheet: View {
         }
         .presentationDetents([.fraction(0.55)])
         .presentationDragIndicator(.visible)
+        .onAppear {
+            AnalyticsTracker.trackGuestSignInPromptShown(reason: reason.id)
+        }
+        .onDisappear {
+            // If the user dismissed without converting, fire dismissed.
+            // If they tapped Sign in and AuthStore is authed, the
+            // RootView shell swap handled the transition — that's a
+            // success, not a dismissal.
+            if !didTapSignIn || !AuthStore.shared.isAuthenticated {
+                AnalyticsTracker.trackGuestSignInPromptDismissed(reason: reason.id)
+            }
+        }
     }
 }

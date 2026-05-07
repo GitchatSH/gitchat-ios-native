@@ -46,6 +46,45 @@ enum AnalyticsTracker {
         ])
     }
 
+    // MARK: - Guest sign-in funnel
+
+    /// Fired when `SignInPromptSheet` is presented to a guest user.
+    /// `reason` is `SignInReason.id` ("wave:tj", "follow:ethan", "post",
+    /// "react", "invite", "dm:ethan"). Pair with
+    /// `trackGuestSignInPromptTapped` and `trackGuestSignInPromptDismissed`
+    /// to measure conversion through the funnel.
+    static func trackGuestSignInPromptShown(reason: String) {
+        Analytics.logEvent("guest_signin_prompt_shown", parameters: [
+            "reason": reason
+        ])
+        AppsFlyerLib.shared().logEvent("guest_signin_prompt_shown", withValues: [
+            "reason": reason
+        ])
+    }
+
+    /// Fired when a guest taps the "Sign in with GitHub" button in the
+    /// prompt sheet. Counts intent to convert (sign-in success/failure
+    /// is measured separately via `trackLogin`/`trackSignUp`).
+    static func trackGuestSignInPromptTapped(reason: String) {
+        Analytics.logEvent("guest_signin_prompt_tapped", parameters: [
+            "reason": reason
+        ])
+        AppsFlyerLib.shared().logEvent("guest_signin_prompt_tapped", withValues: [
+            "reason": reason
+        ])
+    }
+
+    /// Fired when a guest dismisses the prompt without signing in
+    /// ("Not now", drag-down, sheet system dismissal).
+    static func trackGuestSignInPromptDismissed(reason: String) {
+        Analytics.logEvent("guest_signin_prompt_dismissed", parameters: [
+            "reason": reason
+        ])
+        AppsFlyerLib.shared().logEvent("guest_signin_prompt_dismissed", withValues: [
+            "reason": reason
+        ])
+    }
+
     // MARK: - Messaging
 
     static func trackMessageSent(conversationId: String, isGroup: Bool, hasAttachment: Bool) {
