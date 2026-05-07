@@ -7,6 +7,7 @@ import SwiftUI
 struct UserSearchView: View {
     @State private var query: String = ""
     @State private var pushedLogin: String?
+    @State private var showSignIn = false
 
     var body: some View {
         NavigationStack {
@@ -37,6 +38,22 @@ struct UserSearchView: View {
             )) {
                 if let login = pushedLogin {
                     ProfileView(login: login)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Sign in") { showSignIn = true }
+                        .font(.geist(15, weight: .semibold))
+                }
+            }
+            .fullScreenCover(isPresented: $showSignIn) {
+                NavigationStack {
+                    SignInView()
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button("Close") { showSignIn = false }
+                            }
+                        }
                 }
             }
         }
