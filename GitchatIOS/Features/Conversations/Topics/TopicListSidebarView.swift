@@ -54,56 +54,64 @@ struct TopicListSidebarView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
-                Button {
-                    router.exitTopicMode()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color("AccentColor"))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back to chats")
+        HStack(spacing: 12) {
+            // Leading back chevron
+            Button {
+                router.exitTopicMode()
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color("AccentColor"))
+                    .frame(width: 20)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to chats")
 
-                // `Conversation` has no emoji field — groups use an avatar
-                // URL. Fall back to a generic chat glyph so the header still
-                // has a left-side icon affordance.
-                Text("💬")
-                    .font(.system(size: 14))
-                    .frame(width: 24, height: 24)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color("AccentColor").opacity(0.15))
-                    )
-
-                Text(parent.displayTitle)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-
-                Spacer()
-
-                Button {
-                    showCreate = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Color("AccentColor"))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.plain)
-                .macHover()
-                .accessibilityLabel("New Topic")
+            // Parent group avatar — same component as ConversationRow uses
+            if parent.isGroup {
+                GroupAvatarView(
+                    name: parent.group_name ?? parent.displayTitle,
+                    avatarURL: parent.group_avatar_url,
+                    groupId: parent.id,
+                    size: 44
+                )
+            } else {
+                AvatarView(
+                    url: parent.displayAvatarURL,
+                    size: 44,
+                    login: parent.other_user?.login
+                )
             }
 
-            Text(memberSubtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.leading, 36)   // align under group name
+            VStack(alignment: .leading, spacing: 2) {
+                Text(parent.displayTitle)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(memberSubtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Button {
+                showCreate = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color("AccentColor"))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .macHover()
+            .accessibilityLabel("New Topic")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .frame(minHeight: 60)  // match ConversationRow height
+        .background(Color("AccentColor").opacity(0.08))
     }
 }
 #endif

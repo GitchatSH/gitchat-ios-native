@@ -277,9 +277,6 @@ final class ConversationsViewModel: ObservableObject {
 }
 
 struct ConversationsListView: View {
-    var compact: Bool = false
-    var navTitle: String? = nil
-
     @StateObject private var vm = ConversationsViewModel()
     @StateObject private var router = AppRouter.shared
     @EnvironmentObject var socket: SocketClient
@@ -311,21 +308,15 @@ struct ConversationsListView: View {
     }
 
     private func openConversation(_ convo: Conversation) {
-        NSLog("[Topic] openConversation id=%@ hasTopics=%@ compact=%@",
-              convo.id, String(convo.hasTopicsEnabled), String(compact))
+        NSLog("[Topic] openConversation id=%@ hasTopics=%@",
+              convo.id, String(convo.hasTopicsEnabled))
         tappedConvoId = convo.id
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.easeOut(duration: 0.2)) { tappedConvoId = nil }
         }
         vm.markLocallyRead(convo.id)
         #if targetEnvironment(macCatalyst)
-        if compact {
-            // Already in topic mode — this is the same ConversationsListView
-            // rendered in compact form alongside the topic list. Route through
-            // the smart switcher so forum-to-forum replaces (not stacks),
-            // and forum-to-DM exits topic mode and opens the DM.
-            router.switchToConversation(convo)
-        } else if convo.hasTopicsEnabled {
+        if convo.hasTopicsEnabled {
             router.enterTopicMode(parent: convo)
         } else {
             // If user was in topic mode for another group, exit it first
@@ -497,8 +488,7 @@ struct ConversationsListView: View {
             conversation: convo,
             isLocallyRead: vm.locallyRead.contains(convo.id),
             isMuted: vm.isLocallyMuted(convo),
-            isActive: isActiveRow(convo),
-            compact: compact
+            isActive: isActiveRow(convo)
         )
         .transaction { $0.animation = nil }
         .contentShape(Rectangle())
@@ -762,7 +752,7 @@ struct ConversationsListView: View {
             }
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
             .onChange(of: filter) { runSearch($0) }
-            .navigationTitle(navTitle ?? "Chats")
+            .navigationTitle("Chats")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
@@ -871,10 +861,6 @@ struct ConversationRow: View {
     /// in the sticky detail panel. Flips text/icon colors to white
     /// for contrast against the accent-color background.
     var isActive: Bool = false
-    /// On Catalyst, when topic mode is active the chats list collapses
-    /// into a 60pt-wide rail. `compact` swaps the row body for an
-    /// icon-only render (44pt avatar + tiny unread chip).
-    var compact: Bool = false
     @ObservedObject private var draftStore = DraftStore.shared
     @ScaledMetric(relativeTo: .footnote) private var badgeMinSize: CGFloat = 24
     @ScaledMetric(relativeTo: .caption) private var mentionBadgeSize: CGFloat = 20
@@ -1128,44 +1114,8 @@ struct ConversationRow: View {
         return parts.joined(separator: ". ")
     }
 
-    @ViewBuilder
     var body: some View {
-        if compact {
-            compactBody
-        } else {
-            regularBody
-        }
-    }
-
-    private var compactBody: some View {
-        VStack(spacing: 2) {
-            if conversation.isGroup {
-                GroupAvatarView(
-                    name: conversation.group_name ?? conversation.displayTitle,
-                    avatarURL: conversation.group_avatar_url,
-                    groupId: conversation.id,
-                    size: 44
-                )
-            } else {
-                AvatarView(
-                    url: conversation.displayAvatarURL,
-                    size: 44,
-                    login: conversation.other_user?.login
-                )
-            }
-            if displayedUnread > 0 {
-                Text(displayedUnread > 99 ? "99+" : "\(displayedUnread)")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .frame(minWidth: 14, minHeight: 14)
-                    .background(Color("AccentColor"), in: Capsule())
-            }
-        }
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(conversation.displayTitle)
+        regularBody
     }
 
     private var regularBody: some View {
