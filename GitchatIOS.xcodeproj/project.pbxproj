@@ -171,6 +171,7 @@
 		BEE4C46D98A25FE9C189B31A /* ChatReactionsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D181734FB494C1E5131DBB12 /* ChatReactionsRow.swift */; };
 		C157BC035592D85E4685543B /* MutedConversationsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */; };
 		C17F6E3938CE1135ADF031BA /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2AEBD410A03C01B0360E8B5 /* ShareViewController.swift */; };
+		C1838A11BB554599DE3069B2 /* GuestModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38CEBCA1ED006164C16BD8E7 /* GuestModeTests.swift */; };
 		C41E398C90A9053918588AEE /* JumpToBottomButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242AC390D468D5CCF42A810D /* JumpToBottomButton.swift */; };
 		C5707AE9DCD25A6E076EA2E8 /* ImageViewerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7E871CD8B3B98D4064FC71 /* ImageViewerSheet.swift */; };
 		C63A274EB9BD4527B0FA59E6 /* PendingMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65BDD84BE2F44020A45107E0 /* PendingMessageTests.swift */; };
@@ -329,6 +330,7 @@
 		3381F45EB5AC1A25D178B698 /* TopicListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicListSheet.swift; sourceTree = "<group>"; };
 		345FE4973CA4634A831FE621 /* TopicColorTokenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicColorTokenTests.swift; sourceTree = "<group>"; };
 		36F06688A6AEFA05D9DA56B8 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
+		38CEBCA1ED006164C16BD8E7 /* GuestModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuestModeTests.swift; sourceTree = "<group>"; };
 		3927534896166F03595089C7 /* PinnedIndicatorBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedIndicatorBar.swift; sourceTree = "<group>"; };
 		3B4A00E4129ED6DF739E1ACB /* Skeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Skeleton.swift; sourceTree = "<group>"; };
 		3CC840DF62F0D52265D6C401 /* GitchatShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GitchatShareExtension.entitlements; sourceTree = "<group>"; };
@@ -1070,6 +1072,7 @@
 			isa = PBXGroup;
 			children = (
 				F0D8FDDB6F6CDBB4122B7CFE /* ComposerRegressionTests.swift */,
+				38CEBCA1ED006164C16BD8E7 /* GuestModeTests.swift */,
 				FC01A065D8F07A1C92D1A4D3 /* Info.plist */,
 				AD3E0E8748D50D70E74D6B35 /* PasteImageFromClipboardTests.swift */,
 				06414EF268FC059C7E6D2183 /* SmokeTests.swift */,
@@ -1299,6 +1302,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				25AFEB16F23937A3A22CFDB2 /* ComposerRegressionTests.swift in Sources */,
+				C1838A11BB554599DE3069B2 /* GuestModeTests.swift in Sources */,
 				B5E6380689143853AE98545A /* PasteImageFromClipboardTests.swift in Sources */,
 				0CF34A4E114CD00DF57DC12A /* SmokeTests.swift in Sources */,
 				006085D23F229CC5E80B280E /* UITestHelpers.swift in Sources */,
