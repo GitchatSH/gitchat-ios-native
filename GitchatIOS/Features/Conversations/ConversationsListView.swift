@@ -277,6 +277,9 @@ final class ConversationsViewModel: ObservableObject {
 }
 
 struct ConversationsListView: View {
+    var compact: Bool = false
+    var navTitle: String? = nil
+
     @StateObject private var vm = ConversationsViewModel()
     @StateObject private var router = AppRouter.shared
     @EnvironmentObject var socket: SocketClient
@@ -460,6 +463,9 @@ struct ConversationsListView: View {
     /// row so the user can see which chat is loaded on the right.
     private func isActiveRow(_ convo: Conversation) -> Bool {
         #if targetEnvironment(macCatalyst)
+        if let parentId = router.selectedTopic?.parent.id, parentId == convo.id {
+            return true
+        }
         return router.selectedConversation?.id == convo.id
         #else
         return false
@@ -485,7 +491,8 @@ struct ConversationsListView: View {
             conversation: convo,
             isLocallyRead: vm.locallyRead.contains(convo.id),
             isMuted: vm.isLocallyMuted(convo),
-            isActive: isActiveRow(convo)
+            isActive: isActiveRow(convo),
+            compact: compact
         )
         .transaction { $0.animation = nil }
         .contentShape(Rectangle())
@@ -749,7 +756,7 @@ struct ConversationsListView: View {
             }
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
             .onChange(of: filter) { runSearch($0) }
-            .navigationTitle("Chats")
+            .navigationTitle(navTitle ?? "Chats")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
@@ -858,6 +865,10 @@ struct ConversationRow: View {
     /// in the sticky detail panel. Flips text/icon colors to white
     /// for contrast against the accent-color background.
     var isActive: Bool = false
+    /// On Catalyst, when topic mode is active the chats list collapses
+    /// into a 60pt-wide rail. `compact` swaps the row body for an
+    /// icon-only render (44pt avatar + tiny unread chip).
+    var compact: Bool = false
     @ObservedObject private var draftStore = DraftStore.shared
     @ScaledMetric(relativeTo: .footnote) private var badgeMinSize: CGFloat = 24
     @ScaledMetric(relativeTo: .caption) private var mentionBadgeSize: CGFloat = 20
@@ -1111,7 +1122,47 @@ struct ConversationRow: View {
         return parts.joined(separator: ". ")
     }
 
+    @ViewBuilder
     var body: some View {
+        if compact {
+            compactBody
+        } else {
+            regularBody
+        }
+    }
+
+    private var compactBody: some View {
+        VStack(spacing: 2) {
+            if conversation.isGroup {
+                GroupAvatarView(
+                    name: conversation.group_name ?? conversation.displayTitle,
+                    avatarURL: conversation.group_avatar_url,
+                    groupId: conversation.id,
+                    size: 44
+                )
+            } else {
+                AvatarView(
+                    url: conversation.displayAvatarURL,
+                    size: 44,
+                    login: conversation.other_user?.login
+                )
+            }
+            if displayedUnread > 0 {
+                Text(displayedUnread > 99 ? "99+" : "\(displayedUnread)")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .frame(minWidth: 14, minHeight: 14)
+                    .background(Color("AccentColor"), in: Capsule())
+            }
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(conversation.displayTitle)
+    }
+
+    private var regularBody: some View {
         HStack(spacing: 12) {
             if conversation.isGroup {
                 GroupAvatarView(

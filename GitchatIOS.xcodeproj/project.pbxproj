@@ -151,7 +151,6 @@
 		BA24D8E2CF19CCBD4345A975 /* MutedConversationsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA66AF4BC200F232939FB647 /* MutedConversationsStore.swift */; };
 		BB54A7D21F3FFF7C735D3E51 /* GitHubEventPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C35C6EDE03C18F7E69EAAD7 /* GitHubEventPayloadTests.swift */; };
 		BC07AD1A5393406245A14CA4 /* KeyboardState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 867F0CBC05168FBAABB0109C /* KeyboardState.swift */; };
-		BD4CAAA986F15F2982253797 /* IconChatsColumn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6336EB08C0AEC7434D79B646 /* IconChatsColumn.swift */; };
 		BE388086BFB6A3B03531A9A3 /* ReactionSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C98DEBD91F06CEACB15AD9 /* ReactionSelectionView.swift */; };
 		BECCFD9188F71D9C196D1394 /* ImageSendPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 329C9B0EF873958D6A6CA198 /* ImageSendPreview.swift */; };
 		BEE4C46D98A25FE9C189B31A /* ChatReactionsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D181734FB494C1E5131DBB12 /* ChatReactionsRow.swift */; };
@@ -334,7 +333,6 @@
 		6213BEBF4437AE0A10FC31B3 /* APIClient+Topic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIClient+Topic.swift"; sourceTree = "<group>"; };
 		627F4895536B968BBC4A02DD /* ChatSectioning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSectioning.swift; sourceTree = "<group>"; };
 		6311B0C0CFDB81C367C16FF8 /* TopicEmojiPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicEmojiPresets.swift; sourceTree = "<group>"; };
-		6336EB08C0AEC7434D79B646 /* IconChatsColumn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconChatsColumn.swift; sourceTree = "<group>"; };
 		653BEFDD6BDC71148D0887E5 /* GitchatIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GitchatIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		65BDD84BE2F44020A45107E0 /* PendingMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingMessageTests.swift; sourceTree = "<group>"; };
 		6C2F57A00C4CFAFC24CD61DE /* StubURLProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StubURLProtocol.swift; sourceTree = "<group>"; };
@@ -738,7 +736,6 @@
 		73DFDC899B65D39E959FBEF8 /* Topics */ = {
 			isa = PBXGroup;
 			children = (
-				6336EB08C0AEC7434D79B646 /* IconChatsColumn.swift */,
 				89D44C363FDE6442F09E7C13 /* TopicCreateSheet.swift */,
 				6311B0C0CFDB81C367C16FF8 /* TopicEmojiPresets.swift */,
 				896795B9C8F75F43A68DC187 /* TopicListContent.swift */,
@@ -1300,7 +1297,6 @@
 				B497FE7DE58DA3A11465F566 /* GroupSettingsSheet.swift in Sources */,
 				38D52553E01E93DC2FA83451 /* Haptics.swift in Sources */,
 				128B2F995B3C428FA137E15E /* HideScrollIndicators.swift in Sources */,
-				BD4CAAA986F15F2982253797 /* IconChatsColumn.swift in Sources */,
 				3BB278E3A94069839823436D /* ImageCropSheet.swift in Sources */,
 				79E4A5DE2ACFB58124D5BB7A /* ImageDownloader.swift in Sources */,
 				BECCFD9188F71D9C196D1394 /* ImageSendPreview.swift in Sources */,
