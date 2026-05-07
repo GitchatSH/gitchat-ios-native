@@ -1,8 +1,5 @@
 import Foundation
 
-/// The three discover surfaces. Order matches the on-screen segmented
-/// control. `searchPlaceholder` swaps the `.searchable` prompt so the
-/// field hint tracks the active list's data source.
 enum DiscoverSubTab: String, CaseIterable, Identifiable {
     case people, teams, communities
 

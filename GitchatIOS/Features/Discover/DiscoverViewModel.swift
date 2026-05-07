@@ -1,37 +1,67 @@
 import SwiftUI
 
+protocol DiscoverDataSource {
+    func trendingRepos() async throws -> [APIClient.TrendingRepo]
+    func trendingPeople() async throws -> [APIClient.TrendingUser]
+    func friendsMutual() async throws -> [FriendUser]
+    func fetchStarredRepos() async throws -> [APIClient.StarredRepo]
+    func fetchContributedRepos() async throws -> [APIClient.ContributedRepo]
+}
+
+extension APIClient: DiscoverDataSource {}
+
 @MainActor
 final class DiscoverViewModel: ObservableObject {
     // Navigation
     @Published var subTab: DiscoverSubTab = .people
     @Published var query: String = ""
 
-    // People
+    // People (authed)
     @Published var mutuals: [FriendUser] = []
     @Published var peopleSearchResults: [FriendUser] = []
     @Published var peopleLoading = false
     @Published var peopleError: String?
 
-    // Teams
+    // Teams (authed)
     @Published var contributedRepos: [APIClient.ContributedRepo] = []
     @Published var teamsLoading = false
     @Published var teamsError: String?
 
-    // Communities
+    // Communities (authed)
     @Published var starredRepos: [APIClient.StarredRepo] = []
     @Published var communitiesLoading = false
     @Published var communitiesError: String?
 
-    // Optimistic: repos the user just joined, removed from the list
-    // immediately so the row doesn't flash while the socket catches up.
+    // Trending (guest)
+    @Published var trendingRepos: [APIClient.TrendingRepo] = []
+    @Published var trendingPeople: [APIClient.TrendingUser] = []
+    @Published var trendingLoading = false
+    @Published var trendingError: String?
+
     @Published var pendingJoinedRepos: Set<String> = []
 
     private var searchTask: Task<Void, Never>?
     private let debounceNanos: UInt64 = 300_000_000
+    private let api: DiscoverDataSource
+    private let isAuthenticated: @MainActor () -> Bool
+
+    init(api: DiscoverDataSource = APIClient.shared,
+         isAuthenticated: @escaping @MainActor () -> Bool = { AuthStore.shared.isAuthenticated }) {
+        self.api = api
+        self.isAuthenticated = isAuthenticated
+    }
 
     // MARK: - Loading
 
     func loadAll() async {
+        if isAuthenticated() {
+            await loadAllAuthed()
+        } else {
+            await loadAllGuest()
+        }
+    }
+
+    private func loadAllAuthed() async {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await self.loadMutuals() }
             group.addTask { await self.loadContributed() }
@@ -39,10 +69,44 @@ final class DiscoverViewModel: ObservableObject {
         }
     }
 
+    private func loadAllGuest() async {
+        trendingLoading = true; defer { trendingLoading = false }
+        trendingError = nil
+        async let repos = safeTrendingRepos()
+        async let people = safeTrendingPeople()
+        let (r, p) = await (repos, people)
+        trendingRepos = r
+        trendingPeople = p
+    }
+
+    private func safeTrendingRepos() async -> [APIClient.TrendingRepo] {
+        do {
+            let r = try await api.trendingRepos()
+            return r
+        } catch {
+            if trendingError == nil {
+                trendingError = error.localizedDescription
+            }
+            return []
+        }
+    }
+
+    private func safeTrendingPeople() async -> [APIClient.TrendingUser] {
+        do {
+            let r = try await api.trendingPeople()
+            return r
+        } catch {
+            if trendingError == nil {
+                trendingError = error.localizedDescription
+            }
+            return []
+        }
+    }
+
     func loadMutuals() async {
         peopleLoading = true; defer { peopleLoading = false }
         do {
-            mutuals = try await APIClient.shared.friendsMutual()
+            mutuals = try await api.friendsMutual()
             peopleError = nil
         } catch {
             peopleError = error.localizedDescription
@@ -52,7 +116,7 @@ final class DiscoverViewModel: ObservableObject {
     func loadContributed() async {
         teamsLoading = true; defer { teamsLoading = false }
         do {
-            contributedRepos = try await APIClient.shared.fetchContributedRepos()
+            contributedRepos = try await api.fetchContributedRepos()
             teamsError = nil
         } catch {
             teamsError = error.localizedDescription
@@ -62,18 +126,16 @@ final class DiscoverViewModel: ObservableObject {
     func loadStarred() async {
         communitiesLoading = true; defer { communitiesLoading = false }
         do {
-            starredRepos = try await APIClient.shared.fetchStarredRepos()
+            starredRepos = try await api.fetchStarredRepos()
             communitiesError = nil
         } catch {
             communitiesError = error.localizedDescription
         }
     }
 
-    // MARK: - Search
+    // MARK: - Search (unchanged from authed flow — guest search is handled in UserSearchView, not here)
 
     func onSubTabChange() {
-        // Swapping sub-tabs — clear the in-flight people search. Teams /
-        // Communities filter locally so there's nothing to cancel.
         searchTask?.cancel()
         peopleSearchResults = []
     }
@@ -81,11 +143,7 @@ final class DiscoverViewModel: ObservableObject {
     func scheduleSearch() {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         searchTask?.cancel()
-        guard !q.isEmpty else {
-            peopleSearchResults = []
-            return
-        }
-        // Only People hits an API — Teams/Communities filter locally.
+        guard !q.isEmpty else { peopleSearchResults = []; return }
         guard subTab == .people else { return }
         searchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: self?.debounceNanos ?? 0)
@@ -95,8 +153,7 @@ final class DiscoverViewModel: ObservableObject {
     }
 
     private func runPeopleSearch(_ q: String) async {
-        peopleLoading = true
-        defer { peopleLoading = false }
+        peopleLoading = true; defer { peopleLoading = false }
         do {
             peopleSearchResults = try await APIClient.shared.searchUsersForDM(query: q)
             peopleError = nil
@@ -106,10 +163,8 @@ final class DiscoverViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Derived lists
+    // MARK: - Derived lists (unchanged for authed flow)
 
-    /// Mutuals + API-search results, deduped by login, filtered by the
-    /// current query when non-empty.
     func peopleRows() -> [FriendUser] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let base = mutuals + peopleSearchResults
@@ -121,8 +176,6 @@ final class DiscoverViewModel: ObservableObject {
         }
     }
 
-    /// Contributed repos minus the ones the user has already joined as
-    /// a team conversation, and local-filtered by query.
     func teamRows(joinedTeamSlugs: Set<String>) -> [APIClient.ContributedRepo] {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return contributedRepos.filter { r in

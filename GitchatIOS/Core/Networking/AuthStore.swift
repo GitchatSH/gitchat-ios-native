@@ -22,10 +22,29 @@ final class AuthStore: ObservableObject {
     private let sharedLoginKey = "shared_login"
 
     private init() {
-        self.accessToken = read(tokenKey)
-        self.login = read(loginKey)
-        self.isAuthenticated = accessToken != nil
-        self.needsGithubLink = read(needsGithubKey) == "1"
+        let args = ProcessInfo.processInfo.arguments
+        let forceUnauthed = args.contains("-uiTestUnauthed")
+        let forceTestAuth = args.contains("-uiTestPrimeToken")
+
+        if forceUnauthed {
+            self.accessToken = nil
+            self.login = nil
+            self.isAuthenticated = false
+            self.needsGithubLink = false
+        } else if forceTestAuth {
+            // UI tests that need a primed authed session without touching
+            // keychain or wiring real OAuth. Mirrors `_testPrimeAuth` but
+            // for the UI-test process where we can't reach the seam.
+            self.accessToken = "ui-test-token"
+            self.login = "ui-test-user"
+            self.isAuthenticated = true
+            self.needsGithubLink = false
+        } else {
+            self.accessToken = read(tokenKey)
+            self.login = read(loginKey)
+            self.isAuthenticated = accessToken != nil
+            self.needsGithubLink = read(needsGithubKey) == "1"
+        }
         mirrorToSharedGroup()
     }
 
@@ -130,3 +149,25 @@ final class AuthStore: ObservableObject {
         SecItemDelete(query as CFDictionary)
     }
 }
+
+#if DEBUG
+extension AuthStore {
+    /// Test-only token primer. Bypasses the side effects of `save()`
+    /// (push registration, analytics, permission prompts) so unit tests
+    /// can put `AuthStore.shared` into an authenticated state without
+    /// touching the network / OneSignal / system permissions. Pair with
+    /// `_testClearAuth()` in tearDown to restore a clean slate.
+    func _testPrimeAuth(token: String, login: String = "test-user") {
+        self.accessToken = token
+        self.login = login
+        self.isAuthenticated = true
+    }
+
+    func _testClearAuth() {
+        self.accessToken = nil
+        self.login = nil
+        self.isAuthenticated = false
+        self.needsGithubLink = false
+    }
+}
+#endif

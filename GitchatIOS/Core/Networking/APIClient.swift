@@ -502,6 +502,10 @@ struct APIClient {
         try await request("user/profile")
     }
 
+    /// `GET /user/:username` — public on the BE (`UserController.getUserByUsername`,
+    /// no auth guard). The viewer-token branch in the BE only personalises the
+    /// collaborator subset; the basic profile read works without it. Pass
+    /// `requireAuth: false` so guest mode (no token) can call this.
     func userProfile(login: String) async throws -> UserProfile {
         struct NestedRepo: Decodable {
             let owner: String
@@ -527,7 +531,7 @@ struct APIClient {
             let profile: NestedProfile
             let repos: [NestedRepo]?
         }
-        let resp: NestedResponse = try await request("user/\(login)")
+        let resp: NestedResponse = try await request("user/\(login)", requireAuth: false)
         let tops = (resp.repos ?? []).prefix(10).map {
             RepoSummary(
                 full_name: "\($0.owner)/\($0.name)",
@@ -673,6 +677,40 @@ struct APIClient {
         let encoded = list.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? list
         let resp: Resp = try await request("presence?logins=\(encoded)")
         return resp.data
+    }
+
+    // MARK: - Trending (public, no auth)
+
+    struct TrendingRepo: Decodable, Identifiable, Hashable {
+        let owner: String
+        let name: String
+        let description: String?
+        let language: String?
+        let stars: Int?
+        let avatar_url: String?
+        var id: String { "\(owner)/\(name)" }
+        var fullName: String { "\(owner)/\(name)" }
+    }
+
+    struct TrendingUser: Decodable, Identifiable, Hashable {
+        let login: String
+        let name: String?
+        let avatar_url: String?
+        var id: String { login }
+    }
+
+    /// `GET /trending/repos`. Public — no Authorization header. The BE
+    /// returns `{ data: [...repos...], page, hasMore }`; we let the shared
+    /// `APIEnvelope` decode unwrap `data`. Pagination fields are ignored
+    /// for v1 — the guest browse surface shows the first page only.
+    func trendingRepos() async throws -> [TrendingRepo] {
+        try await request("trending/repos", requireAuth: false)
+    }
+
+    /// `GET /trending/people`. Public — no Authorization header. Same
+    /// envelope shape as `trendingRepos()`.
+    func trendingPeople() async throws -> [TrendingUser] {
+        try await request("trending/people", requireAuth: false)
     }
 
     // MARK: - App version

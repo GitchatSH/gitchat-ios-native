@@ -26,16 +26,18 @@ final class APIClient426InterceptorTests: XCTestCase {
         }
     }
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         StubURLProtocol.reset()
         AppUpdateChecker._testOverride = makeChecker()
+        AuthStore.shared._testPrimeAuth(token: "test-token")
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         StubURLProtocol.reset()
         AppUpdateChecker._testOverride = nil
-        super.tearDown()
+        AuthStore.shared._testClearAuth()
+        try await super.tearDown()
     }
 
     func test_426Response_triggersHandle426() async throws {

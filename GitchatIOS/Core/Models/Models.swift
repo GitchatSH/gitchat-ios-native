@@ -650,6 +650,17 @@ struct FollowStatus: Decodable, Hashable {
         case following
         case followed_by = "followedBy"
     }
+
+    init(following: Bool, followed_by: Bool) {
+        self.following = following
+        self.followed_by = followed_by
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.following = try c.decode(Bool.self, forKey: .following)
+        self.followed_by = try c.decode(Bool.self, forKey: .followed_by)
+    }
 }
 
 // MARK: - Notifications

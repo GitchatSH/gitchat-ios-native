@@ -1,6 +1,7 @@
 import XCTest
 @testable import Gitchat
 
+@MainActor
 final class APIClientSendMessageTests: XCTestCase {
 
     /// Build an APIClient that routes through StubURLProtocol by injecting
@@ -12,14 +13,16 @@ final class APIClientSendMessageTests: XCTestCase {
         return APIClient(session: session)
     }
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         StubURLProtocol.reset()
+        AuthStore.shared._testPrimeAuth(token: "test-token")
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         StubURLProtocol.reset()
-        super.tearDown()
+        AuthStore.shared._testClearAuth()
+        try await super.tearDown()
     }
 
     func test_sendMessage_includes_clientMessageID_inBody() async throws {

@@ -50,7 +50,22 @@ final class AppRouter: ObservableObject {
     /// deep-link handler.
     @Published var pendingInviteCode: String?
 
-    private init() {}
+    private init() {
+        // Allow UI tests to seed an invite code before any view mounts —
+        // saves the test from having to drive iOS's deep-link handler.
+        if let value = Self.testInviteCode() {
+            self.pendingInviteCode = value
+        }
+    }
+
+    private static func testInviteCode() -> String? {
+        let args = ProcessInfo.processInfo.arguments
+        if let idx = args.firstIndex(of: "-uiTestInviteCode"),
+           idx + 1 < args.count {
+            return args[idx + 1]
+        }
+        return nil
+    }
 
     /// Route a Gitchat deep link. Accepts both our custom scheme
     /// (`gitchat://invite/<code>`) and https URLs that point at our web
