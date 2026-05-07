@@ -22,11 +22,22 @@ final class AuthStore: ObservableObject {
     private let sharedLoginKey = "shared_login"
 
     private init() {
-        let forceUnauthed = ProcessInfo.processInfo.arguments.contains("-uiTestUnauthed")
+        let args = ProcessInfo.processInfo.arguments
+        let forceUnauthed = args.contains("-uiTestUnauthed")
+        let forceTestAuth = args.contains("-uiTestPrimeToken")
+
         if forceUnauthed {
             self.accessToken = nil
             self.login = nil
             self.isAuthenticated = false
+            self.needsGithubLink = false
+        } else if forceTestAuth {
+            // UI tests that need a primed authed session without touching
+            // keychain or wiring real OAuth. Mirrors `_testPrimeAuth` but
+            // for the UI-test process where we can't reach the seam.
+            self.accessToken = "ui-test-token"
+            self.login = "ui-test-user"
+            self.isAuthenticated = true
             self.needsGithubLink = false
         } else {
             self.accessToken = read(tokenKey)
