@@ -40,8 +40,20 @@ struct IconChatsColumn: View {
         let unread = vm.locallyRead.contains(convo.id) ? 0 : convo.unreadCount
 
         VStack(spacing: 2) {
-            AvatarView(url: convo.displayAvatarURL, size: 32,
-                       login: convo.isGroup ? nil : convo.other_user?.login)
+            if convo.isGroup {
+                GroupAvatarView(
+                    name: convo.group_name ?? convo.displayTitle,
+                    avatarURL: convo.group_avatar_url,
+                    groupId: convo.id,
+                    size: 44
+                )
+            } else {
+                AvatarView(
+                    url: convo.displayAvatarURL,
+                    size: 44,
+                    login: convo.other_user?.login
+                )
+            }
             if unread > 0 {
                 Text(unread > 99 ? "99+" : "\(unread)")
                     .font(.system(size: 9, weight: .bold))

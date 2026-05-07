@@ -79,7 +79,7 @@ struct MacShellView: View {
                     .navigationDestination(for: TopicSidebarRoute.self) { route in
                         HStack(spacing: 0) {
                             IconChatsColumn(activeParentId: route.parent.id)
-                                .frame(width: 56)
+                                .frame(width: 60)
                             Divider()
                             TopicListSidebarView(parent: route.parent)
                         }
