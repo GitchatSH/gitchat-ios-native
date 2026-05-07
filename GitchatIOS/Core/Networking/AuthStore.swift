@@ -138,3 +138,25 @@ final class AuthStore: ObservableObject {
         SecItemDelete(query as CFDictionary)
     }
 }
+
+#if DEBUG
+extension AuthStore {
+    /// Test-only token primer. Bypasses the side effects of `save()`
+    /// (push registration, analytics, permission prompts) so unit tests
+    /// can put `AuthStore.shared` into an authenticated state without
+    /// touching the network / OneSignal / system permissions. Pair with
+    /// `_testClearAuth()` in tearDown to restore a clean slate.
+    func _testPrimeAuth(token: String, login: String = "test-user") {
+        self.accessToken = token
+        self.login = login
+        self.isAuthenticated = true
+    }
+
+    func _testClearAuth() {
+        self.accessToken = nil
+        self.login = nil
+        self.isAuthenticated = false
+        self.needsGithubLink = false
+    }
+}
+#endif
