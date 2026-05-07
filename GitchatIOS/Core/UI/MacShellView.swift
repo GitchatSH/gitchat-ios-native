@@ -44,8 +44,12 @@ struct MacShellView: View {
         let tab = router.selectedTab
         let convoId = router.selectedConversation?.id ?? "none"
         let profile = router.selectedProfile ?? "none"
-        let topicId = router.selectedTopic?.topic.id ?? "none"
-        return "tab-\(tab)-profile-\(profile)-convo-\(convoId)-topic-\(topicId)"
+        // Note: topic switches don't go into the identity here — the inner
+        // ChatDetailView in detailPanel has its own .id("topic-...") that
+        // rebuilds per-topic without tearing down the surrounding stack.
+        // Letting this identity bypass topic changes lets the .transition
+        // on the detail Group fire (move + opacity) on topic switches.
+        return "tab-\(tab)-profile-\(profile)-convo-\(convoId)"
     }
 
     @ViewBuilder

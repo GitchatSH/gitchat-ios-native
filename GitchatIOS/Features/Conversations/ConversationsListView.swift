@@ -319,6 +319,11 @@ struct ConversationsListView: View {
                 router.enterTopicMode(parent: convo)
             }
         } else {
+            // If user was in topic mode for another group, exit it first
+            // so the detail panel actually switches to the picked chat.
+            if router.selectedTopic != nil {
+                router.exitTopicMode()
+            }
             router.selectedConversation = convo
         }
         #else
