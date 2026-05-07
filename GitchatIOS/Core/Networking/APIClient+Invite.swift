@@ -90,11 +90,12 @@ extension APIClient {
         )
     }
 
-    /// Unauthenticated-friendly preview — used before the user commits to
-    /// joining. Backend may still require auth; if so the user has already
-    /// signed in anyway by the time they land on this screen.
+    /// `GET /messages/conversations/join/:code` — public preview of a group invite.
+    /// Used both by signed-in flows (`InvitePreviewSheet`) and by the guest
+    /// path on a `gitchat://invite/...` deep link, so we must NOT require a
+    /// bearer token.
     func previewInvite(code: String) async throws -> InvitePreview {
-        try await request("messages/conversations/join/\(code)")
+        try await request("messages/conversations/join/\(code)", requireAuth: false)
     }
 
     /// Join a group via invite code. Returns the conversation so the UI
