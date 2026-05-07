@@ -29,9 +29,11 @@ struct ChatDetailTitleBar: View {
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
+                #if !targetEnvironment(macCatalyst)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
+                #endif
             }
             HStack(spacing: 2) {
                 Text("in \(parent.displayTitle)")
@@ -41,7 +43,9 @@ struct ChatDetailTitleBar: View {
             }
         }
         .contentShape(Rectangle())
+        #if !targetEnvironment(macCatalyst)
         .onTapGesture { onTap?() }
+        #endif
     }
 
     // MARK: - Conversation header
