@@ -439,8 +439,10 @@ struct ConversationsListView: View {
                     }
                 }
                 .navigationDestination(for: TopicChatRoute.self) { route in
-                    ChatDetailView(conversation: route.parent)
+                    ChatDetailView(conversation: route.parent, initialTopic: route.topic)
                         .onAppear {
+                            // Cache the user's pick so re-entering this parent later
+                            // (via Catalyst sidebar or future iOS deep-link) lands here.
                             AppRouter.shared.pickTopic(route.topic, in: route.parent)
                         }
                 }

@@ -74,8 +74,13 @@ struct ChatDetailView: View {
     /// `navigationDestination(item:)`.
     @Namespace private var imageZoomNamespace
 
-    init(conversation: Conversation) {
+    init(conversation: Conversation, initialTopic: Topic? = nil) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
+        if let topic = initialTopic {
+            // Pre-seed resolvedTarget so resolveTarget()'s "if resolvedTarget == nil"
+            // guard skips the General-by-default path, honoring the caller's pick.
+            _resolvedTarget = State(initialValue: .topic(topic, parent: conversation))
+        }
     }
 
     // MARK: - Derived state

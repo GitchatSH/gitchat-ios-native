@@ -81,7 +81,7 @@ struct MacShellView: View {
             if let login = router.selectedProfile {
                 ProfileView(login: login)
             } else if let target = router.selectedTopic {
-                ChatDetailView(conversation: target.parent)
+                ChatDetailView(conversation: target.parent, initialTopic: target.topic)
                     .id("topic-\(target.topic.id)")
             } else if let convo = router.selectedConversation {
                 ChatDetailView(conversation: convo)
