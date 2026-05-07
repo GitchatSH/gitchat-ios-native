@@ -52,48 +52,67 @@ Create `GitchatIOSTests/APIClientTrendingTests.swift`:
 import XCTest
 @testable import Gitchat
 
-@MainActor
 final class APIClientTrendingTests: XCTestCase {
+
+    /// Build an APIClient that routes through StubURLProtocol — same
+    /// pattern as `APIClientSendMessageTests`. Using an injected client
+    /// means the test does not depend on `AuthStore.shared`'s state, so
+    /// `requireAuth: false` (the behaviour we want to verify) is exercised
+    /// regardless of whatever token a prior test or simulator state left
+    /// in the keychain.
+    private func makeStubClient() -> APIClient {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [StubURLProtocol.self]
+        return APIClient(session: URLSession(configuration: cfg))
+    }
 
     override func setUp() {
         super.setUp()
         StubURLProtocol.reset()
-        URLProtocol.registerClass(StubURLProtocol.self)
     }
 
     override func tearDown() {
-        URLProtocol.unregisterClass(StubURLProtocol.self)
         StubURLProtocol.reset()
         super.tearDown()
     }
 
-    func test_trendingRepos_decodes_response_and_omits_bearer() async throws {
-        let body = """
-        {"repos":[{"owner":"vercel","name":"next.js","description":"d","language":"TS","stars":100000,"avatar_url":"https://x/a.png"}]}
-        """
-        StubURLProtocol.stub(matchingPathSuffix: "/trending/repos",
-                             status: 200,
-                             body: Data(body.utf8))
-        let repos = try await APIClient.shared.trendingRepos()
+    func test_trendingRepos_decodes_response() async throws {
+        StubURLProtocol.responseBody = Data(#"""
+        {"repos":[{"owner":"vercel","name":"next.js","description":"The React Framework","language":"TypeScript","stars":100000,"avatar_url":"https://x/a.png"}]}
+        """#.utf8)
+
+        let repos = try await makeStubClient().trendingRepos()
         XCTAssertEqual(repos.count, 1)
         XCTAssertEqual(repos.first?.owner, "vercel")
         XCTAssertEqual(repos.first?.name, "next.js")
-        let req = StubURLProtocol.lastRequest!
-        XCTAssertNil(req.value(forHTTPHeaderField: "Authorization"),
-                     "Trending endpoints must not send a Bearer token")
+        XCTAssertEqual(repos.first?.fullName, "vercel/next.js")
     }
 
-    func test_trendingPeople_decodes_response_and_omits_bearer() async throws {
-        let body = """
+    func test_trendingPeople_decodes_response() async throws {
+        StubURLProtocol.responseBody = Data(#"""
         {"users":[{"login":"tj","name":"TJ","avatar_url":"https://x/a.png"}]}
-        """
-        StubURLProtocol.stub(matchingPathSuffix: "/trending/people",
-                             status: 200,
-                             body: Data(body.utf8))
-        let people = try await APIClient.shared.trendingPeople()
+        """#.utf8)
+
+        let people = try await makeStubClient().trendingPeople()
         XCTAssertEqual(people.first?.login, "tj")
-        XCTAssertNil(StubURLProtocol.lastRequest!
-            .value(forHTTPHeaderField: "Authorization"))
+        XCTAssertEqual(people.first?.name, "TJ")
+    }
+
+    /// Guards against a regression where someone removes `requireAuth: false`.
+    /// Calling the production singleton without an Authorization header
+    /// would throw `APIError.notAuthenticated` synchronously before the
+    /// request goes out. By signing out first we guarantee no token is
+    /// present, then assert the call does NOT throw `.notAuthenticated`.
+    func test_trendingRepos_does_not_require_token() async throws {
+        await AuthStore.shared.signOut()
+        StubURLProtocol.responseBody = Data(#"{"repos":[]}"#.utf8)
+        do {
+            _ = try await makeStubClient().trendingRepos()
+        } catch APIError.notAuthenticated {
+            XCTFail("Trending must be callable without a token (requireAuth must be false)")
+        } catch {
+            // Any other error is fine — only `.notAuthenticated` is the regression we guard.
+        }
     }
 }
 ```
@@ -187,29 +206,36 @@ git commit -m "feat(api): add /trending/repos + /trending/people unauth clients"
 
 - [ ] **Step 1: Add the failing test**
 
-Append to `APIClientTrendingTests.swift`:
+Append to `APIClientTrendingTests.swift` (re-uses the `makeStubClient()` helper from Task 1):
 
 ```swift
-    func test_previewInvite_omits_bearer_for_guest() async throws {
-        let body = """
-        {"code":"abc","group_name":"g","conversation_id":"c"}
-        """
-        StubURLProtocol.stub(matchingPathSuffix: "/messages/conversations/join/abc",
-                             status: 200,
-                             body: Data(body.utf8))
-        _ = try await APIClient.shared.previewInvite(code: "abc")
-        XCTAssertNil(StubURLProtocol.lastRequest!
-            .value(forHTTPHeaderField: "Authorization"),
-            "Preview is documented public — must not require a token")
+    /// Same regression pattern as the trending tests — guarantees
+    /// `previewInvite` does not require a token. With `requireAuth: true`
+    /// (the current bug), `signOut()` followed by the call throws
+    /// `APIError.notAuthenticated` before the request goes out.
+    func test_previewInvite_does_not_require_token() async throws {
+        await AuthStore.shared.signOut()
+        StubURLProtocol.responseBody = Data(#"""
+        {"code":"abc","group_name":"g","conversation_id":"c","creator_login":"x","creator_avatar_url":null,"recipient_count":1}
+        """#.utf8)
+        do {
+            _ = try await makeStubClient().previewInvite(code: "abc")
+        } catch APIError.notAuthenticated {
+            XCTFail("Invite preview is documented public — requireAuth must be false")
+        } catch {
+            // Decoding/transport errors are fine — we only guard `.notAuthenticated`.
+        }
     }
 ```
+
+> The exact `InvitePreview` decoding shape may not match the stub literally. The test only asserts on the auth gate, not on the decoded value, so a partial JSON is sufficient. If decoding throws, the catch swallows it; the test still validates the regression we care about.
 
 - [ ] **Step 2: Run, confirm failure**
 
 ```bash
-xcodebuild test ... -only-testing:GitchatIOSTests/APIClientTrendingTests/test_previewInvite_omits_bearer_for_guest
+xcodebuild test ... -only-testing:GitchatIOSTests/APIClientTrendingTests/test_previewInvite_does_not_require_token
 ```
-Expected: FAIL — without `requireAuth: false`, the call attaches the token (test fixture leaves a stale token from setup; if not, the call still attaches whatever AuthStore has). Verify the assertion fails.
+Expected: FAIL with `XCTFail("Invite preview is documented public — requireAuth must be false")` because current code defaults `requireAuth` to true and `signOut()` left no token.
 
 - [ ] **Step 3: Edit `previewInvite`**
 
