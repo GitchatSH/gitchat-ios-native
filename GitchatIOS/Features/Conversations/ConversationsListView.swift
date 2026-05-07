@@ -1128,44 +1128,14 @@ struct ConversationRow: View {
         return parts.joined(separator: ". ")
     }
 
-    @ViewBuilder
     var body: some View {
-        if compact {
-            compactBody
-        } else {
-            regularBody
-        }
-    }
-
-    private var compactBody: some View {
-        VStack(spacing: 2) {
-            if conversation.isGroup {
-                GroupAvatarView(
-                    name: conversation.group_name ?? conversation.displayTitle,
-                    avatarURL: conversation.group_avatar_url,
-                    groupId: conversation.id,
-                    size: 44
-                )
-            } else {
-                AvatarView(
-                    url: conversation.displayAvatarURL,
-                    size: 44,
-                    login: conversation.other_user?.login
-                )
-            }
-            if displayedUnread > 0 {
-                Text(displayedUnread > 99 ? "99+" : "\(displayedUnread)")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 5)
-                    .frame(minWidth: 14, minHeight: 14)
-                    .background(Color("AccentColor"), in: Capsule())
-            }
-        }
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(conversation.displayTitle)
+        // Same row design in both modes — when the parent column is
+        // narrowed (compact), the trailing content (name/preview/badges)
+        // simply clips off the right edge, leaving the avatar visible.
+        // This is the "collapse the existing chat rows" pattern, not a
+        // separate compact-icon view.
+        regularBody
+            .clipped()
     }
 
     private var regularBody: some View {
