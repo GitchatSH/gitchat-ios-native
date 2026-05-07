@@ -9,10 +9,10 @@ import UIKit
 /// `UILabel` overlay, hidden whenever `text` is non-empty.
 ///
 /// Sizing: `isScrollEnabled = true` so once the frame reaches the
-/// 5-line cap (computed in `sizeThatFits`), the UITextView scrolls
+/// 10-line cap (computed in `sizeThatFits`), the UITextView scrolls
 /// internally and keeps the caret in view. Previously this was set to
 /// `false` to force the field to publish a growing intrinsicContentSize,
-/// but that clipped any text past line 5 because the frame was capped
+/// but that clipped any text past the cap because the frame was capped
 /// while scrolling was disabled (see issue #87). The custom
 /// `sizeThatFits` below still drives SwiftUI sizing — UITextView's
 /// `sizeThatFits(_:)` returns the full content height regardless of
@@ -40,6 +40,8 @@ struct PasteableTextField: UIViewRepresentable {
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
         tv.isScrollEnabled = true
+        tv.showsVerticalScrollIndicator = false
+        tv.showsHorizontalScrollIndicator = false
         tv.focusEffect = nil
         tv.returnKeyType = .default
         tv.text = text
@@ -87,12 +89,11 @@ struct PasteableTextField: UIViewRepresentable {
 
     /// Drives SwiftUI sizing directly. Computes the height needed for the
     /// current text at the proposed width, clamped to:
-    /// - 1 line minimum on both platforms
-    /// - 1 line maximum on Mac Catalyst (single-line composer)
-    /// - 5 lines maximum on iOS
+    /// - 1 line minimum
+    /// - 10 lines maximum (both iOS and Mac Catalyst)
     ///
-    /// When the content exceeds the iOS 5-line cap, the height stays at
-    /// `lineHeight * 5` and the UITextView (which has
+    /// When the content exceeds the cap, the height stays at
+    /// `lineHeight * 10` and the UITextView (which has
     /// `isScrollEnabled = true`) scrolls internally, keeping the caret
     /// in view as the user keeps typing.
     func sizeThatFits(
@@ -102,16 +103,12 @@ struct PasteableTextField: UIViewRepresentable {
     ) -> CGSize? {
         let width = proposal.width ?? UIView.layoutFittingExpandedSize.width
         let lineHeight = uiView.font?.lineHeight ?? 22
-        #if targetEnvironment(macCatalyst)
-        return CGSize(width: width, height: lineHeight)
-        #else
         let fitted = uiView.sizeThatFits(
             CGSize(width: width, height: .greatestFiniteMagnitude)
         )
-        let maxH = lineHeight * 5
+        let maxH = lineHeight * 10
         let clamped = max(lineHeight, min(maxH, fitted.height))
         return CGSize(width: width, height: clamped)
-        #endif
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

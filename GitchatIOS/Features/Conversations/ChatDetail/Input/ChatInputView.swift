@@ -5,8 +5,9 @@ import UIKit
 /// Composer bar sitting above the keyboard. Combines:
 /// - Attach button (PhotosPicker → routes through the parent's drop
 ///   preview flow).
-/// - Text field (multi-line on iOS; single-line on Mac Catalyst so
-///   Return triggers `.onSubmit`).
+/// - Text field (auto-grows up to 10 lines on both iOS and Mac
+///   Catalyst; on Catalyst bare Return submits and Shift+Return
+///   inserts a newline).
 /// - Send button (disabled when draft is empty or an upload is in
 ///   flight).
 ///
@@ -53,7 +54,7 @@ struct ChatInputView: View {
         // Whole composer as one Tahoe-style floating pill, matching
         // `MacBottomNav` inner/outer padding so sidebar nav + detail
         // composer sit level on the same horizontal row.
-        HStack(spacing: 4) {
+        HStack(alignment: .bottom, spacing: 4) {
             attachButton
             textField
             sendButton
