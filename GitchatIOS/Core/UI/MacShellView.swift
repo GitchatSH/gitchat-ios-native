@@ -35,7 +35,8 @@ struct MacShellView: View {
         let tab = router.selectedTab
         let convoId = router.selectedConversation?.id ?? "none"
         let profile = router.selectedProfile ?? "none"
-        return "tab-\(tab)-profile-\(profile)-convo-\(convoId)"
+        let topicId = router.selectedTopic?.topic.id ?? "none"
+        return "tab-\(tab)-profile-\(profile)-convo-\(convoId)-topic-\(topicId)"
     }
 
     @ViewBuilder
@@ -56,7 +57,16 @@ struct MacShellView: View {
     @ViewBuilder
     private var currentTabSidebar: some View {
         switch router.selectedTab {
-        case 0: ConversationsListView()
+        case 0:
+            NavigationStack(path: Binding(
+                get: { router.topicSidebarPath },
+                set: { router.topicSidebarPath = $0 }
+            )) {
+                ConversationsListView()
+                    .navigationDestination(for: TopicSidebarRoute.self) { route in
+                        TopicListSidebarView(parent: route.parent)
+                    }
+            }
         case 1: DiscoverView()
         case 2: NotificationsView()
         case 3: FollowingView()
@@ -67,17 +77,23 @@ struct MacShellView: View {
 
     @ViewBuilder
     private var detailPanel: some View {
-        if let login = router.selectedProfile {
-            ProfileView(login: login)
-        } else if let convo = router.selectedConversation {
-            ChatDetailView(conversation: convo)
-        } else {
-            ContentUnavailableCompat(
-                title: "Select a conversation",
-                systemImage: "bubble.left.and.bubble.right",
-                description: "Pick a chat from the sidebar to start reading."
-            )
+        Group {
+            if let login = router.selectedProfile {
+                ProfileView(login: login)
+            } else if let target = router.selectedTopic {
+                ChatDetailView(conversation: target.parent)
+                    .id("topic-\(target.topic.id)")
+            } else if let convo = router.selectedConversation {
+                ChatDetailView(conversation: convo)
+            } else {
+                ContentUnavailableCompat(
+                    title: "Select a conversation",
+                    systemImage: "bubble.left.and.bubble.right",
+                    description: "Pick a chat from the sidebar to start reading."
+                )
+            }
         }
+        .transition(.opacity.combined(with: .move(edge: .trailing)))
     }
 
     /// Hidden buttons that bind ⌘1–⌘5 to tab indices.
