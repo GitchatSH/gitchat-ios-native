@@ -4,10 +4,7 @@ import XCTest
 final class APIClientTrendingTests: XCTestCase {
 
     /// Build an APIClient that routes through StubURLProtocol — same
-    /// pattern as `APIClientSendMessageTests`. The injected `URLSession`
-    /// only intercepts the network layer; `requireAuth: true` paths still
-    /// read `AuthStore.shared.accessToken`. The regression test below
-    /// signs out explicitly to make that read return nil.
+    /// pattern as `APIClientSendMessageTests`.
     private func makeStubClient() -> APIClient {
         let cfg = URLSessionConfiguration.ephemeral
         cfg.protocolClasses = [StubURLProtocol.self]
