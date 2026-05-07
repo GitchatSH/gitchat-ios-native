@@ -24,7 +24,7 @@ struct TopicListContent: View {
 
     var body: some View {
         content
-            .task { await load() }
+            .task(id: parent.id) { await load() }
             .onReceive(NotificationCenter.default.publisher(for: .gitchatTopicEvent)) { note in
                 if let evt = note.object as? TopicSocketEvent { store.applyEvent(evt) }
             }

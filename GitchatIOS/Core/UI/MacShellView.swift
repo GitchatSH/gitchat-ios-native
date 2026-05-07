@@ -72,17 +72,19 @@ struct MacShellView: View {
         switch router.selectedTab {
         case 0:
             let inTopicMode = router.selectedTopic != nil
-            HStack(spacing: 0) {
-                ConversationsListView(
-                    compact: inTopicMode,
-                    navTitle: router.selectedTopic?.parent.displayTitle
-                )
-                .frame(width: inTopicMode ? 60 : nil)
-                .animation(.easeInOut(duration: 0.25), value: inTopicMode)
+            NavigationStack {
+                HStack(spacing: 0) {
+                    ConversationsListView(
+                        compact: inTopicMode,
+                        navTitle: router.selectedTopic?.parent.displayTitle
+                    )
+                    .frame(width: inTopicMode ? 60 : nil)
+                    .animation(.easeInOut(duration: 0.25), value: inTopicMode)
 
-                if let target = router.selectedTopic {
-                    Divider()
-                    TopicListSidebarView(parent: target.parent)
+                    if let target = router.selectedTopic {
+                        Divider()
+                        TopicListSidebarView(parent: target.parent)
+                    }
                 }
             }
         case 1: DiscoverView()
