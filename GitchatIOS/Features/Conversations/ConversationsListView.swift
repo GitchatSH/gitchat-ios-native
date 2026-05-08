@@ -281,9 +281,12 @@ struct ConversationsListView: View {
 
     @StateObject private var vm = ConversationsViewModel()
     @StateObject private var router = AppRouter.shared
+    @StateObject private var topicStore = TopicListStore.shared
+    @ObservedObject private var presence = PresenceStore.shared
     @EnvironmentObject var socket: SocketClient
     @Environment(\.scenePhase) private var scenePhase
     @State private var showNewChat = false
+    @State private var showCreateTopic = false
     @State private var filter = ""
     @State private var profileResults: [FriendUser] = []
     @State private var isSearchingProfiles = false
@@ -309,23 +312,16 @@ struct ConversationsListView: View {
         #endif
     }
 
-    /// Catalyst sidebar wrapper. When in topic mode, renders `sidebar`
-    /// (the full chats list with chrome — `.searchable`, `.navigationTitle`,
-    /// `.toolbar` — attached) constrained to a 60pt column on the left,
-    /// with `TopicListSidebarView` filling the remaining width on the right.
-    /// The chrome modifiers stay attached to `sidebar` so they propagate up
-    /// to the `NavigationSplitView` column's chrome area at full sidebar
-    /// width — only the row list itself is narrowed.
+    /// Catalyst sidebar wrapper. The NavigationSplitView column's chrome
+    /// (title bar + search) renders at full sidebar width — we keep
+    /// `.navigationTitle` and `.searchable` on `sidebar` so they bind there.
+    /// Only the row content area is split via `safeAreaInset.trailing` to
+    /// make room for `TopicListSidebarView` when in topic mode.
     @ViewBuilder
     private var catalystSidebar: some View {
         #if targetEnvironment(macCatalyst)
         let _ = NSLog("[Topic] catalystSidebar render activeForumParent=%@",
                       router.activeForumParent?.id ?? "nil")
-        // Use GeometryReader to determine sidebar column width so the
-        // topic list inset reserves "everything past the leading 60pt".
-        // Chrome (`.searchable`, `.navigationTitle`, `.toolbar`) stays
-        // attached to `sidebar` at full column width — only the row
-        // content area is split via `safeAreaInset`.
         GeometryReader { geo in
             sidebar
                 .safeAreaInset(edge: .trailing, spacing: 0) {
@@ -334,7 +330,7 @@ struct ConversationsListView: View {
                             Divider()
                             TopicListSidebarView(parent: parent)
                         }
-                        .frame(width: max(geo.size.width - 60, 0))
+                        .frame(width: max(geo.size.width - 72, 0))
                     }
                 }
         }
@@ -376,6 +372,22 @@ struct ConversationsListView: View {
 
     private var isSearching: Bool {
         !filter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var navigationTitleText: String {
+        router.activeForumParent?.displayTitle ?? "Chats"
+    }
+
+    private func memberSubtitle(for parent: Conversation) -> String {
+        let participants = parent.participantsOrEmpty.map(\.login)
+        if participants.isEmpty {
+            return "Members"
+        }
+        let onlineCount = participants.filter { presence.isOnline($0) }.count
+        if onlineCount > 0 {
+            return "\(participants.count) members · \(onlineCount) online"
+        }
+        return "\(participants.count) members"
     }
 
     private var filteredChats: [Conversation] {
@@ -531,8 +543,7 @@ struct ConversationsListView: View {
             compact: compact
         )
         .transaction { $0.animation = nil }
-        .frame(maxWidth: compact ? 60 : .infinity, alignment: .leading)
-        .clipped()
+        .frame(maxWidth: compact ? 72 : .infinity, alignment: compact ? .center : .leading)
         .contentShape(Rectangle())
         .background(tappedConvoId == convo.id ? Color(.tertiarySystemBackground) : Color.clear)
         .scaleEffect(squeezedConvoId == convo.id ? rowSqueezeFactor(for: convo) : 1)
@@ -784,7 +795,7 @@ struct ConversationsListView: View {
                     }
                     .listStyle(.plain)
                     .macRowListContainer()
-                    .scrollIndicators(.hidden, axes: .vertical)
+                    .scrollIndicators(compact ? .never : .hidden, axes: .vertical)
                     .refreshable {
                         await vm.load()
                         Haptics.impact(.light)
@@ -794,15 +805,48 @@ struct ConversationsListView: View {
             }
             .searchable(text: $filter, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
             .onChange(of: filter) { runSearch($0) }
-            .navigationTitle("Chats")
+            .navigationTitle(navigationTitleText)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showNewChat = true
-                    } label: {
-                        Image(systemName: "square.and.pencil")
+                if let parent = router.activeForumParent {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            router.exitTopicMode()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                        }
+                        .accessibilityLabel("Back to chats")
                     }
-                    .accessibilityLabel("New chat")
+                    ToolbarItem(placement: .principal) {
+                        VStack(spacing: 1) {
+                            Text(parent.displayTitle)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Text(memberSubtitle(for: parent))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Menu {
+                            Button {
+                                showCreateTopic = true
+                            } label: {
+                                Label("New topic", systemImage: "plus")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                        }
+                        .accessibilityLabel("Topics menu")
+                    }
+                } else {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            showNewChat = true
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                        }
+                        .accessibilityLabel("New chat")
+                    }
                 }
             }
             .alert("Delete conversation?", isPresented: Binding(
@@ -821,6 +865,13 @@ struct ConversationsListView: View {
                     Task {
                         await vm.load()
                         openConversation(convo)
+                    }
+                }
+            }
+            .sheet(isPresented: $showCreateTopic) {
+                if let parent = router.activeForumParent {
+                    TopicCreateSheet(parent: parent) { newTopic in
+                        TopicListStore.shared.append(newTopic, parentId: parent.id)
                     }
                 }
             }
@@ -912,11 +963,12 @@ struct ConversationRow: View {
     private var primaryTextColor: Color { isActive ? .white : .primary }
     private var secondaryTextColor: Color { isActive ? .white.opacity(0.85) : .secondary }
 
-    /// Avatar diameter — 44pt on Catalyst (Apple list standard),
-    /// 64pt on iOS for the Telegram-feeling chat-list look.
+    /// Avatar diameter — 50pt on Catalyst (Telegram-feel, slightly bigger
+    /// than HIG's 44pt list-cell default for stronger visual presence in
+    /// the sidebar), 64pt on iOS for the chat-list look.
     private var avatarSize: CGFloat {
         #if targetEnvironment(macCatalyst)
-        return 44
+        return 50
         #else
         return 64
         #endif
@@ -1158,7 +1210,72 @@ struct ConversationRow: View {
     }
 
     var body: some View {
-        regularBody
+        if compact {
+            compactBody
+        } else {
+            regularBody
+        }
+    }
+
+    /// Avatar-only row used when the chats sidebar is narrowed to 60pt
+    /// in topic mode. Renders the same avatar as `regularBody` centered
+    /// in the cell, with a full-cell rounded-rect accent background when
+    /// the row is active (matches the regular row's active treatment),
+    /// and a Telegram-style unread badge at bottom-right.
+    private var compactBody: some View {
+        avatarOnly
+            .overlay(alignment: .bottomTrailing) {
+                if displayedUnread > 0 { compactBadge }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.vertical, 6)
+            .background(compactActiveBackground)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityRowLabel)
+    }
+
+    @ViewBuilder
+    private var avatarOnly: some View {
+        if conversation.isGroup {
+            GroupAvatarView(
+                name: conversation.group_name ?? conversation.displayTitle,
+                avatarURL: conversation.group_avatar_url,
+                groupId: conversation.id,
+                size: avatarSize
+            )
+        } else {
+            AvatarView(
+                url: conversation.displayAvatarURL,
+                size: avatarSize,
+                login: conversation.other_user?.login
+            )
+        }
+    }
+
+    /// Active-row background for compact mode — full-width rounded-rect
+    /// accent fill behind the avatar. No horizontal padding so the pill
+    /// reads clearly wider than the avatar (which would otherwise look
+    /// like a thick halo).
+    @ViewBuilder
+    private var compactActiveBackground: some View {
+        if isActive {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color("AccentColor"))
+                .padding(.vertical, 2)
+        }
+    }
+
+    @ViewBuilder
+    private var compactBadge: some View {
+        let bg: Color = isMuted ? Color(.systemGray) : Color("AccentColor")
+        Text(displayedUnread > 99 ? "99+" : "\(displayedUnread)")
+            .font(.caption2.bold())
+            .foregroundStyle(.white)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 18, minHeight: 18)
+            .background(bg, in: .capsule)
+            .overlay(Capsule().stroke(Color(.systemBackground), lineWidth: 2))
+            .offset(x: 4, y: 4)
     }
 
     private var regularBody: some View {
@@ -1181,7 +1298,7 @@ struct ConversationRow: View {
                 // Row 1: Name + Checkmark + Date
                 HStack(spacing: 4) {
                     Text(conversation.displayTitle)
-                        .font(displayedUnread > 0 ? .headline : .body)
+                        .font(.headline)
                         .foregroundStyle(primaryTextColor)
                         .lineLimit(1)
                     Spacer(minLength: 4)
