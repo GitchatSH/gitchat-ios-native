@@ -380,16 +380,34 @@ struct ChatMessageView: View {
     /// exactly as tall as the content.
     @ViewBuilder
     private func inlineReplyQuote(for reply: ReplyPreview) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if let login = reply.sender_login {
-                Text("@\(login)")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(isMe ? .white : theme.replyAccent)
+        let thumbURL: URL? = {
+            guard let raw = reply.first_image_url, !raw.isEmpty else { return nil }
+            return URL(string: raw)
+        }()
+        let bodyText: String = {
+            if let body = reply.body, !body.isEmpty { return body }
+            // Image-only target: show "Photo" so the snippet line isn't a lonely ellipsis.
+            return thumbURL != nil ? "Photo" : "…"
+        }()
+
+        HStack(spacing: 6) {
+            if let url = thumbURL {
+                CachedAsyncImage(url: url, contentMode: .fill, maxPixelSize: 96)
+                    .frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
             }
-            Text(reply.body ?? "…")
-                .font(.caption)
-                .foregroundStyle(isMe ? .white.opacity(0.85) : .secondary)
-                .lineLimit(2)
+            VStack(alignment: .leading, spacing: 4) {
+                if let login = reply.sender_login {
+                    Text("@\(login)")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(isMe ? .white : theme.replyAccent)
+                }
+                Text(bodyText)
+                    .font(.caption)
+                    .foregroundStyle(isMe ? .white.opacity(0.85) : .secondary)
+                    .italic((reply.body ?? "").isEmpty && thumbURL != nil)
+                    .lineLimit(2)
+            }
         }
         .padding(.leading, 8)
         .padding(.trailing, 12)
