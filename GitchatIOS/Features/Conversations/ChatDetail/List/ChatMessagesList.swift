@@ -367,22 +367,23 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             coord.reconfigure(ids: affected)
         }
 
-        // Keyboard-driven scroll-to-bottom: we used to snap to the
-        // latest message every time the keyboard appeared, but that
-        // hijacked the user's reading position whenever they tapped
-        // into the composer from mid-conversation. Drop the auto-
-        // scroll entirely — the caller bumps `scrollToBottomToken`
-        // explicitly from `onSend`, which is the only time we want
-        // to force the list back to the bottom.
-        //
-        // `keyboard.height` is still tracked here (via `bottomInset`)
-        // because other layout paths may care; `keyboardWasOpen` is
-        // still updated for parity with any future opt-in behaviour.
+        // Keyboard scroll: only snap to bottom when the keyboard JUST
+        // opened AND the user was already parked at the bottom. This
+        // mirrors Telegram/Messages — don't hijack a mid-conversation
+        // reading position, but DO keep the user on the latest message
+        // when they tap into the composer from the bottom.
         let isOpen = bottomInset > 0.5
+        let justOpened = !coord.keyboardWasOpen && isOpen
         if coord.keyboardWasOpen != isOpen {
             coord.keyboardWasOpen = isOpen
         }
         coord.lastBottomInset = bottomInset
+        if justOpened && isAtBottom {
+            DispatchQueue.main.async { [weak tv, weak coord] in
+                guard let tv, let coord else { return }
+                coord.beginAnchoredScrollToBottom(in: tv)
+            }
+        }
 
         // Sync overlay insets for scroll-behind blur.
         // Rotated table: visual-bottom = .top, visual-top = .bottom.
