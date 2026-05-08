@@ -946,6 +946,7 @@ struct ConversationRow: View {
                 CachedAsyncImage(
                     url: url,
                     contentMode: .fill,
+                    fixedHeight: 18,
                     maxPixelSize: 80
                 )
                 .frame(width: 18, height: 18)
@@ -958,11 +959,6 @@ struct ConversationRow: View {
                 Text(systemPreviewText)
                     .font(.subheadline)
                     .foregroundStyle(isActive ? secondaryTextColor : Color(.systemGray2))
-                    .lineLimit(1)
-            } else if conversation.isGroup && isOutgoing {
-                // Group outgoing — preview only, "You" shown on sender line above
-                Text(previewAttributed)
-                    .font(.subheadline)
                     .lineLimit(1)
             } else if conversation.isGroup {
                 Text(previewAttributed)
