@@ -282,11 +282,18 @@ struct ReplyPreview: Codable, Hashable {
     let id: String
     let body: String?
     let sender_login: String?
+    /// URL of the first image attachment of the replied-to message, if any.
+    /// Backend (gitchat-webapp PR #78) emits this so reply previews can render
+    /// a thumbnail beside the snippet — empty body messages with image
+    /// attachments otherwise have nothing to show.
+    let first_image_url: String?
 
     enum CodingKeys: String, CodingKey {
         case id, body
         case sender_login
         case senderLogin
+        case first_image_url
+        case firstImageUrl
     }
 
     init(from decoder: Decoder) throws {
@@ -295,6 +302,8 @@ struct ReplyPreview: Codable, Hashable {
         self.body = try c.decodeIfPresent(String.self, forKey: .body)
         self.sender_login = try c.decodeIfPresent(String.self, forKey: .sender_login)
             ?? c.decodeIfPresent(String.self, forKey: .senderLogin)
+        self.first_image_url = try c.decodeIfPresent(String.self, forKey: .first_image_url)
+            ?? c.decodeIfPresent(String.self, forKey: .firstImageUrl)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -302,6 +311,7 @@ struct ReplyPreview: Codable, Hashable {
         try c.encode(id, forKey: .id)
         try c.encodeIfPresent(body, forKey: .body)
         try c.encodeIfPresent(sender_login, forKey: .sender_login)
+        try c.encodeIfPresent(first_image_url, forKey: .first_image_url)
     }
 }
 
@@ -517,6 +527,20 @@ extension Message {
         guard let date = Cache.iso.date(from: created)
                 ?? Cache.isoBasic.date(from: created) else { return nil }
         return Cache.hhmm.string(from: date)
+    }
+
+    /// First image attachment URL on this message, if any. Used by the
+    /// composer reply bar to render a thumbnail when the user replies to
+    /// an image-only or image-with-caption message.
+    var firstImageAttachmentURL: String? {
+        guard let attachments = attachments else { return nil }
+        for att in attachments {
+            let isImage = (att.mime_type?.hasPrefix("image/") ?? false)
+                || att.type == "image"
+                || att.type == "gif"
+            if isImage, !att.url.isEmpty { return att.url }
+        }
+        return nil
     }
 }
 
