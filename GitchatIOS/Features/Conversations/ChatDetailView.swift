@@ -479,6 +479,17 @@ struct ChatDetailView: View {
         a.onAvatarTap = { login in
             profileRoute = ProfileLoginRoute(login: login)
         }
+        // Smart-route from a tap on the "Forwarded from @login" badge label —
+        // open the existing DM if there is one (Telegram-like jump-back),
+        // otherwise fall through to the profile sheet.
+        a.onForwardSenderTap = { login in
+            if login == AuthStore.shared.login { return } // No-op on self
+            if let dm = ConversationsCache.shared.findDmConversation(otherLogin: login) {
+                AppRouter.shared.openConversation(id: dm.id)
+            } else {
+                profileRoute = ProfileLoginRoute(login: login)
+            }
+        }
         a.onInsertMention = { p in insertMention(p.login) }
         a.onPasteImage = { img in
             guard !showDropConfirm else { return }   // ignore re-paste while sheet is up

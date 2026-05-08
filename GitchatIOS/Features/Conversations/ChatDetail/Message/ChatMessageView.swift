@@ -49,6 +49,10 @@ struct ChatMessageView: View {
     var onAttachmentTap: ((String) -> Void)? = nil
     var onPinTap: (() -> Void)? = nil
     var onAvatarTap: (() -> Void)? = nil
+    /// Tap on the `@<login>` portion of the "Forwarded from …" badge.
+    /// Receives the original sender's login so the host can smart-route
+    /// (existing DM → open it; otherwise → user profile).
+    var onForwardSenderTap: ((String) -> Void)? = nil
     /// Namespace for the shared-element transition from attachment
     /// tile → full-screen image viewer. Passed through from the host
     /// ChatView.
@@ -357,8 +361,20 @@ struct ChatMessageView: View {
         HStack(spacing: 4) {
             Image(systemName: "arrowshape.turn.up.right.fill")
                 .font(.caption2.weight(.bold))
-            Text("Forwarded from @\(login)")
-                .font(.caption2.weight(.semibold))
+            // Two-segment row so only the "@<login>" portion is tappable.
+            // Single Text + .onTapGesture on the whole badge would let users
+            // mis-trigger nav by tapping the "Forwarded from" prefix.
+            HStack(spacing: 0) {
+                Text("Forwarded from ")
+                    .font(.caption2.weight(.semibold))
+                Text("@\(login)")
+                    .font(.caption2.weight(.semibold))
+                    .underline(onForwardSenderTap != nil)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        onForwardSenderTap?(login)
+                    }
+            }
         }
         .foregroundStyle(isMe ? .white.opacity(0.85) : .secondary)
         .padding(.horizontal, 12)

@@ -70,6 +70,9 @@ struct ChatView: View {
         var onAttachmentTap: (Message, String) -> Void = { _, _ in }
         var onPinBadgeTap: (Message) -> Void = { _ in }
         var onAvatarTap: (String) -> Void = { _ in }
+        /// Tap on the @<login> in the "Forwarded from …" badge — host
+        /// resolves the smart route (existing DM → open it; else → profile).
+        var onForwardSenderTap: (String) -> Void = { _ in }
         var onInsertMention: (ConversationParticipant) -> Void = { _ in }
         var onPasteImage: (UIImage) -> Void = { _ in }
         var onMacCatalystSubmit: () -> Void = {}
@@ -473,6 +476,7 @@ struct ChatView: View {
                         onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
                         onPinTap: { actions.onPinBadgeTap(msg) },
                         onAvatarTap: { actions.onAvatarTap(msg.sender) },
+                        onForwardSenderTap: { login in actions.onForwardSenderTap(login) },
                         imageMatchedNS: imageZoomNamespace,
                         showTail: showTail,
                         isGroup: vm.conversation.isGroup,
@@ -574,6 +578,7 @@ private struct GroupedMessageRowInner: View {
                         onAttachmentTap: { url in actions.onAttachmentTap(msg, url) },
                         onPinTap: { actions.onPinBadgeTap(msg) },
                         onAvatarTap: { actions.onAvatarTap(msg.sender) },
+                        onForwardSenderTap: { login in actions.onForwardSenderTap(login) },
                         imageMatchedNS: imageZoomNamespace,
                         showTail: isLast,
                         isGroup: true,
