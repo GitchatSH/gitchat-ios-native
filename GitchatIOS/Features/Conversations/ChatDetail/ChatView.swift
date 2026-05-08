@@ -148,7 +148,7 @@ struct ChatView: View {
                             startPoint: .top,
                             endPoint: .bottom
                         )
-                        .frame(height: composerOverlayHeight * 0.5)
+                        .frame(height: min(composerOverlayHeight * 0.25, 20))
                     }
                 }
 
