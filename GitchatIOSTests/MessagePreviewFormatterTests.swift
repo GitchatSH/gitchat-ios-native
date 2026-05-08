@@ -45,6 +45,24 @@ final class MessagePreviewFormatterTests: XCTestCase {
         )
         let out = MessagePreviewFormatter.format(message: m, isGroup: false, senderLogin: nil)
         XCTAssertEqual(out.text, "📎 report.pdf")
+        XCTAssertNil(out.thumbURL)  // file is not a renderable thumb
+    }
+
+    func test_voiceOnly_dm_returnsVoiceLabel() {
+        let m = makeMessage(content: "", attachments: [att(type: "voice", url: "https://x/v.ogg")])
+        let out = MessagePreviewFormatter.format(message: m, isGroup: false, senderLogin: nil)
+        XCTAssertEqual(out.text, "🎙 Voice message")
+        XCTAssertNil(out.thumbURL)  // voice is not a renderable thumb
+    }
+
+    func test_forward_imageNoCaption_combinedLabel() {
+        let m = makeMessage(
+            content: "> Forwarded from @alice\n\n",
+            attachments: [att(type: "image", url: "https://x/1.jpg", thumbnailUrl: "https://x/1-t.jpg")]
+        )
+        let out = MessagePreviewFormatter.format(message: m, isGroup: false, senderLogin: nil)
+        XCTAssertEqual(out.text, "↪ @alice: 📷 Photo")
+        XCTAssertEqual(out.thumbURL, URL(string: "https://x/1-t.jpg"))
     }
 
     func test_forward_structured_dm_addsArrowPrefix() {

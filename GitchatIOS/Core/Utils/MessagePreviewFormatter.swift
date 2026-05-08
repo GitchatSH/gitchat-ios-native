@@ -10,7 +10,7 @@ import Foundation
 /// DTO field; falls back to parsing the legacy `> Forwarded from @user\n\n`
 /// body prefix so this lands on iOS independently of the backend rollout.
 enum MessagePreviewFormatter {
-    struct Output: Equatable {
+    struct Output: Equatable, Sendable {
         let text: String
         let thumbURL: URL?
     }
@@ -60,7 +60,10 @@ enum MessagePreviewFormatter {
         }
 
         let thumbURL: URL? = {
-            guard let att = message.attachments?.first else { return nil }
+            guard let att = message.attachments?.first,
+                  let type = att.type,
+                  type == "image" || type == "video" || type == "gif"
+            else { return nil }
             if let s = att.thumbnail_url, let u = URL(string: s) { return u }
             if !att.url.isEmpty, let u = URL(string: att.url) { return u }
             return nil
@@ -71,15 +74,16 @@ enum MessagePreviewFormatter {
 
     // MARK: - Legacy forward prefix parsing
 
-    private static let legacyForwardRegex: NSRegularExpression? = try? NSRegularExpression(
-        pattern: #"^(?:>\s+)?Forwarded from @([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?:\n+|$)"#,
-        options: []
+    // Compile-time constant pattern; force-try is intentional —
+    // a regex compile failure here means the source is wrong and must be fixed,
+    // not silently degraded.
+    private static let legacyForwardRegex = try! NSRegularExpression(
+        pattern: #"^(?:>\s+)?Forwarded from @([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))(?:\n+|$)"#
     )
 
     private static func parseLegacyForwardPrefix(_ raw: String) -> (author: String?, rest: String) {
-        guard let regex = legacyForwardRegex else { return (nil, raw) }
         let range = NSRange(raw.startIndex..., in: raw)
-        guard let match = regex.firstMatch(in: raw, range: range), match.numberOfRanges >= 2,
+        guard let match = legacyForwardRegex.firstMatch(in: raw, range: range), match.numberOfRanges >= 2,
               let authorRange = Range(match.range(at: 1), in: raw),
               let fullRange = Range(match.range(at: 0), in: raw) else {
             return (nil, raw)
