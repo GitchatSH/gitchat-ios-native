@@ -25,9 +25,13 @@ final class NotificationService: UNNotificationServiceExtension {
             request,
             with: bestAttemptContent
         ) { [weak self] processed in
+            // Rewrite the body via MessagePreviewFormatter BEFORE
+            // applyCommunicationIntent so the INSendMessageIntent picks up
+            // the formatted text (forward arrow, media label, etc.).
+            let formatted = self?.applyCompactPreview(to: processed) ?? processed
             // Attempt to upgrade to a Communication Notification (big avatar
             // + small app icon) when we have a sender login in the payload.
-            var finalContent = self?.applyCommunicationIntent(to: processed) ?? processed
+            var finalContent = self?.applyCommunicationIntent(to: formatted) ?? formatted
             finalContent = self?.silenceIfMuted(finalContent) ?? finalContent
             contentHandler(finalContent)
         }
@@ -41,6 +45,83 @@ final class NotificationService: UNNotificationServiceExtension {
             )
             contentHandler(bestAttemptContent)
         }
+    }
+
+    /// Rewrite `content.body` via `MessagePreviewFormatter` so the push
+    /// banner matches the in-app chat-list preview (forward arrow, media
+    /// label, group sender prefix). Reads structured fields from the
+    /// OneSignal payload (`forwarded_from_original_author`,
+    /// `attachment_thumb_url`, `attachment_type`, `attachment_filename`)
+    /// and falls back to the formatter's legacy `> Forwarded from @user`
+    /// regex on older payloads.
+    private func applyCompactPreview(to content: UNNotificationContent) -> UNNotificationContent {
+        let userInfo = content.userInfo
+        let custom = (userInfo["custom"] as? [String: Any]) ?? [:]
+        let data = (custom["a"] as? [String: Any]) ?? (userInfo["data"] as? [String: Any]) ?? [:]
+
+        let forwardedFromOriginalAuthor = data["forwarded_from_original_author"] as? String
+        let attachmentThumbUrl = data["attachment_thumb_url"] as? String
+        let attachmentType = data["attachment_type"] as? String
+        let attachmentFilename = data["attachment_filename"] as? String
+        let senderLogin = (data["sender_login"] as? String) ?? (data["actor_login"] as? String)
+        let isGroup = (data["is_group"] as? Bool) == true
+            || (data["is_group"] as? NSNumber)?.boolValue == true
+            || (data["is_group"] as? String) == "true"
+
+        // Synthesize an attachment only when the backend gave us at least one
+        // structured attachment field. The formatter checks `!att.url.isEmpty`
+        // when picking a thumbnail, so feeding it an empty url would be a no-op
+        // that still pays the alloc cost.
+        let attachments: [MessageAttachment]?
+        if attachmentThumbUrl != nil || attachmentType != nil {
+            attachments = [
+                MessageAttachment(
+                    attachment_id: nil,
+                    url: attachmentThumbUrl ?? "",
+                    type: attachmentType,
+                    filename: attachmentFilename,
+                    mime_type: nil,
+                    width: nil,
+                    height: nil,
+                    duration_seconds: nil,
+                    thumbnail_url: attachmentThumbUrl
+                )
+            ]
+        } else {
+            attachments = nil
+        }
+
+        // Throwaway Message — the formatter only reads `content`, `attachments`,
+        // and `forwarded_from_original_author`. Everything else is filler.
+        let synthetic = Message(
+            id: receivedRequest?.identifier ?? UUID().uuidString,
+            conversation_id: data["conversation_id"] as? String,
+            sender: senderLogin ?? "",
+            sender_avatar: nil,
+            content: content.body,
+            created_at: nil,
+            edited_at: nil,
+            reactions: nil,
+            attachment_url: nil,
+            type: nil,
+            reply_to_id: nil,
+            attachments: attachments,
+            forwarded_from_original_author: forwardedFromOriginalAuthor
+        )
+
+        let out = MessagePreviewFormatter.format(
+            message: synthetic,
+            isGroup: isGroup,
+            senderLogin: isGroup ? senderLogin : nil
+        )
+
+        // Only rewrite when the formatter actually changed something, and
+        // never blank out a backend-provided body with an empty result.
+        guard !out.text.isEmpty, out.text != content.body,
+              let mutable = content.mutableCopy() as? UNMutableNotificationContent
+        else { return content }
+        mutable.body = out.text
+        return mutable
     }
 
     /// Silence lockscreen / banner sound for pushes belonging to a muted
