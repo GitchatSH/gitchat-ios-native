@@ -493,7 +493,9 @@ final class OutboxStore: ObservableObject {
                 serverMsg = try await APIClient.shared.sendMessage(
                     at: TopicEndpoints.sendMessage(parentId: parentID, topicId: topicID),
                     body: p.content,
-                    replyTo: p.replyToID
+                    attachments: attachmentDicts,
+                    replyToID: p.replyToID,
+                    clientMessageID: p.clientMessageID
                 )
             } else {
                 serverMsg = try await api.sendMessage(

@@ -107,26 +107,42 @@ extension APIClient {
         return try await request(path, query: q)
     }
 
-    /// Path-based variant of sendMessage. Use this when the endpoint isn't
-    /// /messages/conversations/{id} — e.g. topic message paths.
-    func sendMessage(at path: String,
-                     body: String,
-                     replyTo: String? = nil,
-                     attachmentURL: String? = nil,
-                     attachmentURLs: [String]? = nil) async throws -> Message {
-        struct Body: Encodable {
-            let body: String
-            let reply_to_id: String?
-            let attachments: [[String: String]]?
+    /// Path-based variant of sendMessage with full attachment payload +
+    /// idempotency. Mirrors the conversationID-keyed protocol method in
+    /// `APIClient+Protocol.swift` but lets the caller supply an arbitrary
+    /// endpoint path — used for topic message sends, where the URL has the
+    /// `/topics/{topicId}` segment that the protocol method can't express.
+    func sendMessage(
+        at path: String,
+        body: String,
+        attachments: [[String: Any]],
+        replyToID: String?,
+        clientMessageID: String?
+    ) async throws -> Message {
+        var jsonObj: [String: Any] = ["body": body]
+        if let replyToID { jsonObj["reply_to_id"] = replyToID }
+        if let clientMessageID { jsonObj["client_message_id"] = clientMessageID }
+        let validAttachments = attachments.filter { ($0["url"] as? String) != nil }
+        if !validAttachments.isEmpty { jsonObj["attachments"] = validAttachments }
+
+        let jsonData = try JSONSerialization.data(withJSONObject: jsonObj)
+
+        var req = URLRequest(url: Config.apiBaseURL.appendingPathComponent(path))
+        req.httpMethod = "POST"
+        guard let token = await AuthStore.shared.accessToken else { throw APIError.notAuthenticated }
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = jsonData
+
+        let (data, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse else { throw APIError.http(-1, nil) }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.http(http.statusCode, String(data: data, encoding: .utf8))
         }
-        var attachments: [[String: String]]? = nil
-        if let many = attachmentURLs, !many.isEmpty {
-            attachments = many.map { ["url": $0] }
-        } else if let single = attachmentURL {
-            attachments = [["url": single]]
+        if let wrapped = try? decoder.decode(APIEnvelope<Message>.self, from: data), let inner = wrapped.data {
+            return inner
         }
-        let req = Body(body: body, reply_to_id: replyTo, attachments: attachments)
-        return try await request(path, method: "POST", body: req)
+        return try decoder.decode(Message.self, from: data)
     }
 }
 
