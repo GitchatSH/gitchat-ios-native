@@ -861,21 +861,6 @@ struct ConversationRow: View {
         MessageCache.shared.get(conversation.id)
     }
 
-    /// Pull the most recent attachment URL out of the message cache so
-    /// "📷 Photo" preview rows can show an actual thumbnail instead of
-    /// the camera emoji.
-    private var lastPhotoURL: URL? {
-        guard let messages = cachedEntry?.messages,
-              let last = messages.last else { return nil }
-        if let urlString = last.attachments?.first?.url, let url = URL(string: urlString) {
-            return url
-        }
-        if let urlString = last.attachment_url, let url = URL(string: urlString) {
-            return url
-        }
-        return nil
-    }
-
     private var lastSenderLogin: String? {
         guard conversation.isGroup else { return nil }
         if let cached = cachedEntry?.messages,
@@ -885,17 +870,26 @@ struct ConversationRow: View {
         return conversation.last_message?.sender
     }
 
-    private var previewWithoutPhotoEmoji: String {
-        let text = conversation.previewText ?? ""
-        guard lastPhotoURL != nil else { return text }
-        // Drop the leading "📷 Photo" / "📎 …" / etc when we have a real
-        // thumbnail next to it.
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        let prefixes = ["📷 Photo", "🎥 Video", "📎 Attachment", "📎 Shared a post", "📎 Shared an event"]
-        for p in prefixes where trimmed == p {
-            return ""
+    /// Source of truth for the preview line's text + inline thumbnail URL.
+    /// Delegates to the shared `MessagePreviewFormatter` so the chat-list and
+    /// the OneSignal Notification Service Extension agree on what a message
+    /// looks like in compact form.
+    ///
+    /// `senderLogin` is intentionally `nil` for group rows because the row UI
+    /// renders the sender on a separate line above the preview (see
+    /// `lastSenderLogin` / "You" branches in `body`); passing it here would
+    /// double up the `bob: …` prefix.
+    private var formattedPreview: MessagePreviewFormatter.Output {
+        let last = cachedEntry?.messages.last(where: { $0.type == nil || $0.type == "user" })
+            ?? conversation.last_message
+        guard let last else {
+            return .init(text: conversation.previewText ?? "", thumbURL: nil)
         }
-        return text
+        return MessagePreviewFormatter.format(
+            message: last,
+            isGroup: conversation.isGroup,
+            senderLogin: nil
+        )
     }
 
     private var isLastMessageUnsent: Bool {
@@ -935,7 +929,7 @@ struct ConversationRow: View {
     /// Compose the preview line with optional topic chip prefix.
     private var previewAttributed: AttributedString {
         var line = topicChipPrefix
-        var body = AttributedString(previewWithoutPhotoEmoji)
+        var body = AttributedString(formattedPreview.text)
         body.foregroundColor = secondaryTextColor
         line += body
         return line
@@ -943,27 +937,41 @@ struct ConversationRow: View {
 
     @ViewBuilder
     private var previewContent: some View {
-        if isLastMessageSystem {
-            // System / deleted message — italic gray (white when row is active)
-            Text(systemPreviewText)
-                .font(.subheadline)
-                .foregroundStyle(isActive ? secondaryTextColor : Color(.systemGray2))
-                .lineLimit(1)
-        } else if conversation.isGroup && isOutgoing {
-            // Group outgoing — preview only, "You" shown on sender line above
-            Text(previewAttributed)
-                .font(.subheadline)
-                .lineLimit(1)
-        } else if conversation.isGroup {
-            Text(previewAttributed)
-                .font(.subheadline)
-                .lineLimit(1)
-        } else {
-            // DM — allow 2 lines
-            Text(previewWithoutPhotoEmoji)
-                .font(.subheadline)
-                .foregroundStyle(secondaryTextColor)
-                .lineLimit(2)
+        // Inline 18pt thumbnail for image/video/gif messages — sits next to the
+        // text instead of on its own row. System / deleted messages never show
+        // a thumbnail (formatter doesn't surface one for them, but guard
+        // explicitly so future formatter changes can't sneak one through).
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if !isLastMessageSystem, let url = formattedPreview.thumbURL {
+                CachedAsyncImage(
+                    url: url,
+                    contentMode: .fill,
+                    fixedHeight: 18,
+                    maxPixelSize: 80
+                )
+                .frame(width: 18, height: 18)
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                .alignmentGuide(.firstTextBaseline) { d in d[.bottom] - 3 }
+            }
+
+            if isLastMessageSystem {
+                // System / deleted message — italic gray (white when row is active)
+                Text(systemPreviewText)
+                    .font(.subheadline)
+                    .foregroundStyle(isActive ? secondaryTextColor : Color(.systemGray2))
+                    .lineLimit(1)
+            } else if conversation.isGroup {
+                Text(previewAttributed)
+                    .font(.subheadline)
+                    .lineLimit(1)
+            } else {
+                // DM — allow 2 lines. Skip the topic-chip prefix (DMs don't
+                // have topics) so use formattedPreview.text directly.
+                Text(formattedPreview.text)
+                    .font(.subheadline)
+                    .foregroundStyle(secondaryTextColor)
+                    .lineLimit(2)
+            }
         }
     }
 
@@ -1061,7 +1069,10 @@ struct ConversationRow: View {
         if let draft = draftStore.draft(for: conversation.id) {
             parts.append("Draft: \(draft)")
         } else {
-            let preview = conversation.previewText ?? ""
+            // Use the same source the sighted user sees so the screen-reader
+            // announcement matches the visible preview line (incl. media labels
+            // like "📷 Photo", forward attribution, etc.).
+            let preview = formattedPreview.text
             if !preview.isEmpty { parts.append(preview) }
         }
 
@@ -1138,15 +1149,6 @@ struct ConversationRow: View {
                                 .lineLimit(1)
                                 .transition(.opacity.animation(.easeInOut(duration: 0.2)))
                             } else {
-                                if let thumbURL = lastPhotoURL {
-                                    CachedAsyncImage(
-                                        url: thumbURL,
-                                        contentMode: .fill,
-                                        maxPixelSize: 80
-                                    )
-                                    .frame(width: 22, height: 22)
-                                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                                }
                                 previewContent
                             }
                         }

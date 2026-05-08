@@ -25,9 +25,13 @@ final class NotificationService: UNNotificationServiceExtension {
             request,
             with: bestAttemptContent
         ) { [weak self] processed in
+            // Rewrite the body via MessagePreviewFormatter BEFORE
+            // applyCommunicationIntent so the INSendMessageIntent picks up
+            // the formatted text (forward arrow, media label, etc.).
+            let formatted = self?.applyCompactPreview(to: processed) ?? processed
             // Attempt to upgrade to a Communication Notification (big avatar
             // + small app icon) when we have a sender login in the payload.
-            var finalContent = self?.applyCommunicationIntent(to: processed) ?? processed
+            var finalContent = self?.applyCommunicationIntent(to: formatted) ?? formatted
             finalContent = self?.silenceIfMuted(finalContent) ?? finalContent
             contentHandler(finalContent)
         }
@@ -41,6 +45,24 @@ final class NotificationService: UNNotificationServiceExtension {
             )
             contentHandler(bestAttemptContent)
         }
+    }
+
+    /// Rewrite `content.body` via `MessagePreviewFormatter` so the push
+    /// banner matches the in-app chat-list preview (forward arrow, media
+    /// label, group sender prefix). Pure extraction + synthesis lives in
+    /// `CompactPreviewPayload.formattedBody` so it's unit-testable without
+    /// the OneSignal SDK or `UNNotificationContent`. This wrapper just
+    /// applies the formatter's output to a mutable copy of `content`.
+    private func applyCompactPreview(to content: UNNotificationContent) -> UNNotificationContent {
+        guard let formatted = CompactPreviewPayload.formattedBody(
+            userInfo: content.userInfo,
+            currentBody: content.body
+        ) else { return content }
+        guard let mutable = content.mutableCopy() as? UNMutableNotificationContent else {
+            return content
+        }
+        mutable.body = formatted
+        return mutable
     }
 
     /// Silence lockscreen / banner sound for pushes belonging to a muted

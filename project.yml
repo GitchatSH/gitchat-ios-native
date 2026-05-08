@@ -177,6 +177,9 @@ targets:
     sources:
       - path: OneSignalNotificationServiceExtension
       - path: GitchatIOS/Core/MutedConversationsStore.swift
+      - path: GitchatIOS/Core/Utils/MessagePreviewFormatter.swift
+      - path: GitchatIOS/Core/Utils/CompactPreviewPayload.swift
+      - path: GitchatIOS/Core/Models/Models.swift
     dependencies:
       - package: OneSignalXCFramework
         product: OneSignalExtension
