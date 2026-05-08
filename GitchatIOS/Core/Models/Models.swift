@@ -353,6 +353,11 @@ struct Message: Codable, Identifiable, Hashable {
     let reply_to_id: String?
     let reply: ReplyPreview?
     let topicId: String?
+    /// Login of the original author when this message is a forward.
+    /// Preferred over parsing the legacy `> Forwarded from @user\n\n`
+    /// body prefix; backend support is rolling out — fallback parsing
+    /// in MessagePreviewFormatter keeps older payloads working.
+    let forwarded_from_original_author: String?
 
     // Decode defensively: backend may send `sender` as a string OR as an
     // object `{ login, avatar_url }`, and may use slightly different keys.
@@ -370,6 +375,7 @@ struct Message: Codable, Identifiable, Hashable {
         case reply_to_id, replyToId
         case body
         case topicId
+        case forwarded_from_original_author
     }
 
     private struct SenderObject: Decodable {
@@ -394,7 +400,8 @@ struct Message: Codable, Identifiable, Hashable {
         attachments: [MessageAttachment]? = nil,
         unsent_at: String? = nil,
         reactionRows: [RawReactionRow]? = nil,
-        topicId: String? = nil
+        topicId: String? = nil,
+        forwarded_from_original_author: String? = nil
     ) {
         self.id = id
         self.client_message_id = client_message_id
@@ -413,6 +420,7 @@ struct Message: Codable, Identifiable, Hashable {
         self.reply_to_id = reply_to_id
         self.reply = reply
         self.topicId = topicId
+        self.forwarded_from_original_author = forwarded_from_original_author
     }
 
     init(from decoder: Decoder) throws {
@@ -479,6 +487,9 @@ struct Message: Codable, Identifiable, Hashable {
             ?? c.decodeIfPresent(String.self, forKey: .replyToId)
         self.reply = try? c.decodeIfPresent(ReplyPreview.self, forKey: .reply)
         self.topicId = try? c.decodeIfPresent(String.self, forKey: .topicId)
+        self.forwarded_from_original_author = try c.decodeIfPresent(
+            String.self, forKey: .forwarded_from_original_author
+        )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -499,6 +510,7 @@ struct Message: Codable, Identifiable, Hashable {
         try c.encodeIfPresent(reply_to_id, forKey: .reply_to_id)
         try c.encodeIfPresent(reply, forKey: .reply)
         try c.encodeIfPresent(topicId, forKey: .topicId)
+        try c.encodeIfPresent(forwarded_from_original_author, forKey: .forwarded_from_original_author)
     }
 }
 
@@ -738,53 +750,9 @@ struct PresenceResponse: Decodable {
     let presence: [String: String?]
 }
 
-// MARK: - Optimistic message factory
-
-extension Message {
-    /// Creates a local-only optimistic Message for immediate UI display
-    /// before the server confirms delivery. id = "local-<cmid>",
-    /// client_message_id = cmid. Used by ChatViewModel.send(content:attachments:replyTo:).
-    static func optimistic(
-        clientMessageID: String,
-        conversationID: String,
-        sender: String,
-        content: String,
-        attachments: [PendingAttachment]
-    ) -> Message {
-        let localAttachments: [MessageAttachment]? = attachments.isEmpty ? nil :
-            attachments.map { att in
-                MessageAttachment(
-                    attachment_id: att.clientAttachmentID,
-                    url: "",
-                    type: att.mimeType.hasPrefix("image/") ? "image" : "file",
-                    filename: nil,
-                    mime_type: att.mimeType,
-                    width: att.width,
-                    height: att.height,
-                    duration_seconds: nil,
-                    thumbnail_url: nil
-                )
-            }
-        return Message(
-            id: "local-\(clientMessageID)",
-            client_message_id: clientMessageID,
-            conversation_id: conversationID,
-            sender: sender,
-            sender_avatar: nil,
-            content: content,
-            created_at: ISO8601DateFormatter().string(from: Date()),
-            edited_at: nil,
-            reactions: nil,
-            attachment_url: nil,
-            type: "user",
-            reply_to_id: nil,
-            reply: nil,
-            attachments: localAttachments,
-            unsent_at: nil,
-            reactionRows: nil
-        )
-    }
-}
+// Optimistic message factory moved to Message+Optimistic.swift so that
+// Models.swift can be linked into the OneSignal NSE target without
+// pulling in `PendingAttachment` (which lives in the outbox/UI layer).
 
 // MARK: - Test fixtures (DEBUG only)
 

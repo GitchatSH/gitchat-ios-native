@@ -9,7 +9,9 @@ extension Message {
         clientMessageID: String? = nil,
         conversationID: String = "c1",
         sender: String = "alice",
-        content: String = "hi"
+        content: String = "hi",
+        attachments: [MessageAttachment]? = nil,
+        forwardedFromOriginalAuthor: String? = nil
     ) -> Message {
         Message(
             id: id,
@@ -25,9 +27,11 @@ extension Message {
             type: "user",
             reply_to_id: nil,
             reply: nil,
-            attachments: nil,
+            attachments: attachments,
             unsent_at: nil,
-            reactionRows: nil
+            reactionRows: nil,
+            topicId: nil,
+            forwarded_from_original_author: forwardedFromOriginalAuthor
         )
     }
 }
