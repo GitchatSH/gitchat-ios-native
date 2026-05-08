@@ -40,6 +40,15 @@ final class ConversationsCache {
         get()?.first(where: { $0.id == id })
     }
 
+    /// Return the existing 1-on-1 DM with the given other-user login, or nil
+    /// if none. Used by the "tap forward sender" smart route to jump directly
+    /// to a known DM instead of dropping the user on a profile screen.
+    func findDmConversation(otherLogin: String) -> Conversation? {
+        get()?.first(where: { conv in
+            !conv.isGroup && conv.other_user?.login == otherLogin
+        })
+    }
+
     /// Insert or replace a conversation in the cache (matched by id).
     func upsert(_ conversation: Conversation) {
         var list = get() ?? []
