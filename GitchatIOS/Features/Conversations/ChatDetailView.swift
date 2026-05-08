@@ -479,12 +479,18 @@ struct ChatDetailView: View {
         a.onAvatarTap = { login in
             profileRoute = ProfileLoginRoute(login: login)
         }
-        // Smart-route from a tap on the "Forwarded from @login" badge label —
-        // open the existing DM if there is one (Telegram-like jump-back),
-        // otherwise fall through to the profile sheet.
+        // Smart-route from a tap on the "Forwarded from @login" badge label.
+        // Three cases:
+        //   1. Already inside the DM with this login → AppRouter.openConversation
+        //      would redirect to the same screen (visible no-op). Show the
+        //      profile sheet instead so the tap always produces feedback.
+        //   2. Existing DM (different conversation) → open it.
+        //   3. No prior DM → profile sheet (its "Message" CTA respects the
+        //      5A follow-gate).
         a.onForwardSenderTap = { login in
             if login == AuthStore.shared.login { return } // No-op on self
-            if let dm = ConversationsCache.shared.findDmConversation(otherLogin: login) {
+            if let dm = ConversationsCache.shared.findDmConversation(otherLogin: login),
+               dm.id != vm.conversation.id {
                 AppRouter.shared.openConversation(id: dm.id)
             } else {
                 profileRoute = ProfileLoginRoute(login: login)
