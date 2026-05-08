@@ -45,6 +45,7 @@ enum MessagePreviewFormatter {
             switch firstAttachment.type ?? "" {
             case "image": return "📷 Photo"
             case "video": return "🎥 Video"
+            case "gif":   return "🎞 GIF"
             case "voice": return "🎙 Voice message"
             case "file":  return "📎 \(firstAttachment.filename ?? "File")"
             default:      return bodyAfterForward

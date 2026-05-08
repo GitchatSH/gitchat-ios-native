@@ -55,6 +55,13 @@ final class MessagePreviewFormatterTests: XCTestCase {
         XCTAssertNil(out.thumbURL)  // voice is not a renderable thumb
     }
 
+    func test_gifOnly_dm_returnsGifLabel() {
+        let m = makeMessage(content: "", attachments: [att(type: "gif", url: "https://x/g.gif", thumbnailUrl: "https://x/g-t.jpg")])
+        let out = MessagePreviewFormatter.format(message: m, isGroup: false, senderLogin: nil)
+        XCTAssertEqual(out.text, "🎞 GIF")
+        XCTAssertEqual(out.thumbURL, URL(string: "https://x/g-t.jpg"))
+    }
+
     func test_forward_imageNoCaption_combinedLabel() {
         let m = makeMessage(
             content: "> Forwarded from @alice\n\n",
