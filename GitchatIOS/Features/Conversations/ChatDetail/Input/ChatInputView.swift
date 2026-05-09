@@ -54,7 +54,7 @@ struct ChatInputView: View {
         // Whole composer as one Tahoe-style floating pill, matching
         // `MacBottomNav` inner/outer padding so sidebar nav + detail
         // composer sit level on the same horizontal row.
-        HStack(spacing: 4) {
+        HStack(alignment: .bottom, spacing: 4) {
             attachButton
             textField
             sendButton
