@@ -40,6 +40,8 @@ struct PasteableTextField: UIViewRepresentable {
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
         tv.isScrollEnabled = true
+        tv.showsVerticalScrollIndicator = false
+        tv.showsHorizontalScrollIndicator = false
         tv.focusEffect = nil
         tv.returnKeyType = .default
         tv.text = text

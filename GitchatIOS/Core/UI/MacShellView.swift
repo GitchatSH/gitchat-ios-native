@@ -20,6 +20,15 @@ struct MacShellView: View {
                 detailPanel
             }
             .id(detailIdentity)
+            .onReceive(TopicListStore.shared.objectWillChange) { _ in
+                guard let active = router.selectedTopic else { return }
+                let topics = TopicListStore.shared.topics(forParent: active.parent.id)
+                if !topics.contains(where: { $0.id == active.topic.id }) {
+                    ToastCenter.shared.show(.info, "Topic archived",
+                                            "It was archived by another member")
+                    router.exitTopicMode()
+                }
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .background(macTabShortcuts)
@@ -35,6 +44,11 @@ struct MacShellView: View {
         let tab = router.selectedTab
         let convoId = router.selectedConversation?.id ?? "none"
         let profile = router.selectedProfile ?? "none"
+        // Note: topic switches don't go into the identity here — the inner
+        // ChatDetailView in detailPanel has its own .id("topic-...") that
+        // rebuilds per-topic without tearing down the surrounding stack.
+        // Letting this identity bypass topic changes lets the .transition
+        // on the detail Group fire (move + opacity) on topic switches.
         return "tab-\(tab)-profile-\(profile)-convo-\(convoId)"
     }
 
@@ -56,7 +70,12 @@ struct MacShellView: View {
     @ViewBuilder
     private var currentTabSidebar: some View {
         switch router.selectedTab {
-        case 0: ConversationsListView()
+        case 0:
+            // ConversationsListView itself splits the body into compact
+            // chats column + topic list when `activeForumParent` is set,
+            // so chrome (`.searchable`, `.navigationTitle`, `.toolbar`)
+            // remains attached at full sidebar width.
+            ConversationsListView(compact: router.activeForumParent != nil)
         case 1: DiscoverView()
         case 2: NotificationsView()
         case 3: FollowingView()
@@ -67,17 +86,23 @@ struct MacShellView: View {
 
     @ViewBuilder
     private var detailPanel: some View {
-        if let login = router.selectedProfile {
-            ProfileView(login: login)
-        } else if let convo = router.selectedConversation {
-            ChatDetailView(conversation: convo)
-        } else {
-            ContentUnavailableCompat(
-                title: "Select a conversation",
-                systemImage: "bubble.left.and.bubble.right",
-                description: "Pick a chat from the sidebar to start reading."
-            )
+        Group {
+            if let login = router.selectedProfile {
+                ProfileView(login: login)
+            } else if let target = router.selectedTopic {
+                ChatDetailView(conversation: target.parent, initialTopic: target.topic)
+                    .id("topic-\(target.topic.id)")
+            } else if let convo = router.selectedConversation {
+                ChatDetailView(conversation: convo)
+            } else {
+                ContentUnavailableCompat(
+                    title: "Select a conversation",
+                    systemImage: "bubble.left.and.bubble.right",
+                    description: "Pick a chat from the sidebar to start reading."
+                )
+            }
         }
+        .transition(.opacity.combined(with: .move(edge: .trailing)))
     }
 
     /// Hidden buttons that bind ⌘1–⌘5 to tab indices.

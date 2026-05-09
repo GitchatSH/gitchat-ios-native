@@ -46,7 +46,6 @@ struct ChatDetailView: View {
     @State private var reportDetail: String = ""
     @State private var showReportConfirm = false
     @State private var resolvedTarget: ChatTarget? = nil
-    @State private var showTopicSheet = false
     @State private var composerVisible = true
     @State private var isAtBottom: Bool = true
     @State private var scrollToBottomToken: Int = 0
@@ -77,8 +76,13 @@ struct ChatDetailView: View {
     /// `navigationDestination(item:)`.
     @Namespace private var imageZoomNamespace
 
-    init(conversation: Conversation) {
+    init(conversation: Conversation, initialTopic: Topic? = nil) {
         _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
+        if let topic = initialTopic {
+            // Pre-seed resolvedTarget so resolveTarget()'s "if resolvedTarget == nil"
+            // guard skips the General-by-default path, honoring the caller's pick.
+            _resolvedTarget = State(initialValue: .topic(topic, parent: conversation))
+        }
     }
 
     // MARK: - Derived state
@@ -158,23 +162,6 @@ struct ChatDetailView: View {
             }
         }
         .task(id: vm.conversation.id) { await resolveTarget() }
-        #if !targetEnvironment(macCatalyst)
-        .sheet(isPresented: $showTopicSheet) {
-            if case .topic(_, let parent) = resolvedTarget {
-                TopicListSheet(
-                    parent: parent,
-                    activeTopicId: resolvedTarget?.conversationId,
-                    onPickTopic: { picked in
-                        vm.setTarget(.topic(picked, parent: parent))
-                        resolvedTarget = .topic(picked, parent: parent)
-                        showTopicSheet = false
-                    }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
-        }
-        #endif
         .task { await onAppearTask() }
         .onAppear {
             if let mid = router.pendingMessageId {
@@ -292,21 +279,6 @@ struct ChatDetailView: View {
         )
         .modifier(CatalystDropModifier(isDragOver: $isDragOver, dragOverlay: dragOverlay, onDrop: handleDrop))
         .sheet(isPresented: $showDropConfirm) { dropPreviewSheet }
-        #if targetEnvironment(macCatalyst)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if vm.conversation.hasTopicsEnabled,
-               case .topic(_, let parent) = resolvedTarget {
-                TopicTabsStrip(
-                    parent: parent,
-                    activeTopicId: resolvedTarget?.conversationId,
-                    onPickTopic: { picked in
-                        vm.setTarget(.topic(picked, parent: parent))
-                        resolvedTarget = .topic(picked, parent: parent)
-                    }
-                )
-            }
-        }
-        #endif
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
@@ -319,7 +291,9 @@ struct ChatDetailView: View {
                     vm: vm,
                     onTap: {
                         if case .topic = vm.target {
-                            showTopicSheet = true
+                            #if !targetEnvironment(macCatalyst)
+                            dismiss()
+                            #endif
                         } else if vm.conversation.isGroup {
                             showMembers = true
                         }
@@ -528,7 +502,7 @@ struct ChatDetailView: View {
         a.onBack = { dismiss() }
         a.onHeaderTap = {
             if case .topic = vm.target {
-                showTopicSheet = true
+                // No-op on Catalyst — topic switching is via the sidebar.
             } else if vm.conversation.isGroup {
                 showMembers = true
             }

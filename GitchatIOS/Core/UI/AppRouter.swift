@@ -1,5 +1,24 @@
 import SwiftUI
 
+/// Sidebar `NavigationStack` route used on Mac Catalyst when the user
+/// enters topic mode for a parent group conversation.
+struct TopicSidebarRoute: Hashable {
+    let parent: Conversation
+}
+
+/// Route used on iOS to push a topic chat from the topic list view.
+struct TopicChatRoute: Hashable {
+    let topic: Topic
+    let parent: Conversation
+}
+
+/// Active topic target. Wraps the (topic, parent) pair so SwiftUI can
+/// diff the detail panel cleanly.
+struct TopicTarget: Equatable {
+    let topic: Topic
+    let parent: Conversation
+}
+
 /// Shared global router used for external-navigation events like push
 /// notification taps.
 @MainActor
@@ -13,6 +32,13 @@ final class AppRouter: ObservableObject {
             // jumps to a different tab so the detail panel snaps back to
             // the sticky chat (or placeholder) for that context.
             if oldValue != selectedTab { selectedProfile = nil }
+            // Topic mode is bound to the Chats tab. Leaving Chats resets
+            // the topic sidebar stack so returning lands on chats list.
+            if oldValue != selectedTab && oldValue == 0 {
+                activeForumParent = nil
+                topicSidebarPath = NavigationPath()
+                selectedTopic = nil
+            }
         }
     }
 
@@ -49,6 +75,34 @@ final class AppRouter: ObservableObject {
     /// `InvitePreviewSheet`. Set from the `gitchat://invite/<code>`
     /// deep-link handler.
     @Published var pendingInviteCode: String?
+
+    /// Catalyst sidebar `NavigationStack` path. Empty = chats list shown.
+    /// One element = topic list pushed for that parent.
+    @Published var topicSidebarPath: NavigationPath = NavigationPath()
+
+    /// The forum group the Catalyst sidebar has collapsed into.
+    /// Independent of `selectedTopic` so the UI can transition to topic
+    /// mode immediately, even before topics finish loading. `nil` = chats
+    /// list at full width; non-nil = sidebar collapsed to 60pt + topic
+    /// list rendered alongside.
+    @Published var activeForumParent: Conversation? = nil
+
+    /// What the Catalyst detail panel renders while the user is in topic
+    /// mode. `nil` = fall back to placeholder / `selectedConversation`.
+    @Published var selectedTopic: TopicTarget? = nil {
+        didSet {
+            // Picking a topic clears any sticky chat / profile preview so
+            // the detail panel actually displays the topic chat.
+            if selectedTopic != nil {
+                selectedConversation = nil
+                selectedProfile = nil
+            }
+        }
+    }
+
+    /// In-memory dict of last-picked topic per parent for the current
+    /// session. Not persisted across launches.
+    private(set) var activeTopicByParent: [String: String] = [:]
 
     private init() {
         // Allow UI tests to seed an invite code before any view mounts —
@@ -130,5 +184,71 @@ final class AppRouter: ObservableObject {
 
     func openProfile(login: String) {
         pendingProfileLogin = login
+    }
+
+    /// Collapses the Catalyst sidebar into topic mode for `parent`. Sets
+    /// `activeForumParent` immediately so the UI transitions even before
+    /// topics finish loading; `selectedTopic` is then resolved (best-effort)
+    /// from whatever is in `TopicListStore` right now. The sidebar's
+    /// `TopicListContent.task` will fetch fresh topics on appearance and
+    /// callers can pick a topic to update `selectedTopic` afterwards.
+    func enterTopicMode(parent: Conversation) {
+        activeForumParent = parent
+        topicSidebarPath.append(TopicSidebarRoute(parent: parent))
+        if let resolved = resolveActiveTopic(parent: parent) {
+            selectedTopic = TopicTarget(topic: resolved, parent: parent)
+        }
+        // If store is empty for this parent, leave selectedTopic alone —
+        // the topic-list view will fetch and `pickTopic` will fire.
+    }
+
+    /// Records and renders the user's pick. Idempotent.
+    func pickTopic(_ topic: Topic, in parent: Conversation) {
+        activeTopicByParent[parent.id] = topic.id
+        selectedTopic = TopicTarget(topic: topic, parent: parent)
+    }
+
+    /// Pops the sidebar back to the chats list and clears the active
+    /// topic. Detail panel snaps to the placeholder.
+    func exitTopicMode() {
+        activeForumParent = nil
+        topicSidebarPath = NavigationPath()
+        selectedTopic = nil
+    }
+
+    /// Returns the topic that should be rendered when entering topic mode.
+    /// Order: previously-picked → general → first.
+    private func resolveActiveTopic(parent: Conversation) -> Topic? {
+        let topics = TopicListStore.shared.topics(forParent: parent.id)
+        if let id = activeTopicByParent[parent.id],
+           let t = topics.first(where: { $0.id == id }) {
+            return t
+        }
+        if let general = topics.first(where: { $0.is_general }) {
+            return general
+        }
+        return topics.first
+    }
+
+    /// Picks a chats-list conversation while the user is in topic mode.
+    /// Forum groups swap topic list; non-forum chats exit topic mode.
+    func switchToConversation(_ convo: Conversation) {
+        // Same-target tap: no-op to avoid flicker.
+        if convo.hasTopicsEnabled, selectedTopic?.parent.id == convo.id {
+            return
+        }
+        if !convo.hasTopicsEnabled, selectedConversation?.id == convo.id, selectedTopic == nil {
+            return
+        }
+
+        if convo.hasTopicsEnabled {
+            // Reset path then re-enter topic mode for the new parent.
+            // Single-element invariant per topicSidebarPath doc-comment.
+            topicSidebarPath = NavigationPath()
+            enterTopicMode(parent: convo)
+        } else {
+            exitTopicMode()
+            selectedConversation = convo
+        }
     }
 }
