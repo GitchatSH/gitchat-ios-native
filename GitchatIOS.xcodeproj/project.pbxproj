@@ -193,6 +193,7 @@
 		D2745DCC01B9FB447C2F6ABA /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E6C6D62D2207B8EF522F851 /* SettingsView.swift */; };
 		D279CA272EEC0D5FBC86177F /* ChatDetailViewBindings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F34C94DA0D06E14B5CFA935 /* ChatDetailViewBindings.swift */; };
 		D27DD02D4AA56A1A5EC1F58D /* ChatInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B2D9E43399F860C5B165A48 /* ChatInputView.swift */; };
+		D28168F040A59589B6F05789 /* MessagesResponseDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E215A279A59A1CF086ECAA /* MessagesResponseDecodingTests.swift */; };
 		D30E6486619F0C0E09756908 /* APIClientTopicSendMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 990530886C61483238ADFE5C /* APIClientTopicSendMessageTests.swift */; };
 		D3A3045A0F089C628A6E343D /* GitchatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE08A0DE3086C45434C3F914 /* GitchatApp.swift */; };
 		D4330533AA0D2636297E366E /* TopicSocketEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B26985510AA4D86C29D2DF8 /* TopicSocketEvent.swift */; };
@@ -469,6 +470,7 @@
 		D1AC72B0B806B50EB64E82E8 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		D2053D2F18EEE53949C1F3DB /* DiscoverPeopleList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverPeopleList.swift; sourceTree = "<group>"; };
 		D2FDD46F7AAB3B78242FF13A /* HideScrollIndicators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HideScrollIndicators.swift; sourceTree = "<group>"; };
+		D3E215A279A59A1CF086ECAA /* MessagesResponseDecodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessagesResponseDecodingTests.swift; sourceTree = "<group>"; };
 		D7561D267DF7EC693EA28CDE /* MergeFromServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MergeFromServerTests.swift; sourceTree = "<group>"; };
 		D76926F40E071A4D54FFE217 /* GitHubEventPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubEventPayload.swift; sourceTree = "<group>"; };
 		D7B9E6E5D1D42735BC924A7D /* CatalystCloseButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalystCloseButton.swift; sourceTree = "<group>"; };
@@ -643,6 +645,7 @@
 			isa = PBXGroup;
 			children = (
 				DAFC0B9C92938EB2AED1EA2C /* MessageDecodingTests.swift */,
+				D3E215A279A59A1CF086ECAA /* MessagesResponseDecodingTests.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -1526,6 +1529,7 @@
 				4E432204B955D8D167D61B30 /* MessageCacheUpsertTests.swift in Sources */,
 				140E86388BF7D6F5001B14E8 /* MessageDecodingTests.swift in Sources */,
 				4C37408AFEDE968AE2CC3988 /* MessagePreviewFormatterTests.swift in Sources */,
+				D28168F040A59589B6F05789 /* MessagesResponseDecodingTests.swift in Sources */,
 				114557993AACA02E6C7BB6CA /* MockAPIClient.swift in Sources */,
 				2519C1F26A3B91B79BF8F899 /* OutboxStoreLifecycleTests.swift in Sources */,
 				60C71A9623516E3FD5682B07 /* PendingAttachmentTests.swift in Sources */,
