@@ -284,8 +284,7 @@ final class ChatViewModel: ObservableObject {
                 // pages from the previous session.
             }
             self.otherReadAt = resp.otherReadAt
-            print("[SEEN-LOAD] otherReadAt: \(resp.otherReadAt ?? "nil") | readCursors from API: \(resp.readCursors?.map { "\($0.login):\($0.readAt)" } ?? ["nil"])")
-            if let cursors = resp.readCursors {
+            if let cursors = resp.readReceipts {
                 for c in cursors { readCursors[c.login] = c.readAt }
             }
             persistCache()

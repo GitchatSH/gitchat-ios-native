@@ -206,8 +206,12 @@ struct ChatDetailView: View {
             }
         }
         .onChange(of: vm.draft) { newValue in
+            // Emit typing into the active surface (topic id when in a
+            // topic), so other members of the same topic see it. Pair
+            // with the typing handler which now also matches against
+            // target.conversationId.
             socket.emitTyping(
-                conversationId: vm.conversation.id,
+                conversationId: vm.target.conversationId,
                 isTyping: !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             )
         }
@@ -1020,6 +1024,14 @@ struct ChatDetailView: View {
             _ = await vm.ensureMessageLoaded(id: mid, createdAt: createdAt)
         }
         socket.subscribe(conversation: vm.conversation.id)
+        // Topic targets: BE emits conversation:read (and other room-scoped
+        // events) to room CONVERSATION:{topicId}. Without an explicit topic
+        // subscription the sender never sees seen-status updates inside a
+        // topic. The parent subscription above stays so non-topic events
+        // (group rename, member changes) keep flowing.
+        if vm.target.conversationId != vm.conversation.id {
+            socket.subscribe(conversation: vm.target.conversationId)
+        }
         // Receive server-confirmed self-sends directly from OutboxStore
         // (so a successful send is visible even if the socket event for
         // it never arrives — e.g. WS disconnect, local API without WS).
@@ -1027,22 +1039,29 @@ struct ChatDetailView: View {
         // optimistic placeholder), then fall back to seenIds dedup.
         // Keyed by `vm.target.conversationId` (topic id for topic targets,
         // parent id for plain conversation) to match `PendingMessage.conversationID`.
-        // The socket handler's `conversation_id == vm.conversation.id` guard
-        // (vm.conversation = parent for topic) naturally filters out topic
-        // messages, which are routed via `Notification.gitchatTopicEvent`
-        // to ChatViewModel.handle(topicEvent:.message) instead.
+        // The socket handler matches `msg.conversation_id` against
+        // `vm.target.conversationId`, so topic messages flow through this
+        // path too (BE broadcasts topic message:sent to the parent room
+        // with the topic id on the message itself).
         OutboxStore.shared.registerDeliveryHandler(
             conversationID: vm.target.conversationId,
             ChatDetailViewBindings.makeOutboxDeliveryHandler(vm: vm)
         )
         socket.onMessageSent = ChatDetailViewBindings.makeSocketMessageSentHandler(vm: vm)
         socket.onTyping = { convId, login, typing in
-            guard convId == vm.conversation.id, login != auth.login else { return }
+            // BE emits typing events to the active surface — topic id when
+            // typing in a topic. Compare against target.conversationId so
+            // typing indicators show inside topics (same convId pattern as
+            // the read/pin handlers).
+            guard convId == vm.target.conversationId, login != auth.login else { return }
             if typing { vm.typingUsers.insert(login) }
             else { vm.typingUsers.remove(login) }
         }
         socket.onConversationRead = { convId, login, readAt in
-            guard convId == vm.conversation.id, login != auth.login else { return }
+            // For topic targets the BE emits with the topic id, not the
+            // parent group id. Compare against `target.conversationId`
+            // (same fix already applied to onMessagePinned/onMessageUnpinned).
+            guard convId == vm.target.conversationId, login != auth.login else { return }
             let ts = readAt ?? ISO8601DateFormatter().string(from: Date())
             vm.otherReadAt = ts
             vm.readCursors[login] = ts
@@ -1103,7 +1122,10 @@ struct ChatDetailView: View {
     private func onDisappearCleanup() {
         OutboxStore.shared.unregisterDeliveryHandler(conversationID: vm.target.conversationId)
         socket.unsubscribe(conversation: vm.conversation.id)
-        socket.emitTyping(conversationId: vm.conversation.id, isTyping: false)
+        if vm.target.conversationId != vm.conversation.id {
+            socket.unsubscribe(conversation: vm.target.conversationId)
+        }
+        socket.emitTyping(conversationId: vm.target.conversationId, isTyping: false)
         socket.onReconnect = nil
         if socket.currentConversationId == vm.conversation.id {
             socket.currentConversationId = nil

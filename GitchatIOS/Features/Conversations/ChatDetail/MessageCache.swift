@@ -63,7 +63,7 @@ final class MessageCache {
             defer { self?.inflight[conversationId] = nil }
             do {
                 let resp = try await APIClient.shared.getConversationMessages(id: conversationId)
-                let cursors = resp.readCursors.map { dict in
+                let cursors = resp.readReceipts.map { dict in
                     Dictionary(uniqueKeysWithValues: dict.map { ($0.login, $0.readAt) })
                 }
                 self?.store(conversationId, entry: Entry(

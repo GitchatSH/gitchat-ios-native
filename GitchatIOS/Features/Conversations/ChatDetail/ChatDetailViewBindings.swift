@@ -23,7 +23,13 @@ enum ChatDetailViewBindings {
     /// senders, retry replays, legacy extension-sent messages).
     static func makeSocketMessageSentHandler(vm: ChatViewModel) -> (Message) -> Void {
         return { msg in
-            guard msg.conversation_id == vm.conversation.id else { return }
+            // For topic targets, BE sends `msg.conversation_id` = topic id and
+            // broadcasts to the parent room. Comparing against `vm.conversation.id`
+            // (= parent for topic targets) silently rejected every topic message,
+            // forcing the receiver to back out + re-enter to fetch via GET. Match
+            // against `target.conversationId` instead so topic + non-topic both
+            // flow through this handler.
+            guard msg.conversation_id == vm.target.conversationId else { return }
 
             // 1. Outbound match by cmid — replace optimistic placeholder in-place.
             //    Case-insensitive compare: Swift's UUID().uuidString is UPPERCASE
@@ -41,9 +47,12 @@ enum ChatDetailViewBindings {
             vm.messages.append(msg)
             vm.persistCache()
 
-            // 3. markRead for messages from other senders.
+            // 3. markRead for messages from other senders. Use target.conversationId
+            //    so topic targets hit the correct conversation row — BE's markRead
+            //    detects `parentConversationId` on topic convs and runs the topic
+            //    unread-clear path automatically.
             if msg.sender != AuthStore.shared.login {
-                Task { try? await APIClient.shared.markRead(conversationId: vm.conversation.id) }
+                Task { try? await APIClient.shared.markRead(conversationId: vm.target.conversationId) }
             }
         }
     }

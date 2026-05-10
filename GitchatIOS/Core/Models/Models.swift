@@ -602,7 +602,10 @@ struct MessagesResponse: Decodable {
     let nextCursor: String?
     let previousCursor: String?
     let otherReadAt: String?
-    let readCursors: [ReadCursor]?
+    // Wire field is `readReceipts` (renamed BE-side in commit 13b006f, 2026-04-17).
+    // The struct retains the historical `ReadCursor` Swift type — extra BE
+    // fields (name, avatar_url) are tolerated as unknown keys.
+    let readReceipts: [ReadCursor]?
 }
 
 struct CreateConversationRequest: Encodable {
