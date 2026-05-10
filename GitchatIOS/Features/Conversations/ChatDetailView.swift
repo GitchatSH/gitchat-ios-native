@@ -1065,10 +1065,10 @@ struct ChatDetailView: View {
         // optimistic placeholder), then fall back to seenIds dedup.
         // Keyed by `vm.target.conversationId` (topic id for topic targets,
         // parent id for plain conversation) to match `PendingMessage.conversationID`.
-        // The socket handler's `conversation_id == vm.conversation.id` guard
-        // (vm.conversation = parent for topic) naturally filters out topic
-        // messages, which are routed via `Notification.gitchatTopicEvent`
-        // to ChatViewModel.handle(topicEvent:.message) instead.
+        // The socket handler matches `msg.conversation_id` against
+        // `vm.target.conversationId`, so topic messages flow through this
+        // path too (BE broadcasts topic message:sent to the parent room
+        // with the topic id on the message itself).
         OutboxStore.shared.registerDeliveryHandler(
             conversationID: vm.target.conversationId,
             ChatDetailViewBindings.makeOutboxDeliveryHandler(vm: vm)

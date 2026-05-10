@@ -71,6 +71,51 @@ final class SocketHandlerMatchingTests: XCTestCase {
         XCTAssertEqual(vm.messages.count, 0, "Message for a different conversation should be ignored")
     }
 
+    /// Regression: BE broadcasts topic messages with `msg.conversation_id = topicId`
+    /// to the parent room. The old guard `vm.conversation.id` (= parent for topic
+    /// targets) silently rejected every topic message — receivers had to back out
+    /// + re-enter to fetch via GET. Match against `target.conversationId` instead.
+    func test_inboundMessage_topicTarget_appendsWhenMatchingTopicId() {
+        let store = OutboxStore(api: MockAPIClient())
+        let parent = Conversation.fixture(id: "parent-conv")
+        let topic = Topic.fixture(id: "topic-1", parentId: parent.id)
+        let vm = ChatViewModel(target: .topic(topic, parent: parent), outbox: store)
+        vm.messages = []
+
+        let handler = ChatDetailViewBindings.makeSocketMessageSentHandler(vm: vm)
+        let inbound = Message.testFixture(
+            id: "srv-topic-1",
+            clientMessageID: nil,
+            conversationID: topic.id,
+            content: "topic msg"
+        )
+        handler(inbound)
+
+        XCTAssertEqual(vm.messages.count, 1, "Topic message must reach the receiver in the active topic")
+        XCTAssertEqual(vm.messages.first?.id, "srv-topic-1")
+    }
+
+    /// In a topic target, a message broadcast for the parent conversation
+    /// (different surface) must NOT appear in the topic view.
+    func test_inboundMessage_topicTarget_ignoresParentConversationMessage() {
+        let store = OutboxStore(api: MockAPIClient())
+        let parent = Conversation.fixture(id: "parent-conv")
+        let topic = Topic.fixture(id: "topic-1", parentId: parent.id)
+        let vm = ChatViewModel(target: .topic(topic, parent: parent), outbox: store)
+        vm.messages = []
+
+        let handler = ChatDetailViewBindings.makeSocketMessageSentHandler(vm: vm)
+        let inbound = Message.testFixture(
+            id: "srv-parent-1",
+            clientMessageID: nil,
+            conversationID: parent.id,
+            content: "parent msg"
+        )
+        handler(inbound)
+
+        XCTAssertEqual(vm.messages.count, 0, "Parent-room messages must not bleed into the topic view")
+    }
+
     // MARK: - makeOutboxDeliveryHandler
 
     func test_outboxDelivery_withMatchingCmid_replacesOptimistic() {
