@@ -77,11 +77,21 @@ struct ChatDetailView: View {
     @Namespace private var imageZoomNamespace
 
     init(conversation: Conversation, initialTopic: Topic? = nil) {
-        _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
+        // When the caller pre-picks a topic (e.g. tapping a topic chip from
+        // ConversationsListView), seed BOTH the View-level `resolvedTarget`
+        // AND the ChatViewModel's target. Previously only `resolvedTarget`
+        // was seeded — `vm` was created with `.conversation(parent)`, and
+        // `resolveTarget()`'s `if resolvedTarget == nil` guard then skipped
+        // calling `vm.setTarget(...)`, so `vm.target` stayed pointed at the
+        // parent forever. Socket handlers that match `msg.conversation_id ==
+        // vm.target.conversationId` (per #132) silently rejected every
+        // topic message because parent.id ≠ topic.id — receivers had to
+        // back out + re-enter for GET to repopulate the list.
         if let topic = initialTopic {
-            // Pre-seed resolvedTarget so resolveTarget()'s "if resolvedTarget == nil"
-            // guard skips the General-by-default path, honoring the caller's pick.
+            _vm = StateObject(wrappedValue: ChatViewModel(target: .topic(topic, parent: conversation)))
             _resolvedTarget = State(initialValue: .topic(topic, parent: conversation))
+        } else {
+            _vm = StateObject(wrappedValue: ChatViewModel(conversation: conversation))
         }
     }
 
