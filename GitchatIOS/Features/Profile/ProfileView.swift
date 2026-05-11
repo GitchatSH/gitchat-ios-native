@@ -38,9 +38,7 @@ enum FollowListKind: Identifiable {
 
 struct ProfileView: View {
     @StateObject private var vm: ProfileViewModel
-    @StateObject private var store = StoreManager.shared
     @ObservedObject private var waveHistory = WaveHistory.shared
-    @State private var showUpgrade = false
     @State private var followList: FollowListKind?
     @State private var chatSheet: Conversation?
     @State private var startingChat = false
@@ -83,12 +81,7 @@ struct ProfileView: View {
                 VStack(spacing: 16) {
                     AvatarView(url: p.avatar_url, size: 96, login: p.login)
                         .padding(.top)
-                    HStack(spacing: 8) {
-                        Text(p.name ?? p.login).font(.title2.bold())
-                        if isSelf && store.isPro {
-                            proBadge
-                        }
-                    }
+                    Text(p.name ?? p.login).font(.title2.bold())
                     Text("@\(p.login)").foregroundStyle(.secondary)
                     if let bio = p.bio { Text(bio).multilineTextAlignment(.center).padding(.horizontal) }
                     HStack(spacing: 24) {
@@ -180,9 +173,6 @@ struct ProfileView: View {
                             .tint(.primary)
                         }
                         .padding(.horizontal)
-                    }
-                    if isSelf && !store.isPro {
-                        upgradeCard
                     }
                     if let repos = p.top_repos, !repos.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -287,7 +277,6 @@ struct ProfileView: View {
                 }
             }
         }
-        .sheet(isPresented: $showUpgrade) { UpgradeView() }
         .sheet(item: $chatSheet) { convo in
             NavigationStack { ChatDetailView(conversation: convo) }
         }
@@ -427,61 +416,6 @@ struct ProfileView: View {
 
     private func stat(_ label: String, _ value: Int) -> some View {
         VStack { Text("\(value)").font(.title3.bold()); Text(label).font(.caption).foregroundStyle(.secondary) }
-    }
-
-    private var proBadge: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "star.fill").font(.system(size: 10))
-            Text("PRO").font(.system(size: 11, weight: .heavy))
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(
-            LinearGradient(
-                colors: [Color("AccentColor"), Color("AccentColor").opacity(0.7)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-        )
-        .clipShape(Capsule())
-    }
-
-    private var upgradeCard: some View {
-        Button {
-            showUpgrade = true
-        } label: {
-            VStack(spacing: 10) {
-                HStack(spacing: 10) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.white)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Upgrade to Pro")
-                            .font(.geist(16, weight: .bold))
-                            .foregroundStyle(.white)
-                        Text("Unlimited history, larger uploads, custom themes, Pro badge.")
-                            .font(.geist(12, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .multilineTextAlignment(.leading)
-                    }
-                    Spacer()
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.white)
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity)
-            .background(
-                LinearGradient(
-                    colors: [Color("AccentColor"), Color("AccentColor").opacity(0.75)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: Color("AccentColor").opacity(0.3), radius: 10, y: 4)
-            .padding(.horizontal)
-        }
-        .buttonStyle(.plain)
     }
 }
 
