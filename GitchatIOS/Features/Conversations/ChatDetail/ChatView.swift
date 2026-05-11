@@ -480,8 +480,7 @@ struct ChatView: View {
                         imageMatchedNS: imageZoomNamespace,
                         showTail: showTail,
                         isGroup: vm.conversation.isGroup,
-                        otherReadAt: vm.otherReadAt,
-                        readCursors: vm.readCursors
+                        isRead: isMe ? vm.hasBeenSeenByOthers(message: msg) : false
                     )
                     .opacity(isFailed ? 0.6 : 1)
                     if isFailed {
@@ -582,9 +581,7 @@ private struct GroupedMessageRowInner: View {
                         imageMatchedNS: imageZoomNamespace,
                         showTail: isLast,
                         isGroup: true,
-                        isInsideGroup: true,
-                        otherReadAt: vm.otherReadAt,
-                        readCursors: vm.readCursors
+                        isInsideGroup: true
                     )
                 }
             }
@@ -752,8 +749,7 @@ extension ChatView {
             isPinned: vm.pinnedIds.contains(t.message.id),
             showTail: showTail,
             isGroup: vm.conversation.isGroup,
-            otherReadAt: vm.otherReadAt,
-            readCursors: vm.readCursors
+            isRead: t.isMe ? vm.hasBeenSeenByOthers(message: t.message) : false
         )
     }
 
