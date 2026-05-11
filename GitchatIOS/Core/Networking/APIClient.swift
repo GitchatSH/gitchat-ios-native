@@ -97,6 +97,7 @@ struct APIClient {
         }
         guard let http = resp as? HTTPURLResponse else { throw APIError.http(-1, nil) }
         intercept426IfNeeded(http, request: req)
+        intercept401IfNeeded(http, request: req, requireAuth: requireAuth)
         guard (200..<300).contains(http.statusCode) else {
             let text = String(data: data, encoding: .utf8)
             throw APIError.http(http.statusCode, text)
@@ -315,6 +316,10 @@ struct APIClient {
         }
         if let http = result.1 as? HTTPURLResponse {
             intercept426IfNeeded(http, request: req)
+            // Uploads always carry the user's bearer token (line 265),
+            // so a 401 here is always an auth failure — never a public
+            // endpoint mis-fire.
+            intercept401IfNeeded(http, request: req, requireAuth: true)
         }
         return result
     }
@@ -326,6 +331,23 @@ struct APIClient {
         if request.url?.path.hasSuffix("/app/version") == true { return }
         Task { @MainActor in
             await AppUpdateChecker.shared.handle426()
+        }
+    }
+
+    /// Fires `AuthStore.handle401()` when an authed request comes back 401
+    /// so an expired or revoked token bounces the user back to the guest
+    /// shell instead of stranding them on a spinner. Skipped when the
+    /// request was sent without auth (sign-in flows, public endpoints) —
+    /// a 401 on the sign-in path itself must NOT nuke the current session.
+    /// The stale token from THIS request is captured and passed through so
+    /// a lingering 401 from a pre-resignin request can't sign the user
+    /// back out after they've already re-authed.
+    private func intercept401IfNeeded(_ http: HTTPURLResponse, request: URLRequest, requireAuth: Bool) {
+        guard http.statusCode == 401, requireAuth else { return }
+        let staleToken = request.value(forHTTPHeaderField: "Authorization")
+            .map { $0.replacingOccurrences(of: "Bearer ", with: "") }
+        Task { @MainActor in
+            AuthStore.shared.handle401(forToken: staleToken)
         }
     }
 

@@ -98,6 +98,20 @@ final class AuthStore: ObservableObject {
         PushManager.shared.forgetIdentity()
     }
 
+    /// Reactive sign-out triggered by a server 401 on an authed request.
+    /// `staleToken` is the bearer the failed request was sent with —
+    /// signOut only fires if it still matches the active token. If the
+    /// user re-authed in the interim (the stale request was sent under
+    /// an old token, the response arrives after a fresh save()), the
+    /// 401 is ignored so a lingering bad response can't clobber the new
+    /// session. Idempotent under burst — once signOut clears the token,
+    /// subsequent calls no-op via the token mismatch.
+    func handle401(forToken staleToken: String?) {
+        guard isAuthenticated, let staleToken, accessToken == staleToken else { return }
+        ToastCenter.shared.show(.warning, "Session expired", "Please sign in again.")
+        signOut()
+    }
+
     private func mirrorToSharedGroup() {
         guard let shared = UserDefaults(suiteName: sharedGroup) else { return }
         shared.set(accessToken, forKey: sharedTokenKey)
