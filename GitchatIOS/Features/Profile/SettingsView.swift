@@ -3,7 +3,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var auth: AuthStore
     @StateObject private var blocks = BlockStore.shared
-    @StateObject private var store = StoreManager.shared
     @AppStorage("gitchat.pref.messageSound") private var messageSound: Bool = false
     @AppStorage("gitchat.pref.showOnlineStatus") private var showOnlineStatus: Bool = true
     @AppStorage("gitchat.pref.showUnreadBadges") private var showUnreadBadges: Bool = true
@@ -16,7 +15,6 @@ struct SettingsView: View {
     @State private var deletingAccount = false
     @State private var legalURL: URL?
     @State private var showBlockedList = false
-    @State private var showUpgrade = false
 
     var body: some View {
         List {
@@ -30,7 +28,6 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .font(.system(.body, design: .monospaced))
                 }
-                proRow
             }
 
             Section("Appearance") {
@@ -151,9 +148,6 @@ struct SettingsView: View {
         .sheet(isPresented: $showBlockedList) {
             NavigationStack { BlockedUsersView() }
         }
-        .sheet(isPresented: $showUpgrade) {
-            UpgradeView()
-        }
     }
 
     private func deleteAccount() async {
@@ -168,24 +162,6 @@ struct SettingsView: View {
         }
     }
 
-    private var proRow: some View {
-        Button {
-            showUpgrade = true
-        } label: {
-            HStack {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(Color("AccentColor"))
-                Text("Plan")
-                    .foregroundStyle(Color(.label))
-                Spacer()
-                Text(store.isPro ? "Pro" : "Free")
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-        }
-    }
 }
 
 struct BlockedUsersView: View {
