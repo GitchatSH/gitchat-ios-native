@@ -467,19 +467,21 @@ final class ChatViewModel: ObservableObject {
         return logins.sorted()
     }
 
+    /// Single source of truth for "has any other user seen this message?"
+    /// Drives both the read-tick (`ChatMessageView.isRead`) and the long-press
+    /// menu's `isReadByOthers`. Backed by `seenByLogins` so the two views never
+    /// disagree — a divergence between this and `seenByLogins` was the root
+    /// cause of the "single tick despite 'Seen by N'" bug (commit `dc5cf66`
+    /// upgraded `seenByLogins` to use messages-after + reactions inference
+    /// but left the tick's predicate using only readCursors + otherReadAt).
+    func hasBeenSeenByOthers(message: Message) -> Bool {
+        !seenByLogins(for: message).isEmpty
+    }
+
     /// Returns true when we know at least one other user has read past
     /// this message, even if we don't have per-user cursor details.
     func isReadByOthers(for message: Message) -> Bool {
-        guard let msgDateStr = message.created_at,
-              let msgDate = Self.parseDate(msgDateStr) else { return false }
-        // Per-user cursors
-        let sender = message.sender
-        for (login, readAt) in readCursors {
-            if login != sender, let d = Self.parseDate(readAt), d >= msgDate { return true }
-        }
-        // otherReadAt fallback
-        if let readAt = otherReadAt, let d = Self.parseDate(readAt), d >= msgDate { return true }
-        return false
+        hasBeenSeenByOthers(message: message)
     }
 
     func seenCursorLogins(for message: Message, nextCreatedAt: String?) -> [String] {

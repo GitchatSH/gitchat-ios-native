@@ -136,6 +136,7 @@
 		8FB3557FB1721854174B2237 /* DiscoverTeamsList.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76DD186A17655C846B988019 /* DiscoverTeamsList.swift */; };
 		92E71F6AACBC3BC9107B14F0 /* ChatTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D9FF2224123D14E9F3B352 /* ChatTheme.swift */; };
 		92F2FE2AABCC2EC3078AF8C7 /* MacShellView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF5B3E9D4CC0144CEB0247E8 /* MacShellView.swift */; };
+		9789AE87A200AE4D627A4B31 /* SeenByLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5DB3F724A077942BCA6D407 /* SeenByLogicTests.swift */; };
 		97BEFA46F74B25582C9B5E6A /* ExploreSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1171C3E5B7CAEFCD3F9C388C /* ExploreSheet.swift */; };
 		98BE48E15464DA64FAA0F96B /* SocketHandlerMatchingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510F87602FF09899A6C3C285 /* SocketHandlerMatchingTests.swift */; };
 		9911E286944B2E5A0B5817D6 /* ChatBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FAC444597FF8A45EB8294EC /* ChatBackground.swift */; };
@@ -458,6 +459,7 @@
 		C52A3C804970611E07FF79D0 /* SystemMessageRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemMessageRow.swift; sourceTree = "<group>"; };
 		C572C41B826EC03433688B86 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		C5A2C6DB1A8303E3F1E9F66E /* TopicListSidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopicListSidebarView.swift; sourceTree = "<group>"; };
+		C5DB3F724A077942BCA6D407 /* SeenByLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeenByLogicTests.swift; sourceTree = "<group>"; };
 		C604A613990DF65BB8BC063D /* MacRowStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacRowStyle.swift; sourceTree = "<group>"; };
 		C8CAB4116A44600924A5B1A4 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		CA25F2BA4BC86A0256C4C1DD /* SocketClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocketClient.swift; sourceTree = "<group>"; };
@@ -749,6 +751,7 @@
 				D7561D267DF7EC693EA28CDE /* MergeFromServerTests.swift */,
 				4DB43B0E432F8F3D6E79EC11 /* MessageCacheFilterTests.swift */,
 				88E8DD4490C4D12489573615 /* MessageCacheUpsertTests.swift */,
+				C5DB3F724A077942BCA6D407 /* SeenByLogicTests.swift */,
 				510F87602FF09899A6C3C285 /* SocketHandlerMatchingTests.swift */,
 				2B7822C753B8424FE59D9423 /* VisibleMessagesDedupeTests.swift */,
 			);
@@ -1538,6 +1541,7 @@
 				2519C1F26A3B91B79BF8F899 /* OutboxStoreLifecycleTests.swift in Sources */,
 				60C71A9623516E3FD5682B07 /* PendingAttachmentTests.swift in Sources */,
 				C63A274EB9BD4527B0FA59E6 /* PendingMessageTests.swift in Sources */,
+				9789AE87A200AE4D627A4B31 /* SeenByLogicTests.swift in Sources */,
 				EC46A7CCA783290B81672368 /* SemVerTests.swift in Sources */,
 				77795C1AD2A1CB4EBDB0B28B /* SignInReasonTests.swift in Sources */,
 				146BD1CED03878B0132D7B34 /* SmokeUnitTest.swift in Sources */,

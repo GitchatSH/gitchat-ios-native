@@ -76,10 +76,13 @@ struct ChatMessageView: View {
     /// the outer HStack with avatar/spacers is skipped because the group
     /// cell provides its own avatar column.
     var isInsideGroup: Bool = false
-    /// DM: when the other user last read (ISO 8601 timestamp).
-    var otherReadAt: String? = nil
-    /// Group: per-login read timestamps.
-    var readCursors: [String: String] = [:]
+    /// Pre-computed "has at least one other user seen this message?"
+    /// flag. Owned by `ChatViewModel.hasBeenSeenByOthers(message:)` so the
+    /// read-tick and the long-press menu's "Seen by N" pull from the same
+    /// source of truth (cursors + messages-after + reactions + DM fallback).
+    /// Always false for incoming bubbles — the tick is only shown for
+    /// outgoing (isMe) messages anyway.
+    var isRead: Bool = false
 
     // MARK: Local state
 
@@ -183,19 +186,12 @@ struct ChatMessageView: View {
     }
 
     // MARK: Read state
-
-    private var isRead: Bool {
-        guard isMe, let createdAt = message.created_at else { return false }
-        // DM: other user read past this message
-        if let otherReadAt = otherReadAt, otherReadAt >= createdAt { return true }
-        // Group: any non-me cursor >= createdAt
-        if let myLogin = myLogin {
-            for (login, readAt) in readCursors where login != myLogin {
-                if readAt >= createdAt { return true }
-            }
-        }
-        return false
-    }
+    //
+    // `isRead` is a stored property fed by the host
+    // (`vm.hasBeenSeenByOthers(message:)`) — same source of truth as the
+    // long-press menu's "Seen by N" row. The tick views below are only
+    // rendered inside an `if isMe { ... }` guard (timestampMeta /
+    // imageTimestampMeta), so we don't need a redundant isMe check here.
 
     // MARK: Inline timestamp + checkmarks
 
