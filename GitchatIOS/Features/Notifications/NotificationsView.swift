@@ -2,7 +2,6 @@ import SwiftUI
 
 enum NotificationFilter: String, CaseIterable, Identifiable {
     case all
-    case messages
     case mentions
     case follows
 
@@ -11,16 +10,17 @@ enum NotificationFilter: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .all: return "All"
-        case .messages: return "Messages"
         case .mentions: return "Mentions"
         case .follows: return "Follows"
         }
     }
 
+    // Backend deliberately omits `new_message`/`chat_message`/`reply` from
+    // GET /notifications (see backend INBOX_VISIBLE_TYPES) — chat messages
+    // surface via the Chats tab, not Activity. Don't add a Messages filter.
     func matches(_ n: Notification) -> Bool {
         switch self {
         case .all: return true
-        case .messages: return n.type == "new_message" || n.type == "chat_message" || n.type == "reply"
         case .mentions: return n.type == "mention"
         case .follows: return n.type == "follow" || n.type == "wave"
         }
@@ -199,7 +199,6 @@ struct NotificationsView: View {
     private var emptyTitle: String {
         switch filter {
         case .all: return "No notifications"
-        case .messages: return "No messages"
         case .mentions: return "No mentions"
         case .follows: return "No follows"
         }
@@ -208,7 +207,6 @@ struct NotificationsView: View {
     private var emptyIcon: String {
         switch filter {
         case .all: return "bell"
-        case .messages: return "bubble.left"
         case .mentions: return "at"
         case .follows: return "person.2"
         }
@@ -217,7 +215,7 @@ struct NotificationsView: View {
     private func route(for n: Notification) {
         Haptics.selection()
         switch n.type {
-        case "new_message", "chat_message", "mention", "reply":
+        case "mention":
             if let id = n.metadata?.conversationId, !id.isEmpty {
                 Task {
                     let resp = try? await APIClient.shared.listConversations(limit: 100)
@@ -237,8 +235,6 @@ struct NotificationsView: View {
 
     private func notifText(_ n: Notification) -> String {
         switch n.type {
-        case "new_message", "chat_message": return "\(n.actor_login) sent you a message"
-        case "reply": return "\(n.actor_login) replied to your message"
         case "mention": return "\(n.actor_login) mentioned you"
         case "follow": return "\(n.actor_login) followed you"
         case "repo_activity": return "\(n.actor_login) in \(n.metadata?.repoFullName ?? "a repo")"
@@ -250,10 +246,6 @@ struct NotificationsView: View {
     private func notifLabel(_ n: Notification) -> Text {
         let login = Text(n.actor_login).bold().foregroundColor(Color(.label))
         switch n.type {
-        case "new_message", "chat_message":
-            return login + Text(" sent you a message").foregroundColor(Color(.label))
-        case "reply":
-            return login + Text(" replied to your message").foregroundColor(Color(.label))
         case "mention":
             return login + Text(" mentioned you").foregroundColor(Color(.label))
         case "follow":
