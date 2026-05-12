@@ -735,6 +735,16 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
             animated: Bool,
             completion: (() -> Void)? = nil
         ) {
+            // Capture the previous group→messages mapping BEFORE we rebuild
+            // it. Used after the snapshot build to detect groups whose
+            // identifier stayed stable (id = `__group__|<firstMsgID>`)
+            // but whose message list grew or shrank. Diffable data source
+            // treats a same-identifier row as unchanged and skips the
+            // cell refresh, so without an explicit `reconfigureItems`
+            // those rows render an outdated message list — the cause of
+            // the "new message doesn't show until something else forces
+            // a redraw" reports.
+            let previousGroupById = groupById
             lastItems = items
             itemById = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
             lastTypingUsers = typingUsers
@@ -848,6 +858,23 @@ struct ChatMessagesList<Cell: View>: UIViewRepresentable {
                 rows.append(chatDateRowID(for: dayGroup.sectionID))
                 snap.appendItems(rows, toSection: dayGroup.sectionID)
             }
+            // Force re-render for groups whose row identifier stayed
+            // the same but whose message membership changed (sender ran
+            // on with another message). The id format
+            // `__group__|<firstMsgID>` is stable as the run grows, so
+            // the diffable diff treats the row as unchanged and skips
+            // the cell update — leaving the cell rendering an outdated
+            // message list.
+            var changedGroupIDs: [String] = []
+            for (gid, mids) in groupById {
+                if let prevMids = previousGroupById[gid], prevMids != mids {
+                    changedGroupIDs.append(gid)
+                }
+            }
+            if !changedGroupIDs.isEmpty {
+                snap.reconfigureItems(changedGroupIDs)
+            }
+
             dataSource.apply(snap, animatingDifferences: animated, completion: completion)
         }
 
