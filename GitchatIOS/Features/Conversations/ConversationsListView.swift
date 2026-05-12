@@ -45,6 +45,16 @@ final class ConversationsViewModel: ObservableObject {
         guard let cid = msg.conversation_id,
               let idx = conversations.firstIndex(where: { $0.id == cid }) else { return }
         let c = conversations[idx]
+        // Monotonic guard: an out-of-order `message:sent` (delayed retry,
+        // or a socket event for an older message that ran after a newer
+        // one) shouldn't roll back a fresher preview the row already has.
+        // ISO 8601 strings sort chronologically when format is consistent
+        // with BE output.
+        if let curAt = c.last_message_at,
+           let msgAt = msg.created_at,
+           msgAt < curAt {
+            return
+        }
         let preview = msg.content.isEmpty ? c.last_message_preview : msg.content
         conversations[idx] = c.withLastMessage(msg, preview: preview)
         ConversationsCache.shared.store(conversations)
@@ -194,7 +204,22 @@ final class ConversationsViewModel: ObservableObject {
 
                 if reset {
                     let deduped = Self.dedupeChannels(resp.conversations)
-                    self.conversations = deduped
+                    // Defense against BE briefly returning a row whose
+                    // last_message_text is one message behind (race in
+                    // messages.service.ts:1516 — see fix on backend). If
+                    // we've already applied a newer `message:sent`
+                    // locally, keep its last_message_* fields and take
+                    // everything else from BE.
+                    var localByID: [String: Conversation] = [:]
+                    for c in self.conversations { localByID[c.id] = c }
+                    let merged = deduped.map { remote -> Conversation in
+                        guard let local = localByID[remote.id],
+                              let localAt = local.last_message_at,
+                              let remoteAt = remote.last_message_at,
+                              localAt > remoteAt else { return remote }
+                        return remote.withLatestMessageFrom(local)
+                    }
+                    self.conversations = merged
                     self.locallyRead.removeAll()
                     // Keep locallyMuted/locallyUnmuted — syncMutedStore() reconciles them
                 } else {

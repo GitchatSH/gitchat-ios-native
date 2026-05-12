@@ -121,6 +121,40 @@ struct Conversation: Codable, Identifiable, Hashable {
             topic_chips: topic_chips
         )
     }
+
+    /// Return a copy of self with the latest-message fields (last_message,
+    /// last_message_preview, last_message_text, last_message_at) replaced by
+    /// those from `source`. Used by ConversationsViewModel.load() merge:
+    /// when our locally-applied `message:sent` is newer than what BE returns
+    /// in a refetch, keep the local preview/timestamp instead of letting the
+    /// refetch roll it back.
+    func withLatestMessageFrom(_ source: Conversation) -> Conversation {
+        Conversation(
+            id: id,
+            type: type,
+            is_group: is_group,
+            group_name: group_name,
+            group_avatar_url: group_avatar_url,
+            repo_full_name: repo_full_name,
+            participants: participants,
+            other_user: other_user,
+            last_message: source.last_message,
+            last_message_preview: source.last_message_preview,
+            last_message_text: source.last_message_text,
+            last_message_at: source.last_message_at,
+            unread_count: unread_count,
+            pinned: pinned,
+            pinned_at: pinned_at,
+            is_request: is_request,
+            updated_at: updated_at,
+            is_muted: is_muted,
+            has_mention: has_mention,
+            has_reaction: has_reaction,
+            topics_enabled: topics_enabled,
+            has_topics: has_topics,
+            topic_chips: topic_chips
+        )
+    }
 }
 
 /// Compact summary of a topic embedded in conversation list responses.
