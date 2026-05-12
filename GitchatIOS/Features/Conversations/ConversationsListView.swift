@@ -1022,11 +1022,10 @@ struct ConversationRow: View {
 
     private var lastSenderLogin: String? {
         guard conversation.isGroup else { return nil }
-        if let cached = cachedEntry?.messages,
-           let last = cached.last(where: { $0.type == nil || $0.type == "user" }) {
-            return last.sender
-        }
-        return conversation.last_message?.sender
+        // Use the same source as `formattedPreview` so the sender name
+        // rendered above the preview can't disagree with the preview
+        // body when cache and BE's `last_message` are out of sync.
+        return latestRenderableMessage?.sender
     }
 
     /// Source of truth for the preview line's text + inline thumbnail URL.
@@ -1039,15 +1038,23 @@ struct ConversationRow: View {
     /// `lastSenderLogin` / "You" branches in `body`); passing it here would
     /// double up the `bob: …` prefix.
     private var formattedPreview: MessagePreviewFormatter.Output {
-        let last = cachedEntry?.messages.last(where: { $0.type == nil || $0.type == "user" })
-            ?? conversation.last_message
-        guard let last else {
+        guard let last = latestRenderableMessage else {
             return .init(text: conversation.previewText ?? "", thumbURL: nil)
         }
         return MessagePreviewFormatter.format(
             message: last,
             isGroup: conversation.isGroup,
             senderLogin: nil
+        )
+    }
+
+    /// The message that should drive the row's preview rendering — see
+    /// `Conversation.renderableLastMessage(cached:)` for the merge rule
+    /// (prefer BE's hydrated `last_message` when it disagrees with cache,
+    /// fall back to cache otherwise so we keep richer per-message state).
+    private var latestRenderableMessage: Message? {
+        conversation.renderableLastMessage(
+            cached: cachedEntry?.messages.last(where: { $0.type == nil || $0.type == "user" })
         )
     }
 

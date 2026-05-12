@@ -122,6 +122,31 @@ struct Conversation: Codable, Identifiable, Hashable {
         )
     }
 
+    /// Pick the freshest user message to drive chat-list row rendering,
+    /// merging BE's hydrated `last_message` with whatever the receiver
+    /// already has in MessageCache.
+    ///
+    /// BE's `conversation.last_message` is always the freshest user
+    /// message at fetch time — computed via `DISTINCT ON … ORDER BY
+    /// created_at DESC` against the messages table inside
+    /// `listConversations` (see `gitchat-webapp` `messages.service.ts:750`).
+    /// MessageCache can lag in the gap between socket activity and the
+    /// next `prefetch()` — especially when prefetch's `inflight` dedup
+    /// skips follow-up fetches during a burst.
+    ///
+    /// When the two sources disagree on identity, prefer BE (authoritative
+    /// ordering). When they agree, prefer cache because it carries richer
+    /// state (`unsent_at`, `edited_at`, full attachments — none of which
+    /// BE's hydrated `last_message` payload carries).
+    ///
+    /// Last-resort fallback: whichever side is non-nil.
+    func renderableLastMessage(cached: Message?) -> Message? {
+        if let convoLast = last_message, let cached, convoLast.id != cached.id {
+            return convoLast
+        }
+        return cached ?? last_message
+    }
+
     /// Return a copy of self with the latest-message fields (last_message,
     /// last_message_preview, last_message_text, last_message_at) replaced by
     /// those from `source`. Used by ConversationsViewModel.load() merge:
