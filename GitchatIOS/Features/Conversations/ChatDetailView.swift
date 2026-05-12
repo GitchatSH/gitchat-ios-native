@@ -185,9 +185,15 @@ struct ChatDetailView: View {
             let parentConvId = vm.conversation.id
             let topicsEnabled = vm.conversation.hasTopicsEnabled
             socket.onReconnect = {
-                guard topicsEnabled else { return }
                 Task { @MainActor in
-                    if let fresh = try? await APIClient.shared.fetchTopics(parentId: parentConvId) {
+                    // Catch up on messages the WS offline window dropped.
+                    // Without this, intermittent simulator/network blips
+                    // leave the receiver's chat detail stuck on the last
+                    // pre-disconnect message; the user has to back out
+                    // and re-enter to see anything sent during the gap.
+                    await vm.load()
+                    if topicsEnabled,
+                       let fresh = try? await APIClient.shared.fetchTopics(parentId: parentConvId) {
                         TopicListStore.shared.setTopics(fresh, forParent: parentConvId)
                     }
                 }

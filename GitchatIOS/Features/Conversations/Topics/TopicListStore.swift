@@ -134,8 +134,39 @@ final class TopicListStore: ObservableObject {
             setPinOrder(topicId: topicId, parentId: parentId, order: order)
         case .unpinned(let parentId, let topicId):
             setPinOrder(topicId: topicId, parentId: parentId, order: nil)
-        case .settingsUpdated, .message:
-            // Settings + message events are handled by callers, not the store.
+        case .message(let parentId, let topicId, let message):
+            // Keep the topic row's preview/timestamp/sender in sync with
+            // incoming messages so users on the topic-list view see the
+            // latest body without waiting for the next `.task` reload.
+            // Unread bumping is left to `ChatViewModel.handle(topicEvent:)`
+            // when a chat detail is active — bumping here too would
+            // double-count when both subscribers are alive (e.g. topic
+            // list still mounted in the navigation stack behind a pushed
+            // chat detail). The unread badge catches up from BE on the
+            // next list refetch in that case.
+            update(topicId: topicId, parentId: parentId) { t in
+                if let curAt = t.last_message_at,
+                   let msgAt = message.created_at,
+                   msgAt < curAt {
+                    return
+                }
+                let preview = message.content.isEmpty ? t.last_message_preview : message.content
+                t = Topic(
+                    id: t.id, parent_conversation_id: t.parent_conversation_id,
+                    name: t.name, icon_emoji: t.icon_emoji, color_token: t.color_token,
+                    is_general: t.is_general, pin_order: t.pin_order,
+                    archived_at: t.archived_at,
+                    last_message_at: message.created_at ?? t.last_message_at,
+                    last_message_preview: preview,
+                    last_sender_login: message.sender,
+                    unread_count: t.unread_count,
+                    unread_mentions_count: t.unread_mentions_count,
+                    unread_reactions_count: t.unread_reactions_count,
+                    created_by: t.created_by, created_at: t.created_at
+                )
+            }
+        case .settingsUpdated:
+            // Settings events are handled by callers, not the store.
             break
         }
     }

@@ -45,9 +45,27 @@ final class ConversationsViewModel: ObservableObject {
         guard let cid = msg.conversation_id,
               let idx = conversations.firstIndex(where: { $0.id == cid }) else { return }
         let c = conversations[idx]
+        // Monotonic guard: an out-of-order `message:sent` (delayed retry,
+        // or a socket event for an older message that ran after a newer
+        // one) shouldn't roll back a fresher preview the row already has.
+        // ISO 8601 strings sort chronologically when format is consistent
+        // with BE output.
+        if let curAt = c.last_message_at,
+           let msgAt = msg.created_at,
+           msgAt < curAt {
+            return
+        }
         let preview = msg.content.isEmpty ? c.last_message_preview : msg.content
         conversations[idx] = c.withLastMessage(msg, preview: preview)
         ConversationsCache.shared.store(conversations)
+        // Keep MessageCache in sync. The chat-list cell's `formattedPreview`
+        // reads `cachedEntry?.messages.last(user)` *first* and falls back
+        // to `conversation.last_message` only when the cache is empty —
+        // so without this upsert the cell stays on the previous message
+        // body even after we've updated the conversation row above.
+        // upsertDelivered is a no-op when no cache entry exists (the row
+        // hasn't been prefetched yet), so this is safe everywhere.
+        MessageCache.shared.upsertDelivered(conversationID: cid, message: msg)
     }
 
     /// Patch a row's group name + avatar in place after the user saves
@@ -194,7 +212,22 @@ final class ConversationsViewModel: ObservableObject {
 
                 if reset {
                     let deduped = Self.dedupeChannels(resp.conversations)
-                    self.conversations = deduped
+                    // Defense against BE briefly returning a row whose
+                    // last_message_text is one message behind (race in
+                    // messages.service.ts:1516 — see fix on backend). If
+                    // we've already applied a newer `message:sent`
+                    // locally, keep its last_message_* fields and take
+                    // everything else from BE.
+                    var localByID: [String: Conversation] = [:]
+                    for c in self.conversations { localByID[c.id] = c }
+                    let merged = deduped.map { remote -> Conversation in
+                        guard let local = localByID[remote.id],
+                              let localAt = local.last_message_at,
+                              let remoteAt = remote.last_message_at,
+                              localAt > remoteAt else { return remote }
+                        return remote.withLatestMessageFrom(local)
+                    }
+                    self.conversations = merged
                     self.locallyRead.removeAll()
                     // Keep locallyMuted/locallyUnmuted — syncMutedStore() reconciles them
                 } else {
@@ -989,11 +1022,10 @@ struct ConversationRow: View {
 
     private var lastSenderLogin: String? {
         guard conversation.isGroup else { return nil }
-        if let cached = cachedEntry?.messages,
-           let last = cached.last(where: { $0.type == nil || $0.type == "user" }) {
-            return last.sender
-        }
-        return conversation.last_message?.sender
+        // Use the same source as `formattedPreview` so the sender name
+        // rendered above the preview can't disagree with the preview
+        // body when cache and BE's `last_message` are out of sync.
+        return latestRenderableMessage?.sender
     }
 
     /// Source of truth for the preview line's text + inline thumbnail URL.
@@ -1006,15 +1038,23 @@ struct ConversationRow: View {
     /// `lastSenderLogin` / "You" branches in `body`); passing it here would
     /// double up the `bob: …` prefix.
     private var formattedPreview: MessagePreviewFormatter.Output {
-        let last = cachedEntry?.messages.last(where: { $0.type == nil || $0.type == "user" })
-            ?? conversation.last_message
-        guard let last else {
+        guard let last = latestRenderableMessage else {
             return .init(text: conversation.previewText ?? "", thumbURL: nil)
         }
         return MessagePreviewFormatter.format(
             message: last,
             isGroup: conversation.isGroup,
             senderLogin: nil
+        )
+    }
+
+    /// The message that should drive the row's preview rendering — see
+    /// `Conversation.renderableLastMessage(cached:)` for the merge rule
+    /// (prefer BE's hydrated `last_message` when it disagrees with cache,
+    /// fall back to cache otherwise so we keep richer per-message state).
+    private var latestRenderableMessage: Message? {
+        conversation.renderableLastMessage(
+            cached: cachedEntry?.messages.last(where: { $0.type == nil || $0.type == "user" })
         )
     }
 

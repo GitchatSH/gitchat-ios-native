@@ -121,6 +121,65 @@ struct Conversation: Codable, Identifiable, Hashable {
             topic_chips: topic_chips
         )
     }
+
+    /// Pick the freshest user message to drive chat-list row rendering,
+    /// merging BE's hydrated `last_message` with whatever the receiver
+    /// already has in MessageCache.
+    ///
+    /// BE's `conversation.last_message` is always the freshest user
+    /// message at fetch time — computed via `DISTINCT ON … ORDER BY
+    /// created_at DESC` against the messages table inside
+    /// `listConversations` (see `gitchat-webapp` `messages.service.ts:750`).
+    /// MessageCache can lag in the gap between socket activity and the
+    /// next `prefetch()` — especially when prefetch's `inflight` dedup
+    /// skips follow-up fetches during a burst.
+    ///
+    /// When the two sources disagree on identity, prefer BE (authoritative
+    /// ordering). When they agree, prefer cache because it carries richer
+    /// state (`unsent_at`, `edited_at`, full attachments — none of which
+    /// BE's hydrated `last_message` payload carries).
+    ///
+    /// Last-resort fallback: whichever side is non-nil.
+    func renderableLastMessage(cached: Message?) -> Message? {
+        if let convoLast = last_message, let cached, convoLast.id != cached.id {
+            return convoLast
+        }
+        return cached ?? last_message
+    }
+
+    /// Return a copy of self with the latest-message fields (last_message,
+    /// last_message_preview, last_message_text, last_message_at) replaced by
+    /// those from `source`. Used by ConversationsViewModel.load() merge:
+    /// when our locally-applied `message:sent` is newer than what BE returns
+    /// in a refetch, keep the local preview/timestamp instead of letting the
+    /// refetch roll it back.
+    func withLatestMessageFrom(_ source: Conversation) -> Conversation {
+        Conversation(
+            id: id,
+            type: type,
+            is_group: is_group,
+            group_name: group_name,
+            group_avatar_url: group_avatar_url,
+            repo_full_name: repo_full_name,
+            participants: participants,
+            other_user: other_user,
+            last_message: source.last_message,
+            last_message_preview: source.last_message_preview,
+            last_message_text: source.last_message_text,
+            last_message_at: source.last_message_at,
+            unread_count: unread_count,
+            pinned: pinned,
+            pinned_at: pinned_at,
+            is_request: is_request,
+            updated_at: updated_at,
+            is_muted: is_muted,
+            has_mention: has_mention,
+            has_reaction: has_reaction,
+            topics_enabled: topics_enabled,
+            has_topics: has_topics,
+            topic_chips: topic_chips
+        )
+    }
 }
 
 /// Compact summary of a topic embedded in conversation list responses.
