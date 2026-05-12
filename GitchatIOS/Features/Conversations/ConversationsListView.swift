@@ -58,6 +58,14 @@ final class ConversationsViewModel: ObservableObject {
         let preview = msg.content.isEmpty ? c.last_message_preview : msg.content
         conversations[idx] = c.withLastMessage(msg, preview: preview)
         ConversationsCache.shared.store(conversations)
+        // Keep MessageCache in sync. The chat-list cell's `formattedPreview`
+        // reads `cachedEntry?.messages.last(user)` *first* and falls back
+        // to `conversation.last_message` only when the cache is empty —
+        // so without this upsert the cell stays on the previous message
+        // body even after we've updated the conversation row above.
+        // upsertDelivered is a no-op when no cache entry exists (the row
+        // hasn't been prefetched yet), so this is safe everywhere.
+        MessageCache.shared.upsertDelivered(conversationID: cid, message: msg)
     }
 
     /// Patch a row's group name + avatar in place after the user saves

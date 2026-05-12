@@ -9,6 +9,11 @@ import XCTest
 @MainActor
 final class ConversationsViewModelStalePreviewTests: XCTestCase {
 
+    override func tearDown() {
+        super.tearDown()
+        MessageCache.shared.clearForTesting()
+    }
+
     // MARK: - applyIncomingMessage monotonic guard
 
     func test_applyIncomingMessage_skipsMessageOlderThanCurrentRow() {
@@ -87,6 +92,90 @@ final class ConversationsViewModelStalePreviewTests: XCTestCase {
         vm.applyIncomingMessage(msg)
 
         XCTAssertEqual(vm.conversations.first?.last_message_text, "6")
+    }
+
+    // MARK: - MessageCache sync (real root cause of the original bug)
+
+    func test_applyIncomingMessage_upsertsIntoMessageCache_whenEntryExists() {
+        // Repro of the actual production bug: chat-list cell's
+        // `formattedPreview` reads `MessageCache.last(user)` BEFORE
+        // falling back to `conversation.last_message`. So a fresh
+        // socket `message:sent` that only updates the conversation row
+        // leaves the cell rendering the previous message body.
+        let convID = "conv-cache-sync-\(UUID().uuidString)"
+        let existing = Message.testFixture(id: "srv-3", conversationID: convID, content: "3")
+        MessageCache.shared.store(convID, entry: MessageCache.Entry(
+            messages: [existing], nextCursor: nil, otherReadAt: nil,
+            readCursors: nil, fetchedAt: Date()
+        ))
+
+        let vm = ConversationsViewModel()
+        vm.conversations = [makeConversation(
+            id: convID,
+            lastText: "3",
+            lastAt: "2026-05-12T10:35:00.100Z"
+        )]
+
+        let newer = makeMessage(
+            content: "4",
+            conversationID: convID,
+            createdAt: "2026-05-12T10:35:00.500Z"
+        )
+        vm.applyIncomingMessage(newer)
+
+        let entry = MessageCache.shared.get(convID)
+        XCTAssertNotNil(entry)
+        XCTAssertEqual(entry?.messages.last?.content, "4",
+                       "cache's last message should be the just-applied one")
+        XCTAssertEqual(entry?.messages.count, 2)
+    }
+
+    func test_applyIncomingMessage_doesNotCreateCacheEntry_whenNoneExists() {
+        // upsertDelivered is documented as a no-op when there's no entry.
+        // applyIncomingMessage shouldn't change that contract — populating
+        // the cache from scratch is `prefetch`'s job.
+        let convID = "conv-no-cache-\(UUID().uuidString)"
+        let vm = ConversationsViewModel()
+        vm.conversations = [makeConversation(
+            id: convID, lastText: nil, lastAt: nil
+        )]
+
+        let msg = makeMessage(
+            content: "hi", conversationID: convID,
+            createdAt: "2026-05-12T10:35:00Z"
+        )
+        vm.applyIncomingMessage(msg)
+
+        XCTAssertNil(MessageCache.shared.get(convID))
+    }
+
+    func test_applyIncomingMessage_doesNotUpsertCache_whenMessageIsOlder() {
+        // Monotonic guard already returns early — the cache upsert sits
+        // after it, so an older message must not slip into the cache and
+        // become the cell's "last user message" via the .last accessor.
+        let convID = "conv-cache-skip-older-\(UUID().uuidString)"
+        let existing4 = Message.testFixture(id: "srv-4", conversationID: convID, content: "4")
+        MessageCache.shared.store(convID, entry: MessageCache.Entry(
+            messages: [existing4], nextCursor: nil, otherReadAt: nil,
+            readCursors: nil, fetchedAt: Date()
+        ))
+
+        let vm = ConversationsViewModel()
+        vm.conversations = [makeConversation(
+            id: convID,
+            lastText: "4",
+            lastAt: "2026-05-12T10:35:00.500Z"
+        )]
+
+        let older = makeMessage(
+            content: "3", conversationID: convID,
+            createdAt: "2026-05-12T10:35:00.100Z"
+        )
+        vm.applyIncomingMessage(older)
+
+        let entry = MessageCache.shared.get(convID)
+        XCTAssertEqual(entry?.messages.map(\.content), ["4"],
+                       "older message must not be appended after newer cache state")
     }
 
     // MARK: - withLatestMessageFrom helper
