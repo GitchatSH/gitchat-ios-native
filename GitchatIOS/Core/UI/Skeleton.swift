@@ -4,6 +4,12 @@ struct ShimmerModifier: ViewModifier {
     @State private var phase: CGFloat = -1
 
     func body(content: Content) -> some View {
+        // `withAnimation(...).repeatForever` started from `.onAppear` outlives
+        // the view in iOS 26: the implicit animation keeps publishing `phase`
+        // ticks (and re-evaluating the GeometryReader-based offset) after the
+        // skeleton is replaced. Inside a sheet's ScrollView that turns into a
+        // visible content-bounce loop. Scope the animation to the value so it
+        // dies with the view.
         content
             .overlay(
                 GeometryReader { geo in
@@ -19,14 +25,14 @@ struct ShimmerModifier: ViewModifier {
                     .frame(width: geo.size.width * 1.5)
                     .offset(x: geo.size.width * phase)
                     .blendMode(.plusLighter)
+                    .animation(
+                        .linear(duration: 1.3).repeatForever(autoreverses: false),
+                        value: phase
+                    )
                 }
             )
             .mask(content)
-            .onAppear {
-                withAnimation(.linear(duration: 1.3).repeatForever(autoreverses: false)) {
-                    phase = 1.5
-                }
-            }
+            .onAppear { phase = 1.5 }
     }
 }
 
