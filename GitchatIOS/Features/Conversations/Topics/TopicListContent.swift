@@ -24,7 +24,18 @@ struct TopicListContent: View {
 
     var body: some View {
         content
-            .task(id: parent.id) { await load() }
+            .task(id: parent.id) {
+                await load()
+                // BE emits `topic:message` (and other topic events) to room
+                // `conversation:<parentId>`. Without this subscription the
+                // receiver never gets realtime topic-row updates on this
+                // screen — the preview/timestamp stayed frozen until the
+                // user backed out and re-entered. See issue #148.
+                SocketClient.shared.subscribe(conversation: parent.id)
+            }
+            .onDisappear {
+                SocketClient.shared.unsubscribe(conversation: parent.id)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .gitchatTopicEvent)) { note in
                 if let evt = note.object as? TopicSocketEvent { store.applyEvent(evt) }
             }

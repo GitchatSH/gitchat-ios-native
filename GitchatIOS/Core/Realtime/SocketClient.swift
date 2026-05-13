@@ -44,7 +44,13 @@ final class SocketClient: ObservableObject {
 
     private var manager: SocketManager?
     private var socket: SocketIOClient?
-    private var subscribedConversations = Set<String>()
+    /// Reference-counted room subscriptions. Multiple surfaces can subscribe
+    /// to the same conversation room (e.g. outer Chats list + topic-list +
+    /// chat detail all watching a team's parent room). We only emit
+    /// `subscribe:conversation` on the 0→1 transition and
+    /// `unsubscribe:conversation` on the 1→0 transition, so one screen
+    /// disappearing doesn't yank the room out from under another.
+    private var subscribedConversations: [String: Int] = [:]
     /// Login of the currently authenticated user. Stored so the reconnect
     /// handler can re-emit `subscribe:user` and rebuild the backend's
     /// socket→login mapping. Cleared on `disconnect()`.
@@ -95,9 +101,14 @@ final class SocketClient: ObservableObject {
                 if let login = self?.subscribedUserLogin {
                     self?.socket?.emit("subscribe:user", ["login": login])
                 }
-                // Re-subscribe on reconnect
+                // Re-subscribe on reconnect. Emit one `subscribe:conversation`
+                // per room (BE doesn't ref-count); the local ref counts are
+                // preserved across the reconnect so the 1→0 emit fires only
+                // when the last subscriber goes away.
                 if let subs = self?.subscribedConversations {
-                    for id in subs { self?.subscribe(conversation: id) }
+                    for id in subs.keys {
+                        self?.socket?.emit("subscribe:conversation", ["conversationId": id])
+                    }
                 }
                 // Re-emit watch:presence for every user we previously
                 // subscribed to so the WS server resumes streaming
@@ -218,13 +229,21 @@ final class SocketClient: ObservableObject {
     }
 
     func subscribe(conversation id: String) {
-        subscribedConversations.insert(id)
-        socket?.emit("subscribe:conversation", ["conversationId": id])
+        let prev = subscribedConversations[id] ?? 0
+        subscribedConversations[id] = prev + 1
+        if prev == 0 {
+            socket?.emit("subscribe:conversation", ["conversationId": id])
+        }
     }
 
     func unsubscribe(conversation id: String) {
-        subscribedConversations.remove(id)
-        socket?.emit("unsubscribe:conversation", ["conversationId": id])
+        guard let prev = subscribedConversations[id], prev > 0 else { return }
+        if prev == 1 {
+            subscribedConversations.removeValue(forKey: id)
+            socket?.emit("unsubscribe:conversation", ["conversationId": id])
+        } else {
+            subscribedConversations[id] = prev - 1
+        }
     }
 
     func watchPresence(login: String) {
