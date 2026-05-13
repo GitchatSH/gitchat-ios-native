@@ -68,6 +68,31 @@ final class ConversationsViewModel: ObservableObject {
         MessageCache.shared.upsertDelivered(conversationID: cid, message: msg)
     }
 
+    /// Patch a team row's preview + timestamp in-place when a `topic:message`
+    /// event arrives for one of its topics. The team row in this list is
+    /// keyed by the parent conversation id, but BE's `message:sent` event
+    /// for a topic message carries `msg.conversation_id == topic id` — so
+    /// `applyIncomingMessage(_:)` can't find it. The topic-event payload
+    /// includes `parentId` directly (decoded into `TopicSocketEvent.message`),
+    /// which we use here to look up the team row.
+    ///
+    /// See GitchatSH/gitchat-ios-native#148.
+    func applyIncomingTopicMessage(parentId: String, message: Message) {
+        guard let idx = conversations.firstIndex(where: { $0.id == parentId }) else { return }
+        let c = conversations[idx]
+        // Same monotonic guard as applyIncomingMessage — an out-of-order
+        // topic event shouldn't roll back a fresher preview the row
+        // already has.
+        if let curAt = c.last_message_at,
+           let msgAt = message.created_at,
+           msgAt < curAt {
+            return
+        }
+        let preview = message.content.isEmpty ? c.last_message_preview : message.content
+        conversations[idx] = c.withLastMessage(message, preview: preview)
+        ConversationsCache.shared.store(conversations)
+    }
+
     /// Patch a row's group name + avatar in place after the user saves
     /// group settings from inside the chat. BE emits
     /// `conversation:updated` too, but not always reliably — without
@@ -194,6 +219,53 @@ final class ConversationsViewModel: ObservableObject {
         return ordered
     }
 
+    /// Reconcile a refetched conversation list with our locally-applied state
+    /// after socket events (`message:sent`, `topic:message`). Without this,
+    /// the refetch can roll the row back to BE state that's a beat behind.
+    ///
+    /// Two cases trigger the local-wins branch:
+    ///
+    /// 1. `localAt > remoteAt` — defense against the existing
+    ///    `messages.service.ts:1516` race where the BE briefly returns a row
+    ///    whose `last_message_text` is one message behind (issue #145, PR #146).
+    ///
+    /// 2. `localAt == remoteAt && local.last_message?.id != remote.last_message?.id`
+    ///    — topics-enabled teams (issue #148). BE bumps the parent row's
+    ///    `last_message_at` / `last_message_text` on topic messages
+    ///    (`messages.service.ts:1521-1536`), but the `last_message` struct
+    ///    hydration query (`messages.service.ts:750-756`) filters by
+    ///    `conversation_id = parent_id`, so topic messages — which carry
+    ///    `conversation_id = topic_id` — never make it into the hydrated
+    ///    payload. Result: a row whose timestamp + preview text reflect a
+    ///    topic message but whose structured `last_message` points at an
+    ///    older *root* message on the team. When BE is internally
+    ///    inconsistent like this, the local apply (which has the correct
+    ///    structured message) wins.
+    static func mergeRefetchWithLocal(
+        remote: [Conversation],
+        local: [Conversation]
+    ) -> [Conversation] {
+        var localByID: [String: Conversation] = [:]
+        for c in local { localByID[c.id] = c }
+        return remote.map { remoteConvo -> Conversation in
+            guard let localConvo = localByID[remoteConvo.id],
+                  let localAt = localConvo.last_message_at,
+                  let remoteAt = remoteConvo.last_message_at else {
+                return remoteConvo
+            }
+            if localAt > remoteAt {
+                return remoteConvo.withLatestMessageFrom(localConvo)
+            }
+            if localAt == remoteAt,
+               let localMsgId = localConvo.last_message?.id,
+               let remoteMsgId = remoteConvo.last_message?.id,
+               localMsgId != remoteMsgId {
+                return remoteConvo.withLatestMessageFrom(localConvo)
+            }
+            return remoteConvo
+        }
+    }
+
     func load(reset: Bool = true) async {
         loadTask?.cancel()
         let task = Task { @MainActor in
@@ -212,21 +284,7 @@ final class ConversationsViewModel: ObservableObject {
 
                 if reset {
                     let deduped = Self.dedupeChannels(resp.conversations)
-                    // Defense against BE briefly returning a row whose
-                    // last_message_text is one message behind (race in
-                    // messages.service.ts:1516 — see fix on backend). If
-                    // we've already applied a newer `message:sent`
-                    // locally, keep its last_message_* fields and take
-                    // everything else from BE.
-                    var localByID: [String: Conversation] = [:]
-                    for c in self.conversations { localByID[c.id] = c }
-                    let merged = deduped.map { remote -> Conversation in
-                        guard let local = localByID[remote.id],
-                              let localAt = local.last_message_at,
-                              let remoteAt = remote.last_message_at,
-                              localAt > remoteAt else { return remote }
-                        return remote.withLatestMessageFrom(local)
-                    }
+                    let merged = Self.mergeRefetchWithLocal(remote: deduped, local: self.conversations)
                     self.conversations = merged
                     self.locallyRead.removeAll()
                     // Keep locallyMuted/locallyUnmuted — syncMutedStore() reconciles them
@@ -328,6 +386,13 @@ struct ConversationsListView: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var path = NavigationPath()
     @State private var confirmDelete: Conversation?
+    /// Set of team conversation ids (`has_topics == true`) we've asked the
+    /// socket to subscribe us to. Reconciled whenever `vm.conversations`
+    /// changes so a newly-joined team room starts streaming `topic:message`
+    /// events to the outer Chats list — the only way to update the team
+    /// row's preview/timestamp without waiting on the slower HTTP refetch
+    /// fallback. See GitchatSH/gitchat-ios-native#148.
+    @State private var subscribedTeamRooms: Set<String> = []
     @State private var tappedConvoId: String?
     /// Row currently in the 0.32s "press-in squeeze" before the peek
     /// fires — Telegram's pre-activation feedback (`ContextControllerSourceNode.swift`).
@@ -370,6 +435,21 @@ struct ConversationsListView: View {
         #else
         sidebar
         #endif
+    }
+
+    /// Bring the socket's subscribed-team-rooms set in line with the current
+    /// list. Subscribes to each `has_topics == true` parent room that isn't
+    /// already subscribed, and unsubscribes from rooms we no longer have a
+    /// reason to watch (team left, archived, demoted from topics-enabled).
+    /// SocketClient.subscribe/unsubscribe are reference-counted, so this is
+    /// safe to run alongside ChatDetailView's own subscriptions.
+    private func reconcileTeamRoomSubscriptions() {
+        let wanted = Set(vm.conversations.filter { $0.hasTopicsEnabled }.map(\.id))
+        let toAdd = wanted.subtracting(subscribedTeamRooms)
+        let toRemove = subscribedTeamRooms.subtracting(wanted)
+        for id in toAdd { socket.subscribe(conversation: id) }
+        for id in toRemove { socket.unsubscribe(conversation: id) }
+        subscribedTeamRooms = wanted
     }
 
     private func openConversation(_ convo: Conversation) {
@@ -912,10 +992,31 @@ struct ConversationsListView: View {
                 await vm.load()
                 DraftStore.shared.loadAll(for: vm.conversations.map(\.id))
                 socket.onConversationUpdated = { Task { await vm.load() } }
+                reconcileTeamRoomSubscriptions()
+            }
+            .onDisappear {
+                for id in subscribedTeamRooms {
+                    socket.unsubscribe(conversation: id)
+                }
+                subscribedTeamRooms.removeAll()
             }
             .onReceive(NotificationCenter.default.publisher(for: .gitchatMessageSent)) { note in
                 guard let msg = note.object as? Message else { return }
                 vm.applyIncomingMessage(msg)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .gitchatTopicEvent)) { note in
+                // The outer Chats list is subscribed to every team-conversation
+                // room with `has_topics == true` (see `reconcileTeamRoomSubscriptions`).
+                // For incoming topic messages, patch the team row's preview
+                // via the parentId on the event payload — `message:sent` would
+                // arrive with `conversation_id == topic id`, which doesn't
+                // match any row in `vm.conversations`.
+                guard let evt = note.object as? TopicSocketEvent,
+                      case let .message(parentId, _, msg) = evt else { return }
+                vm.applyIncomingTopicMessage(parentId: parentId, message: msg)
+            }
+            .onChange(of: vm.conversations.map(\.id)) { _ in
+                reconcileTeamRoomSubscriptions()
             }
             .onReceive(NotificationCenter.default.publisher(for: .gitchatConversationMetadataChanged)) { note in
                 guard let info = note.userInfo,
