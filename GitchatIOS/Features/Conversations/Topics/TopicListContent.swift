@@ -36,9 +36,10 @@ struct TopicListContent: View {
             .onDisappear {
                 SocketClient.shared.unsubscribe(conversation: parent.id)
             }
-            .onReceive(NotificationCenter.default.publisher(for: .gitchatTopicEvent)) { note in
-                if let evt = note.object as? TopicSocketEvent { store.applyEvent(evt) }
-            }
+            // Note: `TopicListStore.shared` self-subscribes to
+            // `.gitchatTopicEvent` so we don't forward here. Forwarding
+            // additionally would double-bump unread now that bumping
+            // lives inside `applyEvent(.message)`.
     }
 
     @ViewBuilder

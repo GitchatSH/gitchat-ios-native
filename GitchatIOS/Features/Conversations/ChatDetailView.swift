@@ -174,6 +174,13 @@ struct ChatDetailView: View {
         .task(id: vm.conversation.id) { await resolveTarget() }
         .task { await onAppearTask() }
         .onAppear {
+            // Claim the active chat surface here (not just in
+            // ChatViewModel.init): SwiftUI keeps `@StateObject` alive
+            // past view dismissal, so deinit can't be trusted to release
+            // the surface in time. Re-claiming on every appear is also
+            // idempotent if the user re-enters the same chat after a
+            // dismiss/restore cycle.
+            TopicListStore.shared.setActiveSurface(vm.target.conversationId)
             if let mid = router.pendingMessageId {
                 router.pendingMessageId = nil
                 // Set jump target immediately — the list retries
@@ -1147,6 +1154,13 @@ struct ChatDetailView: View {
             socket.currentConversationId = nil
             ActiveConversationTracker.shared.id = nil
         }
+        // Release the active chat surface so subsequent topic messages
+        // bump the unread badge. Without this, SwiftUI's @StateObject
+        // retention can keep ChatViewModel alive past view dismissal —
+        // its deinit/clearActiveSurface fires too late (or never, until
+        // memory pressure) and the topic the user just exited never
+        // re-receives bumps until they enter another chat.
+        TopicListStore.shared.clearActiveSurface(vm.target.conversationId)
     }
 }
 
