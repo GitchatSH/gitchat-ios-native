@@ -71,10 +71,12 @@ final class TopicListStoreTests: XCTestCase {
         XCTAssertEqual(updated?.last_message_at, "2026-04-28T10:00:00.000Z")
     }
 
-    func testApplyEventMessage_doesNotTouchUnread_avoidingDoubleCountWithChatViewModel() {
-        // ChatViewModel.handle(topicEvent:) already calls bumpUnread when
-        // a chat detail is active for a different topic. Bumping here
-        // would double-count when both subscribers are alive.
+    func testApplyEventMessage_bumpsUnread_whenNoActiveSurface() {
+        // Regression for the chat-list stale badge bug: when the user has
+        // exited every chat detail (no ChatViewModel alive), incoming
+        // `.message` events still need to bump the topic row's unread
+        // count. Previously this was deferred to ChatViewModel and got
+        // lost whenever the chat detail was dismissed.
         let store = TopicListStore()
         store.append(Topic.fixture(id: "t1", parentId: "p", unread: 3), parentId: "p")
 
@@ -84,7 +86,90 @@ final class TopicListStoreTests: XCTestCase {
         )
         store.applyEvent(.message(parentId: "p", topicId: "t1", message: msg))
 
-        XCTAssertEqual(store.topics(forParent: "p").first?.unread_count, 3)
+        XCTAssertEqual(store.topics(forParent: "p").first?.unread_count, 4)
+    }
+
+    func testApplyEventMessage_bumpsUnread_whenDifferentSurfaceIsActive() {
+        // User is in chat detail for topic t1 but a message arrives for
+        // topic t2. t2 must bump.
+        let store = TopicListStore()
+        store.append(Topic.fixture(id: "t1", parentId: "p", unread: 0), parentId: "p")
+        store.append(Topic.fixture(id: "t2", parentId: "p", unread: 1), parentId: "p")
+        store.setActiveSurface("t1")
+
+        let msg = Message.testFixture(
+            id: "srv-3", clientMessageID: nil, conversationID: "t2",
+            sender: "bob", content: "for t2"
+        )
+        store.applyEvent(.message(parentId: "p", topicId: "t2", message: msg))
+
+        XCTAssertEqual(store.topics(forParent: "p").first(where: { $0.id == "t2" })?.unread_count, 2)
+    }
+
+    func testApplyEventMessage_doesNotBumpUnread_whenSameSurfaceIsActive() {
+        // User is currently viewing topic t1; the chat is open so the new
+        // message is rendered in-chat — its badge must stay at 0.
+        let store = TopicListStore()
+        store.append(Topic.fixture(id: "t1", parentId: "p", unread: 0), parentId: "p")
+        store.setActiveSurface("t1")
+
+        let msg = Message.testFixture(
+            id: "srv-4", clientMessageID: nil, conversationID: "t1",
+            sender: "bob", content: "while viewing"
+        )
+        store.applyEvent(.message(parentId: "p", topicId: "t1", message: msg))
+
+        XCTAssertEqual(store.topics(forParent: "p").first?.unread_count, 0)
+        // Preview MUST still update — the row reflects the latest body
+        // for when the user backs out.
+        XCTAssertEqual(store.topics(forParent: "p").first?.last_message_preview, "while viewing")
+    }
+
+    func testApplyEventMessage_bumpsUnread_afterUserExitsTheJustViewedChat() {
+        // Reproduces the user-reported scenario verbatim: user opens a
+        // chat, exits, and a new message arrives for that same chat.
+        // The badge MUST bump (was 0) — the previous deinit-only release
+        // missed this because SwiftUI retains the @StateObject after view
+        // dismissal. Now the View calls `clearActiveSurface` on
+        // `.onDisappear` so the store sees the surface as inactive.
+        let store = TopicListStore()
+        store.append(Topic.fixture(id: "t1", parentId: "p", unread: 0), parentId: "p")
+
+        // Enter chat → mark active.
+        store.setActiveSurface("t1")
+        // While inside, a message arrives — should NOT bump (we're reading).
+        let msg1 = Message.testFixture(
+            id: "srv-while-inside", clientMessageID: nil, conversationID: "t1",
+            sender: "bob", content: "inside"
+        )
+        store.applyEvent(.message(parentId: "p", topicId: "t1", message: msg1))
+        XCTAssertEqual(store.topics(forParent: "p").first?.unread_count, 0)
+
+        // Exit chat → release surface (this is what `.onDisappear` does
+        // in ChatDetailView).
+        store.clearActiveSurface("t1")
+
+        // Next message arrives — MUST bump now.
+        let msg2 = Message.testFixture(
+            id: "srv-after-exit", clientMessageID: nil, conversationID: "t1",
+            sender: "bob", content: "after exit"
+        )
+        store.applyEvent(.message(parentId: "p", topicId: "t1", message: msg2))
+
+        XCTAssertEqual(store.topics(forParent: "p").first?.unread_count, 1,
+                       "After the user backs out of the chat, the next message MUST bump the badge")
+        XCTAssertEqual(store.topics(forParent: "p").first?.last_message_preview, "after exit")
+    }
+
+    func testClearActiveSurface_onlyClearsIfMatching() {
+        // Race protection: A.deinit firing after B.init (rare SwiftUI
+        // lifecycle interleave) must NOT wipe B's active flag.
+        let store = TopicListStore()
+        store.setActiveSurface("B")
+        store.clearActiveSurface("A")  // A is stale
+        XCTAssertEqual(store.activeSurfaceId, "B")
+        store.clearActiveSurface("B")
+        XCTAssertNil(store.activeSurfaceId)
     }
 
     func testApplyEventMessage_monotonicGuardSkipsOutOfOrderOlderMessage() {

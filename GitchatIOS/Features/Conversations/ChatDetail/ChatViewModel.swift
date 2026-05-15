@@ -77,6 +77,14 @@ final class ChatViewModel: ObservableObject {
     var testHook_sendEndpoint: String { sendEndpoint }
     #endif
 
+    // MARK: - Active-surface bookkeeping
+
+    /// Mirrors `target.conversationId` so `deinit` (which can't touch
+    /// MainActor-isolated state directly) has something safe to read.
+    /// Updated from `init` and `setTarget` only — both run on MainActor.
+    private final class SurfaceIdBox { var value: String = "" }
+    private let surfaceIdBox = SurfaceIdBox()
+
     // MARK: - Topic event observer
 
     private var topicEventObserver: NSObjectProtocol?
@@ -101,29 +109,31 @@ final class ChatViewModel: ObservableObject {
                 text: message.content.isEmpty ? nil : message.content,
                 at: message.created_at
             )
-            if target.conversationId == topicId {
-                // Mirror ChatDetailViewBindings.makeOutboxDeliveryHandler:
-                // for our own outbound topic sends, BE echoes the
-                // client_message_id we sent. If an optimistic placeholder
-                // with that cmid is in `messages` (attachment send path),
-                // replace in-place rather than append — otherwise the
-                // server message duplicates the placeholder. Falls through
-                // to seenIds dedup for inbound messages with no cmid match.
-                if let cmid = message.client_message_id,
-                   let idx = messages.firstIndex(where: {
-                       $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame
-                   }) {
-                    messages[idx] = message
-                    ChatMessageView.seenIds.insert(message.id)
-                    persistCache()
-                    return
-                }
-                guard ChatMessageView.seenIds.insert(message.id).inserted else { return }
-                messages.append(message)
+            // Unread bumping for non-active topics is owned by
+            // `TopicListStore.applyEvent(.message)` (gated on
+            // `activeSurfaceId`). Here we only handle the case where the
+            // event is for the chat we're currently viewing — append or
+            // dedupe into the in-memory message list.
+            guard target.conversationId == topicId else { return }
+            // Mirror ChatDetailViewBindings.makeOutboxDeliveryHandler:
+            // for our own outbound topic sends, BE echoes the
+            // client_message_id we sent. If an optimistic placeholder
+            // with that cmid is in `messages` (attachment send path),
+            // replace in-place rather than append — otherwise the
+            // server message duplicates the placeholder. Falls through
+            // to seenIds dedup for inbound messages with no cmid match.
+            if let cmid = message.client_message_id,
+               let idx = messages.firstIndex(where: {
+                   $0.client_message_id?.caseInsensitiveCompare(cmid) == .orderedSame
+               }) {
+                messages[idx] = message
+                ChatMessageView.seenIds.insert(message.id)
                 persistCache()
-            } else {
-                TopicListStore.shared.bumpUnread(topicId: topicId, parentId: parentId, by: 1)
+                return
             }
+            guard ChatMessageView.seenIds.insert(message.id).inserted else { return }
+            messages.append(message)
+            persistCache()
         case .archived(let parentId, let topicId):
             if target.conversationId == topicId {
                 ToastCenter.shared.show(.info, "This topic was archived", nil)
@@ -164,11 +174,21 @@ final class ChatViewModel: ObservableObject {
         loadGeneration &+= 1
         self.target = newTarget
         self.messages = []
+        surfaceIdBox.value = newTarget.conversationId
+        TopicListStore.shared.setActiveSurface(newTarget.conversationId)
         Task { await self.load() }
     }
 
     deinit {
         topicEventObserver.map(NotificationCenter.default.removeObserver)
+        // Hop to MainActor: TopicListStore is @MainActor and deinit runs
+        // nonisolated. `surfaceIdBox` is a let-reference to a small class
+        // so reading its value here is safe without touching MainActor
+        // state on self.
+        let surfaceId = surfaceIdBox.value
+        Task { @MainActor in
+            TopicListStore.shared.clearActiveSurface(surfaceId)
+        }
     }
 
     init(target: ChatTarget, outbox: OutboxStore = .shared) {
@@ -202,6 +222,10 @@ final class ChatViewModel: ObservableObject {
             ChatMessageView.markSeen(self.messages.map(\.id))
         }
         observeTopicEvents()
+        // Claim the active chat surface so `TopicListStore.applyEvent`
+        // skips bumping the badge for the topic the user is now viewing.
+        surfaceIdBox.value = target.conversationId
+        TopicListStore.shared.setActiveSurface(target.conversationId)
     }
 
     /// Backward-compatible convenience for the legacy `ChatViewModel(conversation:)`

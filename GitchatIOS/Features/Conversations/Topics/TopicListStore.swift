@@ -3,23 +3,49 @@ import Combine
 
 @MainActor
 final class TopicListStore: ObservableObject {
-    static let shared = TopicListStore()
+    static let shared = TopicListStore(attachToNotificationCenter: true)
 
     @Published private(set) var topicsByParent: [String: [Topic]] = [:]
     /// Local-only pin state (per parent → set of topic ids), persisted to
     /// UserDefaults. Mirrors the VS Code extension's webview-state pin model:
     /// pin is per-device, never sent to BE, never received via socket.
     @Published private(set) var localPinnedByParent: [String: Set<String>] = [:]
+    /// Id of the chat surface (topic id or conversation id) the user is
+    /// currently viewing. Used by `applyEvent(.message)` to skip the
+    /// unread bump for the active chat — the user is already reading it.
+    /// Set by `ChatViewModel` on init/setTarget and cleared on deinit.
+    @Published private(set) var activeSurfaceId: String?
 
     private var lru: [String] = []                       // recently accessed parentIds (front = newest)
     private let maxParents: Int
     private let defaults: UserDefaults
     private let pinDefaultsKey = "TopicListStore.localPinnedByParent.v1"
+    private var topicEventObserver: NSObjectProtocol?
 
-    init(maxParents: Int = 10, defaults: UserDefaults = .standard) {
+    init(maxParents: Int = 10,
+         defaults: UserDefaults = .standard,
+         attachToNotificationCenter: Bool = false) {
         self.maxParents = maxParents
         self.defaults = defaults
         loadLocalPins()
+        if attachToNotificationCenter {
+            // The shared instance owns this subscription so unread badges
+            // stay up to date even when no chat view or topic list is on
+            // screen (e.g. user is on the outer Chats home tab). Per-view
+            // forwarders were the old design and lost events on dismiss.
+            topicEventObserver = NotificationCenter.default.addObserver(
+                forName: .gitchatTopicEvent, object: nil, queue: .main
+            ) { [weak self] note in
+                guard let evt = note.object as? TopicSocketEvent else { return }
+                Task { @MainActor [weak self] in
+                    self?.applyEvent(evt)
+                }
+            }
+        }
+    }
+
+    deinit {
+        topicEventObserver.map(NotificationCenter.default.removeObserver)
     }
 
     // MARK: - Reads
@@ -110,6 +136,19 @@ final class TopicListStore: ObservableObject {
         bumpUnread(topicId: topicId, parentId: parentId, by: -.max)
     }
 
+    // MARK: - Active surface
+
+    func setActiveSurface(_ id: String?) {
+        activeSurfaceId = id
+    }
+
+    /// Clears the active surface ONLY if it currently matches `id`. Guards
+    /// against a SwiftUI lifecycle race where ChatViewModel A's deinit
+    /// fires after ChatViewModel B has already taken over.
+    func clearActiveSurface(_ id: String) {
+        if activeSurfaceId == id { activeSurfaceId = nil }
+    }
+
     func applyEvent(_ event: TopicSocketEvent) {
         switch event {
         case .created(let parentId, let topic):
@@ -138,12 +177,14 @@ final class TopicListStore: ObservableObject {
             // Keep the topic row's preview/timestamp/sender in sync with
             // incoming messages so users on the topic-list view see the
             // latest body without waiting for the next `.task` reload.
-            // Unread bumping is left to `ChatViewModel.handle(topicEvent:)`
-            // when a chat detail is active — bumping here too would
-            // double-count when both subscribers are alive (e.g. topic
-            // list still mounted in the navigation stack behind a pushed
-            // chat detail). The unread badge catches up from BE on the
-            // next list refetch in that case.
+            //
+            // Unread bumping: this is the single source of truth. We bump
+            // unless `topicId` is the chat surface the user is currently
+            // viewing (which sets itself via `setActiveSurface`). Before,
+            // bumping lived in `ChatViewModel.handle(topicEvent:)` which
+            // meant badges stopped updating the moment the chat detail
+            // was dismissed — see GitchatSH/gitchat-ios-native#150.
+            let isActiveSurface = (topicId == activeSurfaceId)
             update(topicId: topicId, parentId: parentId) { t in
                 if let curAt = t.last_message_at,
                    let msgAt = message.created_at,
@@ -151,6 +192,7 @@ final class TopicListStore: ObservableObject {
                     return
                 }
                 let preview = message.content.isEmpty ? t.last_message_preview : message.content
+                let newUnread = isActiveSurface ? t.unread_count : t.unread_count + 1
                 t = Topic(
                     id: t.id, parent_conversation_id: t.parent_conversation_id,
                     name: t.name, icon_emoji: t.icon_emoji, color_token: t.color_token,
@@ -159,7 +201,7 @@ final class TopicListStore: ObservableObject {
                     last_message_at: message.created_at ?? t.last_message_at,
                     last_message_preview: preview,
                     last_sender_login: message.sender,
-                    unread_count: t.unread_count,
+                    unread_count: newUnread,
                     unread_mentions_count: t.unread_mentions_count,
                     unread_reactions_count: t.unread_reactions_count,
                     created_by: t.created_by, created_at: t.created_at
