@@ -25,3 +25,4 @@ Package.resolved
 ## Per-developer Claude Code workspace notes
 .claude/
 .superpowers/
+.gstack/

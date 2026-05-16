@@ -15,6 +15,23 @@ extension Conversation {
             topic_chips: nil
         )
     }
+
+    /// A topics-enabled team row, used by tests that exercise the outer
+    /// Chats list's unread badge (the row whose badge should reflect
+    /// topic activity after the BE bubble fix lands).
+    static func fixtureTeam(id: String, unreadCount: Int = 0) -> Conversation {
+        Conversation(
+            id: id, type: "team", is_group: true,
+            group_name: "Team \(id)", group_avatar_url: nil,
+            repo_full_name: nil, participants: [], other_user: nil,
+            last_message: nil, last_message_preview: nil,
+            last_message_text: nil, last_message_at: nil,
+            unread_count: unreadCount, pinned: false, pinned_at: nil,
+            is_request: false, updated_at: nil,
+            is_muted: false, has_mention: false, has_reaction: false,
+            topics_enabled: true, has_topics: true, topic_chips: nil
+        )
+    }
 }
 
 extension Topic {

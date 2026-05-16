@@ -16,6 +16,18 @@ final class TopicListStore: ObservableObject {
     /// Set by `ChatViewModel` on init/setTarget and cleared on deinit.
     @Published private(set) var activeSurfaceId: String?
 
+    /// Emitted by every successful topic-unread mutation. Subscribers
+    /// (e.g. `ConversationsViewModel`) apply the delta to the parent
+    /// team's `unreadCount` on the outer Chats list so the badge reflects
+    /// topic activity in real time. The delta is the *true* change in
+    /// the topic's `unread_count` after clamping — never `-Int.max`.
+    let parentUnreadDeltas = PassthroughSubject<ParentUnreadDelta, Never>()
+
+    struct ParentUnreadDelta: Equatable {
+        let parentId: String
+        let delta: Int
+    }
+
     private var lru: [String] = []                       // recently accessed parentIds (front = newest)
     private let maxParents: Int
     private let defaults: UserDefaults
@@ -119,21 +131,43 @@ final class TopicListStore: ObservableObject {
     }
 
     func bumpUnread(topicId: String, parentId: String, by delta: Int) {
-        update(topicId: topicId, parentId: parentId) { t in
-            let new = max(0, t.unread_count + delta)
-            t = Topic(id: t.id, parent_conversation_id: t.parent_conversation_id,
-                      name: t.name, icon_emoji: t.icon_emoji, color_token: t.color_token,
-                      is_general: t.is_general, pin_order: t.pin_order, archived_at: t.archived_at,
-                      last_message_at: t.last_message_at, last_message_preview: t.last_message_preview,
-                      last_sender_login: t.last_sender_login, unread_count: new,
-                      unread_mentions_count: t.unread_mentions_count,
-                      unread_reactions_count: t.unread_reactions_count,
-                      created_by: t.created_by, created_at: t.created_at)
-        }
+        setTopicUnread(topicId: topicId, parentId: parentId) { $0 + delta }
     }
 
     func clearUnread(topicId: String, parentId: String) {
-        bumpUnread(topicId: topicId, parentId: parentId, by: -.max)
+        setTopicUnread(topicId: topicId, parentId: parentId) { _ in 0 }
+    }
+
+    /// Single emission point for topic-unread mutations. Computes the
+    /// true delta (`newClamped - old`) after applying the floor-at-zero
+    /// clamp, and publishes it to `parentUnreadDeltas`. All callers
+    /// (`bumpUnread`, `clearUnread`, and the `.message` realtime path)
+    /// route through here so the outer Chats list parent row stays in
+    /// sync with topic-level changes.
+    private func setTopicUnread(
+        topicId: String,
+        parentId: String,
+        transform: (Int) -> Int
+    ) {
+        guard var arr = topicsByParent[parentId],
+              let idx = arr.firstIndex(where: { $0.id == topicId }) else { return }
+        let old = arr[idx].unread_count
+        let newClamped = max(0, transform(old))
+        let delta = newClamped - old
+        guard delta != 0 else { return }
+        let t = arr[idx]
+        arr[idx] = Topic(
+            id: t.id, parent_conversation_id: t.parent_conversation_id,
+            name: t.name, icon_emoji: t.icon_emoji, color_token: t.color_token,
+            is_general: t.is_general, pin_order: t.pin_order, archived_at: t.archived_at,
+            last_message_at: t.last_message_at, last_message_preview: t.last_message_preview,
+            last_sender_login: t.last_sender_login, unread_count: newClamped,
+            unread_mentions_count: t.unread_mentions_count,
+            unread_reactions_count: t.unread_reactions_count,
+            created_by: t.created_by, created_at: t.created_at
+        )
+        topicsByParent[parentId] = sort(arr, parentId: parentId)
+        parentUnreadDeltas.send(ParentUnreadDelta(parentId: parentId, delta: delta))
     }
 
     // MARK: - Active surface
@@ -185,14 +219,17 @@ final class TopicListStore: ObservableObject {
             // meant badges stopped updating the moment the chat detail
             // was dismissed — see GitchatSH/gitchat-ios-native#150.
             let isActiveSurface = (topicId == activeSurfaceId)
+            // Track whether the monotonic guard short-circuited so we
+            // don't bump unread for an out-of-order older message.
+            var appliedPreviewUpdate = false
             update(topicId: topicId, parentId: parentId) { t in
                 if let curAt = t.last_message_at,
                    let msgAt = message.created_at,
                    msgAt < curAt {
                     return
                 }
+                appliedPreviewUpdate = true
                 let preview = message.content.isEmpty ? t.last_message_preview : message.content
-                let newUnread = isActiveSurface ? t.unread_count : t.unread_count + 1
                 t = Topic(
                     id: t.id, parent_conversation_id: t.parent_conversation_id,
                     name: t.name, icon_emoji: t.icon_emoji, color_token: t.color_token,
@@ -201,11 +238,14 @@ final class TopicListStore: ObservableObject {
                     last_message_at: message.created_at ?? t.last_message_at,
                     last_message_preview: preview,
                     last_sender_login: message.sender,
-                    unread_count: newUnread,
+                    unread_count: t.unread_count, // unread bumped below via setTopicUnread
                     unread_mentions_count: t.unread_mentions_count,
                     unread_reactions_count: t.unread_reactions_count,
                     created_by: t.created_by, created_at: t.created_at
                 )
+            }
+            if appliedPreviewUpdate && !isActiveSurface {
+                setTopicUnread(topicId: topicId, parentId: parentId) { $0 + 1 }
             }
         case .settingsUpdated:
             // Settings events are handled by callers, not the store.
