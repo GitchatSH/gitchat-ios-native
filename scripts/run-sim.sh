@@ -202,7 +202,24 @@ info "Installing app..."
 xcrun simctl install "$TARGET_DEVICE" "$APP_PATH"
 
 # --- Launch ---
-info "Launching $BUNDLE_ID..."
-xcrun simctl launch "$TARGET_DEVICE" "$BUNDLE_ID"
+# Note: --local DOESN'T affect the build (there's only one .xcscheme on disk;
+# the API_BASE_URL override lives in the Xcode scheme run-action env vars
+# which simctl doesn't honor). To match the in-IDE "GitchatIOS local"
+# behavior, we forward localhost API + WS URLs via SIMCTL_CHILD_* so the
+# launched process sees them in ProcessInfo.environment (see Config.swift).
+if [[ "$LOCAL" -eq 1 ]]; then
+    # Mirror the in-IDE "GitchatIOS local" scheme env vars:
+    #   API_BASE_URL = http://localhost:3000/api/v1
+    #   WS_URL       = http://localhost:3001
+    # WS runs on its own port (separate Nest service); the http:// prefix
+    # is correct — SocketManager handles the WS transport upgrade.
+    info "Launching $BUNDLE_ID with local env (API :3000, WS :3001)..."
+    SIMCTL_CHILD_API_BASE_URL="http://localhost:3000/api/v1" \
+    SIMCTL_CHILD_WS_URL="http://localhost:3001" \
+        xcrun simctl launch "$TARGET_DEVICE" "$BUNDLE_ID"
+else
+    info "Launching $BUNDLE_ID..."
+    xcrun simctl launch "$TARGET_DEVICE" "$BUNDLE_ID"
+fi
 
 info "Done. App running on \"$TARGET_DEVICE\"."
