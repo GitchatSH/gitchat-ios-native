@@ -35,11 +35,289 @@
 
 ## Track 1: Backend
 
+> **Test strategy:** Per user decision, tests run against a local Postgres dev DB (no Docker/testcontainers). The codebase has zero existing real-DB test infra, so Task 0 below builds the foundation: a Nest testing module wiring real `DataSource`, a migration runner, and a per-test isolation strategy (transaction rollback). Subsequent tasks (1-5) seed via helpers that share this infrastructure.
+
+### Task 0: Test infrastructure — real-DB integration spec scaffold
+
+**Files:**
+- Create: `../gitchat-webapp/backend/test/integration/helpers/db-test-module.ts`
+- Create: `../gitchat-webapp/backend/test/integration/helpers/seed-helpers.ts`
+- Create: `../gitchat-webapp/backend/test/integration/modules/messages/get-conversations-topic-bubble.integration-spec.ts` (empty smoke test)
+- Modify: `../gitchat-webapp/backend/test/jest-e2e.json` (extend `testRegex` to include `.integration-spec.ts`)
+
+- [ ] **Step 1: Add DB-backed Nest testing module helper**
+
+Create `test/integration/helpers/db-test-module.ts`:
+
+```ts
+import { Test, TestingModule } from '@nestjs/testing';
+import { DataSource } from 'typeorm';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import * as entities from '@database/postgres/entities';
+
+/**
+ * Boot a Nest testing module bound to the local dev Postgres.
+ * Requires DATABASE_URL or the standard PG* env vars in `.env`.
+ *
+ * Tests should run each case inside a transaction and rollback in
+ * afterEach so they don't pollute the shared dev DB.
+ */
+export async function bootDbTestModule(providers: any[] = []): Promise<{
+  module: TestingModule;
+  dataSource: DataSource;
+}> {
+  const module = await Test.createTestingModule({
+    imports: [
+      TypeOrmModule.forRoot({
+        type: 'postgres',
+        url: process.env.DATABASE_URL,
+        entities: Object.values(entities),
+        synchronize: false,
+        logging: false,
+      }),
+    ],
+    providers,
+  }).compile();
+
+  const dataSource = module.get(DataSource);
+  return { module, dataSource };
+}
+```
+
+- [ ] **Step 2: Add per-test transaction-isolation helper**
+
+Append to `db-test-module.ts`:
+
+```ts
+/**
+ * Wrap a test body in a SAVEPOINT and roll it back at the end.
+ * Use this so tests share a single DataSource without polluting each
+ * other's state. Caveat: code under test must not COMMIT explicitly.
+ */
+export async function withRolledBackTx<T>(
+  ds: DataSource,
+  body: (qr: import('typeorm').QueryRunner) => Promise<T>,
+): Promise<T> {
+  const qr = ds.createQueryRunner();
+  await qr.connect();
+  await qr.startTransaction();
+  try {
+    return await body(qr);
+  } finally {
+    await qr.rollbackTransaction();
+    await qr.release();
+  }
+}
+```
+
+- [ ] **Step 3: Add seed helpers**
+
+Create `test/integration/helpers/seed-helpers.ts`:
+
+```ts
+import { QueryRunner } from 'typeorm';
+
+/** Insert a DM conversation between `login` and `other`, plus `unread` user messages from `other`. */
+export async function seedDM(
+  qr: QueryRunner,
+  args: { login: string; other: string; convId: string; unread: number },
+): Promise<void> {
+  await qr.query(
+    `INSERT INTO message_conversations (id, type, parent_conversation_id, created_at)
+     VALUES ($1, 'dm', NULL, NOW())`,
+    [args.convId],
+  );
+  await qr.query(
+    `INSERT INTO message_conversation_participants (conversation_id, user_login)
+     VALUES ($1, $2), ($1, $3)`,
+    [args.convId, args.login, args.other],
+  );
+  for (let i = 0; i < args.unread; i++) {
+    await qr.query(
+      `INSERT INTO messages (id, conversation_id, sender_login, type, body, created_at)
+       VALUES (gen_random_uuid(), $1, $2, 'user', $3, NOW())`,
+      [args.convId, args.other, `dm-msg-${i}`],
+    );
+  }
+}
+
+export async function seedGroup(
+  qr: QueryRunner,
+  args: { login: string; groupId: string; unread: number; senderLogin: string },
+): Promise<void> {
+  await qr.query(
+    `INSERT INTO message_conversations (id, type, parent_conversation_id, created_at)
+     VALUES ($1, 'group', NULL, NOW())`,
+    [args.groupId],
+  );
+  await qr.query(
+    `INSERT INTO message_conversation_participants (conversation_id, user_login)
+     VALUES ($1, $2), ($1, $3)`,
+    [args.groupId, args.login, args.senderLogin],
+  );
+  for (let i = 0; i < args.unread; i++) {
+    await qr.query(
+      `INSERT INTO messages (id, conversation_id, sender_login, type, body, created_at)
+       VALUES (gen_random_uuid(), $1, $2, 'user', $3, NOW())`,
+      [args.groupId, args.senderLogin, `group-msg-${i}`],
+    );
+  }
+}
+
+export async function seedTeamWithTopics(
+  qr: QueryRunner,
+  args: {
+    login: string;
+    teamId: string;
+    topics: Array<{ id: string; cursorAt: string | null }>;
+    teamCursorAt: string | null;
+    mainUnread: number;
+    topicUnreads: Record<string, number>;
+    senderLogin: string;
+  },
+): Promise<void> {
+  await qr.query(
+    `INSERT INTO message_conversations (id, type, parent_conversation_id, created_at)
+     VALUES ($1, 'team', NULL, NOW())`,
+    [args.teamId],
+  );
+  await qr.query(
+    `INSERT INTO message_conversation_participants (conversation_id, user_login)
+     VALUES ($1, $2), ($1, $3)`,
+    [args.teamId, args.login, args.senderLogin],
+  );
+  for (const t of args.topics) {
+    await qr.query(
+      `INSERT INTO message_conversations (id, type, parent_conversation_id, created_at)
+       VALUES ($1, 'topic', $2, NOW())`,
+      [t.id, args.teamId],
+    );
+    if (t.cursorAt) {
+      await qr.query(
+        `INSERT INTO message_read_cursors (conversation_id, user_login, last_read_at)
+         VALUES ($1, $2, $3)`,
+        [t.id, args.login, t.cursorAt],
+      );
+    }
+  }
+  if (args.teamCursorAt) {
+    await qr.query(
+      `INSERT INTO message_read_cursors (conversation_id, user_login, last_read_at)
+       VALUES ($1, $2, $3)`,
+      [args.teamId, args.login, args.teamCursorAt],
+    );
+  }
+  for (let i = 0; i < args.mainUnread; i++) {
+    await qr.query(
+      `INSERT INTO messages (id, conversation_id, sender_login, type, body, created_at)
+       VALUES (gen_random_uuid(), $1, $2, 'user', $3, NOW())`,
+      [args.teamId, args.senderLogin, `main-${i}`],
+    );
+  }
+  for (const [topicId, count] of Object.entries(args.topicUnreads)) {
+    for (let i = 0; i < count; i++) {
+      await qr.query(
+        `INSERT INTO messages (id, conversation_id, sender_login, type, body, created_at)
+         VALUES (gen_random_uuid(), $1, $2, 'user', $3, NOW())`,
+        [topicId, args.senderLogin, `topic-${topicId}-${i}`],
+      );
+    }
+  }
+}
+```
+
+Verify exact participant table/column names against schema before running. If `message_conversation_participants` is named differently in this codebase (e.g. `conversation_members`), adjust to match the entity at `src/database/postgres/entities/`.
+
+- [ ] **Step 4: Add Jest config branch for integration specs**
+
+Edit `test/jest-e2e.json`:
+
+```json
+{
+  "testRegex": "(\\.integration-spec\\.ts$|\\.e2e-spec\\.ts$)",
+  ...
+}
+```
+
+(Or add a new `jest-integration.json` file and a `yarn test:integration` package script — pick whichever the team prefers. Defaulting to extending e2e config keeps it simple.)
+
+- [ ] **Step 5: Add a smoke integration spec to prove the harness works**
+
+Create `test/integration/modules/messages/get-conversations-topic-bubble.integration-spec.ts`:
+
+```ts
+import { DataSource } from 'typeorm';
+import { bootDbTestModule, withRolledBackTx } from '../../helpers/db-test-module';
+import { seedDM } from '../../helpers/seed-helpers';
+
+describe('integration harness smoke', () => {
+  let ds: DataSource;
+
+  beforeAll(async () => {
+    const { dataSource } = await bootDbTestModule();
+    ds = dataSource;
+  });
+
+  afterAll(async () => {
+    await ds.destroy();
+  });
+
+  it('connects to local Postgres and rolls back a seed', async () => {
+    await withRolledBackTx(ds, async (qr) => {
+      await seedDM(qr, {
+        login: 'alice', other: 'bob',
+        convId: '11111111-1111-1111-1111-111111111111',
+        unread: 2,
+      });
+      const rows = await qr.query(
+        `SELECT COUNT(*)::int AS cnt FROM messages WHERE conversation_id = $1`,
+        ['11111111-1111-1111-1111-111111111111'],
+      );
+      expect(rows[0].cnt).toBe(2);
+    });
+    // After rollback, the conversation must not exist.
+    const after = await ds.query(
+      `SELECT COUNT(*)::int AS cnt FROM message_conversations WHERE id = $1`,
+      ['11111111-1111-1111-1111-111111111111'],
+    );
+    expect(after[0].cnt).toBe(0);
+  });
+});
+```
+
+- [ ] **Step 6: Run smoke**
+
+Ensure local Postgres is reachable with the credentials in `backend/.env`. Then:
+
+```bash
+cd ../gitchat-webapp/backend
+yarn test:e2e get-conversations-topic-bubble.integration-spec.ts
+```
+
+Expected: PASS.
+
+If the test cannot connect, the next steps are debugging the env (DATABASE_URL, port, password) — do not proceed to Task 1 until the smoke is green.
+
+- [ ] **Step 7: Commit**
+
+```bash
+cd ../gitchat-webapp
+git add backend/test/integration/helpers/db-test-module.ts \
+        backend/test/integration/helpers/seed-helpers.ts \
+        backend/test/integration/modules/messages/get-conversations-topic-bubble.integration-spec.ts \
+        backend/test/jest-e2e.json
+git commit -m "test(infra): real-Postgres integration spec scaffold"
+```
+
+---
+
 ### Task 1: Read-cursor helper + topic-ids preload (test-first)
+
+> **For Tasks 1-5 of Track 1:** All tests live in `test/integration/modules/messages/get-conversations-topic-bubble.integration-spec.ts` (created in Task 0). Each `it()` body must be wrapped in `withRolledBackTx(ds, async (qr) => { ... })`. Helpers (`seedDM`, `seedGroup`, `seedTeamWithTopics`) come from `../../helpers/seed-helpers`. Replace any direct `dataSource.query(...)` in the test snippets below with `qr.query(...)` (the QueryRunner from the rollback wrapper). Call `service.getConversations({ login })` via the boot helper's compiled module — Task 1 Step 1 below shows the wiring.
 
 **Files:**
 - Modify: `../gitchat-webapp/backend/src/modules/messages/services/messages.service.ts:461-475`
-- Test: `../gitchat-webapp/backend/test/unit/modules/messages/messages.service.spec.ts`
+- Test: `../gitchat-webapp/backend/test/integration/modules/messages/get-conversations-topic-bubble.integration-spec.ts` (extend from Task 0's smoke)
 
 - [ ] **Step 1: Write the failing test — preload + cursor expansion**
 
