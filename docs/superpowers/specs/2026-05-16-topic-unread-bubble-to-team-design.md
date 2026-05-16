@@ -80,7 +80,7 @@ In `MessagesService.getConversations`, between read-cursor preload (line 463-475
 
 ### Edge cases
 
-- **Topic deleted** (`deleted_at NOT NULL`): excluded by the JOIN predicate. Its messages do not contribute.
+- **Topic archived** (`archived_at NOT NULL`): excluded by the JOIN predicate. `message_conversations` extends `AbstractEntityWithoutSoftDelete` (no `deleted_at` column); the archive bit is the canonical "inactive" flag here, matching the topic-chips embed query at `messages.service.ts:726`. Archived topic messages do not contribute.
 - **No read cursor for a topic** (e.g. topic just created and user has never opened it): `threshold = epoch`, every topic message is unread. This mirrors current behavior for fresh DMs/groups.
 - **Muted topic**: unread still counts toward team total. The mute affects notifications and visual treatment elsewhere; semantics here stay Telegram-style.
 - **`is_general` topic**: no special-case. Treated as any topic.

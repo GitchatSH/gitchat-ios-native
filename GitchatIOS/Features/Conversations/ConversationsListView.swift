@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 @MainActor
@@ -15,6 +16,7 @@ final class ConversationsViewModel: ObservableObject {
     @Published var isLoadingMore = false
     private var nextCursor: String?
     private var loadTask: Task<Void, Never>?
+    private var parentUnreadCancellable: AnyCancellable?
 
     func markLocallyRead(_ id: String) {
         locallyRead.insert(id)
@@ -179,10 +181,34 @@ final class ConversationsViewModel: ObservableObject {
         MutedConversationsStore.replace(with: ids)
     }
 
-    init() {
+    init(topicStore: TopicListStore = .shared) {
         if let cached = ConversationsCache.shared.get() {
             self.conversations = cached
         }
+        // Bridge topic-level unread changes onto the outer Chats list row.
+        // `TopicListStore` is the single source of truth for topic unread
+        // (see `TopicListStore.swift:181`); it publishes a true delta on
+        // every effective mutation. Applying it here keeps the team-row
+        // badge in sync with topic activity in real time, without a
+        // round-trip refetch. The `isActiveSurface` guard inside the
+        // store means the delta is zero (and nothing is published) when
+        // the user is already reading that topic, so we don't double-decrement.
+        parentUnreadCancellable = topicStore.parentUnreadDeltas
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyParentUnreadDelta(parentId: event.parentId, delta: event.delta)
+            }
+    }
+
+    /// Apply a topic-derived unread delta to the parent team row on the
+    /// outer Chats list. Source: `TopicListStore.parentUnreadDeltas`.
+    /// No-op when the parent isn't currently in `conversations`
+    /// (archived, paginated out, etc).
+    func applyParentUnreadDelta(parentId: String, delta: Int) {
+        guard let idx = conversations.firstIndex(where: { $0.id == parentId }) else { return }
+        let c = conversations[idx]
+        let newUnread = max(0, c.unreadCount + delta)
+        conversations[idx] = c.withUnreadCount(newUnread)
     }
 
     /// Keep one conversation per case-insensitive `repo_full_name`
@@ -1324,7 +1350,7 @@ struct ConversationRow: View {
         return .sent
     }
 
-    private var accessibilityRowLabel: String {
+    var accessibilityRowLabel: String {
         var parts: [String] = []
         parts.append(conversation.displayTitle)
 

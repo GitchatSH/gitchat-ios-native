@@ -230,6 +230,52 @@ final class ConversationsViewModelTopicRealtimeTests: XCTestCase {
         XCTAssertEqual(merged.first?.last_message?.id, "remote-only")
     }
 
+    // MARK: - applyParentUnreadDelta (topic bubble realtime fix)
+
+    func test_applyParentUnreadDelta_bumpsRowUnread() {
+        let vm = ConversationsViewModel()
+        vm.conversations = [makeTeam(id: "team-1", lastText: nil, lastAt: nil, unreadCount: 2)]
+
+        vm.applyParentUnreadDelta(parentId: "team-1", delta: 3)
+
+        XCTAssertEqual(vm.conversations.first?.unreadCount, 5)
+    }
+
+    func test_applyParentUnreadDelta_clampsAtZero() {
+        let vm = ConversationsViewModel()
+        vm.conversations = [makeTeam(id: "team-1", lastText: nil, lastAt: nil, unreadCount: 1)]
+
+        vm.applyParentUnreadDelta(parentId: "team-1", delta: -10)
+
+        XCTAssertEqual(vm.conversations.first?.unreadCount, 0)
+    }
+
+    func test_applyParentUnreadDelta_unknownParent_isNoOp() {
+        let vm = ConversationsViewModel()
+        vm.conversations = [makeTeam(id: "team-1", lastText: nil, lastAt: nil, unreadCount: 2)]
+
+        vm.applyParentUnreadDelta(parentId: "team-stranger", delta: 5)
+
+        XCTAssertEqual(vm.conversations.first?.unreadCount, 2)
+    }
+
+    func test_topicBumpFlowsThroughPublisherToParentRow() async {
+        let defaults = UserDefaults(suiteName: "ConversationsVM-topic-pub-\(UUID().uuidString)")!
+        let store = TopicListStore(maxParents: 10, defaults: defaults)
+        store.setTopics([
+            Topic.fixture(id: "t1", parentId: "team-1", unread: 0),
+        ], forParent: "team-1")
+
+        let vm = ConversationsViewModel(topicStore: store)
+        vm.conversations = [makeTeam(id: "team-1", lastText: nil, lastAt: nil, unreadCount: 0)]
+
+        store.bumpUnread(topicId: "t1", parentId: "team-1", by: 2)
+        // Let the `.receive(on: DispatchQueue.main)` hop drain.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(vm.conversations.first?.unreadCount, 2)
+    }
+
     // MARK: - Helpers
 
     private func makeTeam(

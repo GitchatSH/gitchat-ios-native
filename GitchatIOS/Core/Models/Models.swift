@@ -94,6 +94,38 @@ struct Conversation: Codable, Identifiable, Hashable {
         return other_user?.avatar_url ?? participantsOrEmpty.first?.avatar_url
     }
 
+    /// Return a copy of self with `unread_count` replaced. Used by
+    /// `ConversationsViewModel.applyParentUnreadDelta` so the outer
+    /// Chats-list row's badge updates when a topic-level bump or
+    /// clear comes through from `TopicListStore`.
+    func withUnreadCount(_ newValue: Int) -> Conversation {
+        Conversation(
+            id: id,
+            type: type,
+            is_group: is_group,
+            group_name: group_name,
+            group_avatar_url: group_avatar_url,
+            repo_full_name: repo_full_name,
+            participants: participants,
+            other_user: other_user,
+            last_message: last_message,
+            last_message_preview: last_message_preview,
+            last_message_text: last_message_text,
+            last_message_at: last_message_at,
+            unread_count: newValue,
+            pinned: pinned,
+            pinned_at: pinned_at,
+            is_request: is_request,
+            updated_at: updated_at,
+            is_muted: is_muted,
+            has_mention: has_mention,
+            has_reaction: has_reaction,
+            topics_enabled: topics_enabled,
+            has_topics: has_topics,
+            topic_chips: topic_chips
+        )
+    }
+
     func withLastMessage(_ msg: Message, preview: String? = nil) -> Conversation {
         Conversation(
             id: id,
